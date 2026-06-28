@@ -1,6 +1,7 @@
 package au.com.benji.robert.screens.dashboard
 
 import android.Manifest
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,8 +38,10 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
+    val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
     val nextPass by viewModel.nextPassTimer.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
     val locationPermissionState = rememberMultiplePermissionsState(
         listOf(
@@ -53,6 +57,18 @@ fun DashboardScreen(
             locationPermissionState.launchMultiplePermissionRequest()
         }
     }
+
+    // Animation for refresh icon
+    val infiniteTransition = rememberInfiniteTransition(label = "refresh")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
 
     Column(
         modifier = modifier
@@ -70,17 +86,75 @@ fun DashboardScreen(
             RobertTopBar()
             IconButton(
                 onClick = { viewModel.refresh() },
+                enabled = !isRefreshing,
                 colors = IconButtonDefaults.iconButtonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh Data")
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Refresh Data",
+                    modifier = if (isRefreshing) Modifier.rotate(rotation) else Modifier
+                )
+            }
+        }
+
+        // --- PROPAGATION ALERTS (New) ---
+        propagationData?.ducting?.let { ducting ->
+            if (ducting.isActive) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(Spacing.Medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+                    ) {
+                        Icon(Icons.Default.Waves, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column {
+                            Text(
+                                text = "PROPAGATION ALERT: ${ducting.intensity} Tropo",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = ducting.description,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
             }
         }
 
         // --- SPACE WEATHER SECTION ---
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-            DashboardSectionTitle("Live Solar Conditions")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DashboardSectionTitle("Live Solar Conditions")
+                TextButton(
+                    onClick = { viewModel.refresh() },
+                    enabled = !isRefreshing
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(if (isRefreshing) "REFRESHING..." else "REFRESH")
+                    }
+                }
+            }
+
             Row(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
                 modifier = Modifier.fillMaxWidth()

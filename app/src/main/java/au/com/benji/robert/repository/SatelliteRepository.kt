@@ -15,13 +15,8 @@ class SatelliteRepository {
     private val TAG = "SatelliteRepository"
     private val json = Json { ignoreUnknownKeys = true }
     
-    // NORAD IDs for popular satellites
-    private val satelliteIds = listOf(
-        "25544", // ISS
-        "25338", // NOAA 15
-        "28654", // NOAA 18
-        "33591"  // NOAA 19
-    )
+    // NORAD IDs - wheretheiss.at currently only supports ISS (25544)
+    private val satelliteIds = listOf("25544")
 
     fun getSatellitePositions(): Flow<List<SatellitePosition>> = flow {
         while (true) {
@@ -33,14 +28,12 @@ class SatelliteRepository {
                         val pos = json.decodeFromString<SatellitePosition>(it)
                         positions.add(pos)
                     }
-                    // Rate limit: The API allows 1 request per second
-                    delay(1100)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error fetching position for $id: ${e.message}")
                 }
+                delay(1000) // Respect rate limit
             }
-            emit(positions)
-            // Wait a bit before next full sweep
+            if (positions.isNotEmpty()) emit(positions)
             delay(10000)
         }
     }
@@ -50,11 +43,16 @@ class SatelliteRepository {
             val allPasses = mutableListOf<SatellitePass>()
             for (id in satelliteIds) {
                 try {
-                    val url = "https://api.wheretheiss.at/v1/satellites/$id/passes?latitude=$lat&longitude=$lon"
+                    // Fetch passes for the next 10 days to ensure we get results
+                    val url = "https://api.wheretheiss.at/v1/satellites/$id/passes?latitude=$lat&longitude=$lon&days=10"
+                    Log.d(TAG, "Fetching passes from: $url")
                     val response = ApiService.fetchData(url)
+                    
                     response?.let {
                         val list = json.decodeFromString<List<JsonElement>>(it)
                         val name = getSatelliteName(id)
+                        Log.d(TAG, "Found ${list.size} passes for $name")
+                        
                         list.forEach { element ->
                             val obj = element.jsonObject
                             allPasses.add(
@@ -66,12 +64,12 @@ class SatelliteRepository {
                             )
                         }
                     }
-                    delay(1100) // Rate limit
                 } catch (e: Exception) {
                     Log.e(TAG, "Error fetching passes for $id: ${e.message}")
                 }
+                delay(1100) // Rate limit
             }
-            // Sort passes by start time
+            
             val sortedPasses = allPasses.sortedBy { it.startTime }
             emit(sortedPasses)
             
@@ -83,9 +81,6 @@ class SatelliteRepository {
     private fun getSatelliteName(id: String): String {
         return when (id) {
             "25544" -> "ISS"
-            "25338" -> "NOAA 15"
-            "28654" -> "NOAA 18"
-            "33591" -> "NOAA 19"
             else -> "SAT-$id"
         }
     }

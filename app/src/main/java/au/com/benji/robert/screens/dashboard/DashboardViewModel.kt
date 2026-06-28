@@ -13,6 +13,8 @@ import au.com.benji.robert.repository.DashboardRepository
 import au.com.benji.robert.repository.SatelliteRepository
 import au.com.benji.robert.repository.SolarDataRepository
 import au.com.benji.robert.repository.WeatherRepository
+import au.com.benji.robert.repository.propagation.PropagationRepository
+import au.com.benji.robert.repository.propagation.PropagationData
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -25,24 +27,22 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val solarRepository = SolarDataRepository()
     private val weatherRepository = WeatherRepository()
     private val satelliteRepository = SatelliteRepository()
+    private val propagationRepository = PropagationRepository()
     private val locationService = LocationService(application)
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
+    
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
 
     fun refresh() {
         viewModelScope.launch {
+            _isRefreshing.value = true
             refreshTrigger.emit(Unit)
+            delay(1000)
+            _isRefreshing.value = false
         }
     }
-
-    val solarData = refreshTrigger
-        .onStart { emit(Unit) }
-        .flatMapLatest { solarRepository.getSolarData() }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
 
     private val locationFlow = refreshTrigger
         .onStart { emit(Unit) }
@@ -54,6 +54,27 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             } else {
                 null
             }
+        }
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val solarData = locationFlow
+        .flatMapLatest { loc -> 
+            solarRepository.getSolarData(loc?.first, loc?.second)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val propagationData = locationFlow
+        .flatMapLatest { loc ->
+            propagationRepository.getPropagationData(loc?.first, loc?.second)
         }
         .stateIn(
             scope = viewModelScope,
@@ -89,7 +110,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             if (loc != null) {
                 satelliteRepository.getSatellitePasses(loc.first, loc.second)
             } else {
-                // Default to Sydney for passes if location is unavailable
                 satelliteRepository.getSatellitePasses(-33.86, 151.20)
             }
         }
@@ -102,24 +122,36 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val nextPassTimer = flow {
         while (true) {
             val passes = satellitePasses.value
-            val pass = passes.firstOrNull { it.startTime * 1000 > System.currentTimeMillis() }
-            if (pass != null) {
-                val diff = (pass.startTime * 1000) - System.currentTimeMillis()
-                if (diff > 0) {
+            val currentTime = System.currentTimeMillis()
+            
+            val activePass = passes.firstOrNull { pass ->
+                val startMs = pass.startTime * 1000
+                val endMs = (pass.startTime + pass.duration) * 1000
+                currentTime in startMs..endMs
+            }
+            
+            if (activePass != null) {
+                emit("${activePass.name} • ACTIVE NOW")
+            } else {
+                val nextPass = passes.firstOrNull { it.startTime * 1000 > currentTime }
+                if (nextPass != null) {
+                    val diff = (nextPass.startTime * 1000) - currentTime
                     val hours = diff / 1000 / 3600
                     val mins = (diff / 1000 / 60) % 60
                     val secs = (diff / 1000) % 60
                     
-                    val timeString = if (hours > 0) "${hours}h ${mins}m" else "${mins}m ${secs}s"
-                    emit("${pass.name} • $timeString")
+                    val timeStr = when {
+                        hours > 0 -> "${hours}h ${mins}m"
+                        mins > 0 -> "${mins}m ${secs}s"
+                        else -> "${secs}s"
+                    }
+                    emit("${nextPass.name} • In $timeStr")
                 } else {
-                    emit("${pass.name} • Active")
-                }
-            } else {
-                if (satellitePasses.value.isEmpty()) {
-                    emit("Searching for passes...")
-                } else {
-                    emit("No upcoming passes today")
+                    if (satellitePasses.value.isEmpty()) {
+                        emit("Searching for passes...")
+                    } else {
+                        emit("No upcoming ISS passes")
+                    }
                 }
             }
             delay(1000)
@@ -127,7 +159,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "Calculating..."
+        initialValue = "Locating satellites..."
     )
 
     val cards = combine(solarData, weatherData, nextPassTimer) { solar, weather, timer ->

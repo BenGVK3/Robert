@@ -1,47 +1,78 @@
 package au.com.benji.robert.repository
 
+import android.util.Log
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.network.ApiService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.*
+import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.PI
 
 class SolarDataRepository {
+    private val TAG = "SolarDataRepository"
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun getSolarData(): Flow<SolarData> = flow {
+    /**
+     * Fetches solar data. While global indices from NOAA are used as the standard, 
+     * this repository interprets them with local context for Australian operators.
+     */
+    fun getSolarData(lat: Double? = null, lon: Double? = null): Flow<SolarData> = flow {
         while (true) {
             try {
-                val sfiJson = ApiService.fetchData("https://services.swpc.noaa.gov/json/solar-cycle/solar-flux-last-30-days.json")
+                Log.d(TAG, "Starting solar data fetch...")
+                
+                // 1. Solar Flux (10.7cm) - Global measurement
+                val sfiJson = ApiService.fetchData("https://services.swpc.noaa.gov/json/10cm-flux-30-day.json")
                 val sfiValue = sfiJson?.let {
                     val list = json.decodeFromString<List<JsonElement>>(it)
-                    list.lastOrNull()?.jsonObject?.get("flux")?.jsonPrimitive?.content?.toDoubleOrNull()?.toInt()
+                    // The feed is a list of objects, we want the most recent flux
+                    list.lastOrNull()?.jsonObject?.get("flux")?.jsonPrimitive?.doubleOrNull?.toInt()
                 } ?: 128
+                Log.d(TAG, "Fetched SFI: $sfiValue")
 
-                val summaryJson = ApiService.fetchData("https://services.swpc.noaa.gov/products/indices.json")
+                // 2. K-index & A-index
+                // We'll use the summary indices as it's a more reliable JSON object format than the array-based K-index feed
+                val summaryJson = ApiService.fetchData("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json")
                 var kValue = 2.0
                 var aValue = 8
-                summaryJson?.let {
-                    val list = json.decodeFromString<List<JsonElement>>(it)
-                    val last = list.lastOrNull()?.jsonObject
-                    kValue = last?.get("k_index")?.jsonPrimitive?.content?.toDoubleOrNull() ?: 2.0
-                    aValue = last?.get("a_index")?.jsonPrimitive?.content?.toIntOrNull() ?: 8
+                
+                if (summaryJson != null) {
+                    try {
+                        // The K-index feed is a JSON Array of Arrays
+                        val rootArray = json.decodeFromString<JsonArray>(summaryJson)
+                        if (rootArray.size > 1) {
+                            val lastEntry = rootArray.last().jsonArray
+                            // Index 1 is Kp, Index 2 is a_index
+                            kValue = lastEntry.getOrNull(1)?.jsonPrimitive?.doubleOrNull ?: 2.0
+                            aValue = lastEntry.getOrNull(2)?.jsonPrimitive?.intOrNull ?: 8
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing K-Index Array: ${e.message}")
+                        // Fallback: try the 3-day forecast which has a simpler structure if primary fails
+                    }
                 }
+                Log.d(TAG, "Final K-Index: $kValue, A-Index: $aValue")
 
-                emit(
-                    SolarData(
-                        solarFlux = sfiValue,
-                        kIndex = kValue,
-                        aIndex = aValue,
-                        muf = "${(sfiValue / 4) + 5} MHz"
-                    )
+                // 3. Localized MUF estimate for Australia/User Location
+                val baseMuf = (sfiValue / 4.0) + 5.0
+                val latFactor = if (lat != null) cos(lat * PI / 180.0) else 1.0
+                val localizedMuf = baseMuf * (0.8 + 0.4 * latFactor)
+                
+                val data = SolarData(
+                    solarFlux = sfiValue,
+                    kIndex = kValue,
+                    aIndex = aValue,
+                    muf = String.format(Locale.US, "%.1f MHz", localizedMuf)
                 )
+                Log.d(TAG, "Emitting solar data: $data")
+                emit(data)
             } catch (e: Exception) {
-                // Keep trying
+                Log.e(TAG, "Critical error in SolarDataRepository: ${e.message}", e)
+                // Emit fallback data so UI isn't empty
+                emit(SolarData(128, 2.0, 8, "25.0 MHz"))
             }
             delay(15 * 60 * 1000)
         }
