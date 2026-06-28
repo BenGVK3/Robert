@@ -5,18 +5,25 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.components.RobertMap
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
@@ -28,6 +35,10 @@ fun PropagationScreen(
 ) {
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
     val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
+    
+    // PSK Reporter URL with show-daynight=1 for the grey line integration
+    val pskReporterUrl = "https://pskreporter.info/pskmap.html?show-daynight=1"
+    var isMapFullscreen by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -38,8 +49,49 @@ fun PropagationScreen(
         item {
             Text(
                 text = "Propagation Center",
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
             )
+        }
+
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                Text(
+                    text = "LIVE PROPAGATION MAP",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(350.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        RobertMap(url = pskReporterUrl, modifier = Modifier.fillMaxSize())
+                    }
+                    
+                    IconButton(
+                        onClick = { isMapFullscreen = true },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
+                    }
+                }
+                
+                Text(
+                    text = "Live FT8/Digital reception reports with integrated Grey Line.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
         }
 
         item {
@@ -52,7 +104,8 @@ fun PropagationScreen(
             item {
                 Text(
                     text = "Atmospheric Ducting",
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(Spacing.ExtraSmall))
                 Card(
@@ -95,8 +148,9 @@ fun PropagationScreen(
 
         item {
             Text(
-                text = "Band Conditions",
-                style = MaterialTheme.typography.titleLarge
+                text = "Live Band Conditions",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -109,7 +163,7 @@ fun PropagationScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(Spacing.Small))
-                    Text("Loading local band conditions...", style = MaterialTheme.typography.bodySmall)
+                    Text("Calculating band stability...", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -123,9 +177,37 @@ fun PropagationScreen(
                     Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(Spacing.Small))
                     Text(
-                        text = "Data incorporates real-time solar indices and local tropospheric models.",
+                        text = "Data combines real-time NOAA solar indices and PSK Reporter live traffic density.",
                         style = MaterialTheme.typography.labelSmall
                     )
+                }
+            }
+        }
+        
+        item { Spacer(modifier = Modifier.height(Spacing.Large)) }
+    }
+
+    if (isMapFullscreen) {
+        Dialog(
+            onDismissRequest = { isMapFullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    RobertMap(url = pskReporterUrl, modifier = Modifier.fillMaxSize())
+                    
+                    IconButton(
+                        onClick = { isMapFullscreen = false },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
                 }
             }
         }
@@ -140,17 +222,23 @@ fun SolarDataCard(data: SolarData) {
     ) {
         Column(modifier = Modifier.padding(Spacing.Medium)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricItem("SFI", data.solarFlux.toString())
+                MetricItem("SFI (Solar Flux)", data.solarFlux.toString())
                 MetricItem("K-Index", data.kIndex.toString())
                 MetricItem("A-Index", data.aIndex.toString())
             }
             Spacer(modifier = Modifier.height(Spacing.Small))
-            Text(
-                text = "Estimated MUF: ${data.muf}", 
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text(
+                    text = "ESTIMATED MUF: ${data.muf}", 
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
@@ -175,7 +263,8 @@ fun BandConditionRow(band: BandCondition) {
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(Spacing.Medium),
@@ -188,14 +277,14 @@ fun BandConditionRow(band: BandCondition) {
             }
             
             Surface(
-                color = color.copy(alpha = 0.2f),
+                color = color.copy(alpha = 0.15f),
                 shape = CircleShape
             ) {
                 Text(
                     text = band.rating.uppercase(),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
                     color = color
                 )
             }

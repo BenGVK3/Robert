@@ -4,17 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import au.com.benji.robert.database.DatabaseModule
+import au.com.benji.robert.database.LogEntryEntity
 import au.com.benji.robert.database.ShackEntity
 import au.com.benji.robert.location.LocationService
-import au.com.benji.robert.models.CardType
-import au.com.benji.robert.models.DetailedWeather
-import au.com.benji.robert.models.InfoCardModel
-import au.com.benji.robert.models.QuickAction
+import au.com.benji.robert.models.*
 import au.com.benji.robert.navigation.Screen
-import au.com.benji.robert.repository.DashboardRepository
-import au.com.benji.robert.repository.SatelliteRepository
-import au.com.benji.robert.repository.SolarDataRepository
-import au.com.benji.robert.repository.WeatherRepository
+import au.com.benji.robert.repository.*
 import au.com.benji.robert.repository.propagation.PropagationRepository
 import au.com.benji.robert.repository.propagation.PropagationData
 import au.com.benji.robert.repository.shack.RadioCapabilities
@@ -32,8 +27,10 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val weatherRepository = WeatherRepository()
     private val satelliteRepository = SatelliteRepository()
     private val propagationRepository = PropagationRepository()
+    private val dxRepository = DxRepository()
     private val locationService = LocationService(application)
-    private val shackDao = DatabaseModule.shackDao(application)
+    private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
+    private val logRepository = LogRepository(DatabaseModule.logDao(application))
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
     
@@ -49,7 +46,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private val locationFlow = refreshTrigger
+    val locationFlow = refreshTrigger
         .onStart { emit(Unit) }
         .map { 
             val loc = locationService.getCurrentLocation()
@@ -101,7 +98,21 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             initialValue = null
         )
 
-    private val equipment = shackDao.getAll()
+    val equipment = shackRepository.equipment()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val logs = logRepository.getAllLogs()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val dxSpots = dxRepository.getDxSpots()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -172,6 +183,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = "Locating satellites..."
+    )
+
+    val recommendation = combine(propagationData, equipment) { propagation, gear ->
+        getPersonalizedRecommendation(propagation, gear)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "Analyzing conditions..."
     )
 
     val cards = combine(solarData, weatherData, nextPassTimer, propagationData, equipment) { solar, weather, timer, propagation, gear ->
@@ -249,9 +268,59 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         QuickAction("📻", "SDR", Screen.Sdr.route),
         QuickAction("📍", "APRS", Screen.Aprs.route),
         QuickAction("🛰", "Satellites", Screen.Satellites.route),
-        QuickAction("📖", "Logbook", Screen.Logbook.route),
-        QuickAction("🔧", "Shack", Screen.Shack.route),
         QuickAction("🛠", "Tools", Screen.Tools.route),
         QuickAction("⚙", "Settings", Screen.Settings.route)
     )
+
+    // Logbook Actions
+    fun addLog(callsign: String, frequency: String, band: String, mode: String, notes: String = "") {
+        viewModelScope.launch {
+            logRepository.addLog(
+                LogEntryEntity(
+                    callsign = callsign.trim(),
+                    frequency = frequency.trim(),
+                    band = band.trim(),
+                    mode = mode.trim(),
+                    notes = notes.trim()
+                )
+            )
+        }
+    }
+
+    fun deleteLog(entry: LogEntryEntity) {
+        viewModelScope.launch {
+            logRepository.deleteLog(entry)
+        }
+    }
+
+    // Shack Actions
+    fun addEquipment(
+        category: String,
+        manufacturer: String,
+        model: String,
+        nickname: String,
+        serialNumber: String = "",
+        notes: String = "",
+        imagePath: String = ""
+    ) {
+        viewModelScope.launch {
+            shackRepository.addEquipment(
+                ShackEntity(
+                    category = category,
+                    manufacturer = manufacturer.trim(),
+                    model = model.trim(),
+                    nickname = nickname.trim(),
+                    serialNumber = serialNumber.trim(),
+                    notes = notes.trim(),
+                    imagePath = imagePath
+                )
+            )
+        }
+    }
+
+    fun deleteEquipment(item: ShackEntity) {
+        viewModelScope.launch {
+            shackRepository.deleteEquipment(item)
+        }
+    }
 }

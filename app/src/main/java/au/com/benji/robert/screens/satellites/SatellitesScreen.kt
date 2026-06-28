@@ -3,19 +3,24 @@ package au.com.benji.robert.screens.satellites
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Height
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.components.RobertMap
 import au.com.benji.robert.network.SatellitePosition
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
@@ -37,10 +42,22 @@ fun SatellitesScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Satellite Tracker", style = MaterialTheme.typography.headlineMedium)
+                Text(text = "Orbital Tracking", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 IconButton(onClick = { viewModel.refresh() }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                 }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(250.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                RobertMap(url = "https://www.n2yo.com/widgets/widget-tracker.php?s=25544&size=small&all=1")
             }
         }
         
@@ -49,9 +66,13 @@ fun SatellitesScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
-                Column(modifier = Modifier.padding(Spacing.Medium)) {
-                    Text(text = "Upcoming Priority Pass", style = MaterialTheme.typography.titleMedium)
-                    Text(text = timer, style = MaterialTheme.typography.headlineMedium)
+                Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.SatelliteAlt, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(Spacing.Medium))
+                    Column {
+                        Text(text = "UPCOMING PRIORITY PASS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black)
+                        Text(text = timer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -62,7 +83,7 @@ fun SatellitesScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(Spacing.Small))
-                        Text("Fetching satellite data...")
+                        Text("Acquiring telemetry...")
                     }
                 }
             }
@@ -71,6 +92,8 @@ fun SatellitesScreen(
         items(positions) { satellite ->
             SatelliteDetailCard(satellite)
         }
+        
+        item { Spacer(modifier = Modifier.height(Spacing.Large)) }
     }
 }
 
@@ -81,6 +104,7 @@ fun SatelliteDetailCard(satellite: SatellitePosition) {
             Text(
                 text = satellite.name, 
                 style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(Spacing.Small))
@@ -118,11 +142,17 @@ fun SatelliteDetailCard(satellite: SatellitePosition) {
             }
             
             Spacer(modifier = Modifier.height(Spacing.Small))
-            Text(
-                text = "Visibility: ${satellite.visibility.uppercase()}", 
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.secondary
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text(
+                    text = "VISIBILITY: ${satellite.visibility.uppercase()}", 
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -143,7 +173,7 @@ fun SatelliteMetricCard(
                 Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(text = label, style = MaterialTheme.typography.labelSmall)
             }
-            Text(text = value, style = MaterialTheme.typography.bodyLarge)
+            Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
         }
     }
 }
