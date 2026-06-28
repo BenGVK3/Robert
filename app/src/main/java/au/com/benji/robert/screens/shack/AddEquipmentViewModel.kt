@@ -12,14 +12,18 @@ class AddEquipmentViewModel(
         category: String,
         manufacturer: String,
         model: String,
-        nickname: String
+        nickname: String,
+        serialNumber: String = "",
+        notes: String = ""
     ) {
         repository.addEquipment(
             ShackEntity(
                 category = category,
                 manufacturer = manufacturer.trim(),
                 model = model.trim(),
-                nickname = nickname.trim()
+                nickname = nickname.trim(),
+                serialNumber = serialNumber.trim(),
+                notes = notes.trim()
             )
         )
     }

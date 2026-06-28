@@ -5,11 +5,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import au.com.benji.robert.screens.dashboard.DashboardScreen
+import au.com.benji.robert.screens.logbook.LogbookScreen
 import au.com.benji.robert.screens.propagation.PropagationScreen
 import au.com.benji.robert.screens.settings.SettingsScreen
 import au.com.benji.robert.screens.shack.AddEquipmentScreen
 import au.com.benji.robert.screens.shack.ShackScreen
 import au.com.benji.robert.screens.tools.ToolsScreen
+import au.com.benji.robert.screens.sdr.SdrScreen
+import au.com.benji.robert.screens.aprs.AprsScreen
+import au.com.benji.robert.screens.satellites.SatellitesScreen
 
 @Composable
 fun RobertNavHost(
@@ -35,6 +39,22 @@ fun RobertNavHost(
 
         composable(Screen.Settings.route) {
             SettingsScreen()
+        }
+
+        composable(Screen.Logbook.route) {
+            LogbookScreen()
+        }
+
+        composable(Screen.Sdr.route) {
+            SdrScreen()
+        }
+
+        composable(Screen.Aprs.route) {
+            AprsScreen()
+        }
+
+        composable(Screen.Satellites.route) {
+            SatellitesScreen()
         }
 
         composable(Screen.Shack.route) {

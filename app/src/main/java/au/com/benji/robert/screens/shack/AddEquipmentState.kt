@@ -14,5 +14,7 @@ data class AddEquipmentState(
 
     val serialNumber: String = "",
 
-    val notes: String = ""
+    val notes: String = "",
+
+    val imagePath: String = ""
 )

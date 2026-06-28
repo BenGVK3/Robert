@@ -19,7 +19,17 @@ data class ShackEntity(
 
     val serialNumber: String = "",
 
+    val imagePath: String = "",
+
+    val thumbnailPath: String = "",
+
     val notes: String = "",
+
+    val favourite: Boolean = false,
+
+    val dateAdded: Long = System.currentTimeMillis(),
+
+    val lastModified: Long = System.currentTimeMillis(),
 
     val tags: List<String> = emptyList()
 )

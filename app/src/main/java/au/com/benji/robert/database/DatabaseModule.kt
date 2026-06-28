@@ -17,4 +17,9 @@ object DatabaseModule {
 
         return database(context).shackDao()
     }
+
+    fun logDao(context: Context): LogDao {
+
+        return database(context).logDao()
+    }
 }

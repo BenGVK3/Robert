@@ -3,6 +3,7 @@ package au.com.benji.robert.screens.shack
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -79,21 +80,40 @@ fun AddEquipmentScreen(
             }
         )
 
+        RobertTextField(
+            value = state.serialNumber,
+            label = "Serial Number",
+            onValueChange = {
+                state = state.copy(serialNumber = it)
+            }
+        )
+
+        RobertTextField(
+            value = state.notes,
+            label = "Notes",
+            onValueChange = {
+                state = state.copy(notes = it)
+            }
+        )
+
         Button(
+            modifier = Modifier.fillMaxWidth(),
             onClick = {
                 scope.launch {
                     viewModel.saveEquipment(
                         category = state.category.displayName,
                         manufacturer = state.manufacturer,
                         model = state.model,
-                        nickname = state.nickname
+                        nickname = state.nickname,
+                        serialNumber = state.serialNumber,
+                        notes = state.notes
                     )
 
                     navController.popBackStack()
                 }
             }
         ) {
-            Text("Save")
+            Text("Save Equipment")
         }
     }
 }
