@@ -16,7 +16,9 @@ object DatabaseProvider {
                 context.applicationContext,
                 RobertDatabase::class.java,
                 "robert.db"
-            ).build()
+            )
+            .fallbackToDestructiveMigration() // Prevent crashes when schema changes
+            .build()
 
             INSTANCE = instance
 

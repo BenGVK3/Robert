@@ -10,6 +10,7 @@ class SolarRepository {
             solarFlux = 128,
             kIndex = 2.0,
             aIndex = 8,
+            sunspots = 0,
             muf = "31 MHz"
         )
     }

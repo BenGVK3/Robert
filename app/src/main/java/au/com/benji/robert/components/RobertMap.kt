@@ -31,7 +31,6 @@ fun RobertMap(
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    databaseEnabled = true
                     setSupportZoom(true)
                     builtInZoomControls = true
                     displayZoomControls = false

@@ -4,6 +4,7 @@ import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +78,8 @@ fun DashboardScreen(
     var logToDelete by remember { mutableStateOf<LogEntryEntity?>(null) }
     var itemToDelete by remember { mutableStateOf<ShackEntity?>(null) }
 
+    val pullToRefreshState = rememberPullToRefreshState()
+
     val locationPermissionState = rememberMultiplePermissionsState(
         listOf(
             Manifest.permission.ACCESS_COARSE_LOCATION,
@@ -85,182 +90,189 @@ fun DashboardScreen(
     LaunchedEffect(locationPermissionState.allPermissionsGranted) {
         if (locationPermissionState.allPermissionsGranted) {
             viewModel.refresh()
-        } else {
+        } else if (!locationPermissionState.shouldShowRationale) {
             locationPermissionState.launchMultiplePermissionRequest()
         }
     }
 
-    // Animation for refresh icon
-    val infiniteTransition = rememberInfiniteTransition(label = "refresh")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Large)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = pullToRefreshState,
+            modifier = Modifier.fillMaxSize()
         ) {
-            // --- HERO BANNER ---
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-            ) {
-                AsyncImage(
-                    model = "https://images.unsplash.com/photo-1516245556508-7d60d4ff0f39?auto=format&fit=crop&q=80&w=1200",
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.1f),
-                                    Color.Black.copy(alpha = 0.6f),
-                                    Color.Black.copy(alpha = 0.85f)
-                                )
-                            )
-                        )
-                )
-                
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.Center)
-                        .padding(horizontal = Spacing.Medium)
-                        .padding(top = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    RobertTopBar()
-                }
-                
-                IconButton(
-                    onClick = { viewModel.refresh() },
-                    enabled = !isRefreshing,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(Spacing.Small),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = Color.Black.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh Data",
-                        tint = Color.White,
-                        modifier = if (isRefreshing) Modifier.rotate(rotation) else Modifier
-                    )
-                }
-            }
-
             Column(
-                modifier = Modifier.padding(horizontal = Spacing.Medium),
+                modifier = modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Large)
             ) {
-                // --- SMART RECOMMENDATION ---
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large,
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                // --- HERO BANNER ---
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(Spacing.Large),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+                    AsyncImage(
+                        model = "https://i.imgur.com/HumKlMe.png",
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        error = painterResource(android.R.drawable.ic_menu_gallery),
+                        placeholder = painterResource(android.R.drawable.ic_menu_gallery)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.2f),
+                                        Color.Black.copy(alpha = 0.5f),
+                                        Color.Black.copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
+                    )
+                    
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.Center)
+                            .padding(horizontal = Spacing.Medium)
+                            .padding(top = 40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Surface(
-                            modifier = Modifier.size(56.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        RobertTopBar()
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.padding(horizontal = Spacing.Medium),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.Large)
+                ) {
+                    // --- PRO OPERATOR CARD ---
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(Spacing.Large),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.AutoAwesome, 
-                                    contentDescription = null, 
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(32.dp)
+                            Surface(
+                                modifier = Modifier.size(56.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.AutoAwesome, 
+                                        contentDescription = null, 
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "OPERATOR'S INSIGHT",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    letterSpacing = 1.5.sp
+                                )
+                                Text(
+                                    text = recommendation,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                         }
-                        Column {
+                    }
+                }
+
+                    // --- LIVE SPACE WEATHER ---
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            DashboardSectionTitle("Live Solar Conditions")
                             Text(
-                                text = "OPERATOR'S INSIGHT",
+                                text = "Auto-refreshes every 15m",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.primary,
-                                letterSpacing = 1.2.sp
+                                color = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(bottom = Spacing.Small)
                             )
-                            Text(
-                                text = recommendation,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                        }
+                        
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            MetricCard(
+                                modifier = Modifier.weight(1f),
+                                title = "Solar Flux",
+                                value = solarData?.solarFlux?.toString() ?: "---",
+                                icon = Icons.Default.WbSunny
+                            )
+                            MetricCard(
+                                modifier = Modifier.weight(1f),
+                                title = "Sunspots",
+                                value = solarData?.sunspots?.toString() ?: "---",
+                                icon = Icons.Default.BrightnessLow
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            MetricCard(
+                                modifier = Modifier.weight(1f),
+                                title = "K-Index",
+                                value = solarData?.kIndex?.toString() ?: "---",
+                                icon = Icons.Default.Public
+                            )
+                            MetricCard(
+                                modifier = Modifier.weight(1f),
+                                title = "A-Index",
+                                value = solarData?.aIndex?.toString() ?: "---",
+                                icon = Icons.AutoMirrored.Filled.TrendingUp
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            MetricCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                title = "MUF",
+                                value = solarData?.muf?.replace(" MHz", "") ?: "---",
+                                unit = "MHz",
+                                icon = Icons.Default.Wifi
                             )
                         }
                     }
-                }
 
-                // --- LIVE METRICS GRID ---
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    DashboardSectionTitle("Live Solar Conditions")
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        MetricCard(
-                            modifier = Modifier.weight(1f),
-                            title = "Solar Flux",
-                            value = solarData?.solarFlux?.toString() ?: "---",
-                            icon = Icons.Default.WbSunny
-                        )
-                        MetricCard(
-                            modifier = Modifier.weight(1f),
-                            title = "K-Index",
-                            value = solarData?.kIndex?.toString() ?: "---",
-                            icon = Icons.Default.Public
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        MetricCard(
-                            modifier = Modifier.weight(1f),
-                            title = "A-Index",
-                            value = solarData?.aIndex?.toString() ?: "---",
-                            icon = Icons.AutoMirrored.Filled.TrendingUp
-                        )
-                        MetricCard(
-                            modifier = Modifier.weight(1f),
-                            title = "MUF",
-                            value = solarData?.muf?.replace(" MHz", "") ?: "---",
-                            unit = "MHz",
-                            icon = Icons.Default.Wifi
-                        )
-                    }
-                }
-
-                // --- LOCAL WEATHER ---
+                // --- LOCAL STATION WEATHER ---
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                     DashboardSectionTitle("Local Weather: ${weatherData?.locationName ?: "Locating..."}")
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -307,28 +319,28 @@ fun DashboardScreen(
                     }
                 }
 
-                // --- CONTROL CENTER ---
+                // --- COMMAND CENTER ---
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    DashboardSectionTitle("Control Center")
+                    DashboardSectionTitle("Command Center")
                     
                     val controlActions = listOf(
                         ControlAction("Propagation", Icons.Default.SignalCellularAlt, { navController.navigate(Screen.Propagation.route) }),
                         ControlAction("DX Spots", Icons.Default.Radar, { showManageDxDialog = true }),
                         ControlAction("Logbook", Icons.Default.EditNote, { showManageLogsDialog = true }),
                         ControlAction("The Shack", Icons.Default.HomeWork, { showManageShackDialog = true }),
-                        ControlAction("SDR", Icons.Default.Radio, { navController.navigate(Screen.Sdr.route) }),
-                        ControlAction("APRS", Icons.Default.LocationOn, { navController.navigate(Screen.Aprs.route) }),
+                        ControlAction("SDR Control", Icons.Default.Radio, { navController.navigate(Screen.Sdr.route) }),
+                        ControlAction("APRS Map", Icons.Default.LocationOn, { navController.navigate(Screen.Aprs.route) }),
                         ControlAction("Satellites", Icons.Default.Explore, { navController.navigate(Screen.Satellites.route) }),
-                        ControlAction("Tools", Icons.Default.Construction, { navController.navigate(Screen.Tools.route) }),
+                        ControlAction("Radio Tools", Icons.Default.Construction, { navController.navigate(Screen.Tools.route) }),
                         ControlAction("Settings", Icons.Default.Settings, { navController.navigate(Screen.Settings.route) })
                     )
 
-                    controlActions.chunked(2).forEach { rowActions ->
+                    for (rowActions in controlActions.chunked(2)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
-                            rowActions.forEach { action ->
+                            for (action in rowActions) {
                                 QuickActionCard(
                                     modifier = Modifier.weight(1f),
                                     icon = action.icon,
@@ -348,7 +360,7 @@ fun DashboardScreen(
         }
     }
 
-    // --- DX SPOTS DIALOG ---
+    // --- DIALOGS (DX, LOGS, SHACK) ---
     if (showManageDxDialog) {
         Dialog(
             onDismissRequest = { showManageDxDialog = false },
@@ -370,7 +382,7 @@ fun DashboardScreen(
                         }
                     }
                     
-                    Text("Including POTA, SOTA and DX Cluster", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                    Text("POTA, SOTA and Global Clusters", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                     
                     Spacer(modifier = Modifier.height(Spacing.Medium))
                     
@@ -383,7 +395,7 @@ fun DashboardScreen(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
-                            dxSpots.forEach { spot ->
+                            for (spot in dxSpots) {
                                 DxSpotItem(spot)
                             }
                         }
@@ -393,7 +405,6 @@ fun DashboardScreen(
         }
     }
 
-    // --- LOGBOOK MANAGEMENT DIALOG ---
     if (showManageLogsDialog) {
         Dialog(
             onDismissRequest = { showManageLogsDialog = false },
@@ -430,7 +441,7 @@ fun DashboardScreen(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
-                            logs.forEach { entry ->
+                            for (entry in logs) {
                                 LogEntryItem(entry = entry, onDelete = { logToDelete = entry })
                             }
                         }
@@ -440,7 +451,6 @@ fun DashboardScreen(
         }
     }
 
-    // --- SHACK MANAGEMENT DIALOG ---
     if (showManageShackDialog) {
         Dialog(
             onDismissRequest = { showManageShackDialog = false },
@@ -477,7 +487,7 @@ fun DashboardScreen(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
-                            equipment.forEach { item ->
+                            for (item in equipment) {
                                 ShackItemCard(
                                     item = item, 
                                     onDelete = { itemToDelete = item },
