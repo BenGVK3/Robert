@@ -14,7 +14,8 @@ class AddEquipmentViewModel(
         model: String,
         nickname: String,
         serialNumber: String = "",
-        notes: String = ""
+        notes: String = "",
+        imagePath: String = ""
     ) {
         repository.addEquipment(
             ShackEntity(
@@ -23,7 +24,8 @@ class AddEquipmentViewModel(
                 model = model.trim(),
                 nickname = nickname.trim(),
                 serialNumber = serialNumber.trim(),
-                notes = notes.trim()
+                notes = notes.trim(),
+                imagePath = imagePath
             )
         )
     }

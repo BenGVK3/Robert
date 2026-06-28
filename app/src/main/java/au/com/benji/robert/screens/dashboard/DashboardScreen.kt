@@ -26,6 +26,8 @@ import au.com.benji.robert.components.MetricCard
 import au.com.benji.robert.components.QuickActionCard
 import au.com.benji.robert.components.RobertTopBar
 import au.com.benji.robert.theme.Spacing
+import java.text.SimpleDateFormat
+import java.util.*
 import au.com.benji.robert.theme.RobertColors
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -136,7 +138,17 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DashboardSectionTitle("Live Solar Conditions")
+                Column {
+                    DashboardSectionTitle("Live Solar Conditions")
+                    solarData?.let {
+                        val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                        Text(
+                            text = "Last updated: ${sdf.format(Date(it.lastUpdated))}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
                 TextButton(
                     onClick = { viewModel.refresh() },
                     enabled = !isRefreshing

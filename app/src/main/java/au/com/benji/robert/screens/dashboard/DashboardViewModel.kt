@@ -3,6 +3,8 @@ package au.com.benji.robert.screens.dashboard
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import au.com.benji.robert.database.DatabaseModule
+import au.com.benji.robert.database.ShackEntity
 import au.com.benji.robert.location.LocationService
 import au.com.benji.robert.models.CardType
 import au.com.benji.robert.models.DetailedWeather
@@ -15,6 +17,8 @@ import au.com.benji.robert.repository.SolarDataRepository
 import au.com.benji.robert.repository.WeatherRepository
 import au.com.benji.robert.repository.propagation.PropagationRepository
 import au.com.benji.robert.repository.propagation.PropagationData
+import au.com.benji.robert.repository.shack.RadioCapabilities
+import au.com.benji.robert.repository.shack.toRadioCapabilities
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -29,6 +33,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val satelliteRepository = SatelliteRepository()
     private val propagationRepository = PropagationRepository()
     private val locationService = LocationService(application)
+    private val shackDao = DatabaseModule.shackDao(application)
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
     
@@ -94,6 +99,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
+        )
+
+    private val equipment = shackDao.getAll()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
         )
 
     val satellitePositions = refreshTrigger
@@ -162,13 +174,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         initialValue = "Locating satellites..."
     )
 
-    val cards = combine(solarData, weatherData, nextPassTimer) { solar, weather, timer ->
-        listOf(
+    val cards = combine(solarData, weatherData, nextPassTimer, propagationData, equipment) { solar, weather, timer, propagation, gear ->
+        val baseCards = mutableListOf(
             InfoCardModel(
                 type = CardType.BAND,
                 icon = "📡",
-                title = "Band Recommendation",
-                value = if (solar != null && (solar.solarFlux > 150)) "10m is popping!" else "20m is reliable"
+                title = "Live Recommendation",
+                value = getPersonalizedRecommendation(propagation, gear)
             ),
             InfoCardModel(
                 type = CardType.SOLAR,
@@ -201,11 +213,36 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 value = timer
             )
         )
+        baseCards
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = repository.getDashboardCards()
     )
+
+    private fun getPersonalizedRecommendation(data: PropagationData?, gear: List<ShackEntity>): String {
+        if (data == null) return "Checking conditions..."
+        
+        // Find bands with "Excellent" or "Good" ratings
+        val goodBands = data.bands.filter { it.rating == "Excellent" || it.rating == "Good" }
+        if (goodBands.isEmpty()) return "20m is your best bet"
+
+        // Map equipment to capabilities
+        val radios = gear.mapNotNull { it.toRadioCapabilities() }
+        
+        // Find a radio that supports one of the good bands
+        for (band in goodBands) {
+            val matchingRadio = radios.firstOrNull { radio -> 
+                radio.bands.contains(band.band) 
+            }
+            if (matchingRadio != null) {
+                return "Use your ${matchingRadio.model} on ${band.band}!"
+            }
+        }
+
+        // Fallback if no specific gear matches the "Excellent" bands
+        return "${goodBands.first().band} is opening up!"
+    }
 
     val quickActions = listOf(
         QuickAction("📡", "Propagation", Screen.Propagation.route),

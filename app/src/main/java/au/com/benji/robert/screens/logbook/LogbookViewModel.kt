@@ -20,14 +20,15 @@ class LogbookViewModel(
             initialValue = emptyList()
         )
 
-    fun addLog(callsign: String, frequency: String, band: String, mode: String) {
+    fun addLog(callsign: String, frequency: String, band: String, mode: String, notes: String = "") {
         viewModelScope.launch {
             repository.addLog(
                 LogEntryEntity(
-                    callsign = callsign,
-                    frequency = frequency,
-                    band = band,
-                    mode = mode
+                    callsign = callsign.trim(),
+                    frequency = frequency.trim(),
+                    band = band.trim(),
+                    mode = mode.trim(),
+                    notes = notes.trim()
                 )
             )
         }

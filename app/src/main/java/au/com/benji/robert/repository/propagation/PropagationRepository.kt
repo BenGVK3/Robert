@@ -14,36 +14,18 @@ class PropagationRepository {
     fun getPropagationData(lat: Double?, lon: Double?): Flow<PropagationData> = flow {
         while (true) {
             try {
-                Log.d(TAG, "Fetching propagation data for lat: $lat, lon: $lon")
+                Log.d(TAG, "Starting live propagation and ducting check...")
                 
-                // Fetch basic solar indices for calculations
                 val solarFlux = fetchSolarFlux()
                 val kIndex = fetchKIndex()
-                
-                Log.d(TAG, "Solar indices for propagation: SFI=$solarFlux, K=$kIndex")
-                
                 val bands = calculateBandConditions(solarFlux, kIndex)
-                val ducting = calculateDucting(lat, lon)
+                val ducting = fetchLiveDuctingData(lat, lon)
                 
-                val data = PropagationData(bands, ducting)
-                Log.d(TAG, "Emitting propagation data: $data")
-                emit(data)
+                emit(PropagationData(bands, ducting))
             } catch (e: Exception) {
-                Log.e(TAG, "Error fetching propagation data: ${e.message}", e)
-                // Emit fallback to ensure UI doesn't hang
-                emit(PropagationData(
-                    bands = listOf(
-                        BandCondition("80m", "Fair", "Stable"),
-                        BandCondition("40m", "Fair", "Stable"),
-                        BandCondition("20m", "Fair", "Stable"),
-                        BandCondition("15m", "Fair", "Stable"),
-                        BandCondition("10m", "Fair", "Stable")
-                    ),
-                    ducting = DuctingAlert(false, "No data available", "Unknown", "None")
-                ))
+                Log.e(TAG, "Error in propagation check: ${e.message}")
             }
-            // Update every 30 minutes
-            delay(30 * 60 * 1000)
+            delay(15 * 60 * 1000)
         }
     }
 
@@ -54,9 +36,7 @@ class PropagationRepository {
                 val list = json.decodeFromString<List<JsonElement>>(it)
                 list.lastOrNull()?.jsonObject?.get("flux")?.jsonPrimitive?.doubleOrNull?.toInt()
             } ?: 120
-        } catch (e: Exception) {
-            120
-        }
+        } catch (e: Exception) { 120 }
     }
 
     private suspend fun fetchKIndex(): Double {
@@ -68,59 +48,96 @@ class PropagationRepository {
                     rootArray.last().jsonArray.getOrNull(1)?.jsonPrimitive?.doubleOrNull ?: 2.0
                 } else 2.0
             } ?: 2.0
-        } catch (e: Exception) {
-            2.0
-        }
+        } catch (e: Exception) { 2.0 }
     }
 
-    private fun calculateBandConditions(sfi: Int, k: Double): List<BandCondition> {
-        return listOf(
-            BandCondition("80m", rateBand(80, sfi, k), "Stable"),
-            BandCondition("40m", rateBand(40, sfi, k), "Stable"),
-            BandCondition("20m", rateBand(20, sfi, k), "Stable"),
-            BandCondition("15m", rateBand(15, sfi, k), "Stable"),
-            BandCondition("10m", rateBand(10, sfi, k), "Stable")
+    private suspend fun fetchLiveDuctingData(lat: Double?, lon: Double?): DuctingAlert {
+        if (lat == null || lon == null) {
+            return DuctingAlert(false, "Waiting for location...", "Unknown", "None")
+        }
+
+        try {
+            // Check 2m activity in the last hour
+            val pskResponse = ApiService.fetchData("https://retrieve.pskreporter.info/query?band=2m&flowStartSeconds=-3600&rronly=1")
+            
+            if (pskResponse != null) {
+                // To confirm Trans-Tasman ducting, we need a SINGLE reception report that contains BOTH VK and ZL.
+                // We'll split by <receptionReport to isolate individual spots.
+                val reports = pskResponse.split("<receptionReport")
+                
+                val transTasmanSpots = reports.filter { report ->
+                    (report.contains("senderCallsign=\"VK") && report.contains("receiverCallsign=\"ZL")) ||
+                    (report.contains("senderCallsign=\"ZL") && report.contains("receiverCallsign=\"VK"))
+                }
+
+                if (transTasmanSpots.isNotEmpty()) {
+                    Log.d(TAG, "Confirmed Trans-Tasman ducting found in PSK Reporter data!")
+                    return DuctingAlert(
+                        isActive = true,
+                        description = "Confirmed Tropospheric Ducting: Live signals detected between Australia and New Zealand!",
+                        region = "Trans-Tasman",
+                        intensity = "High"
+                    )
+                }
+
+                // Check for significant internal ducting (VK to VK over long distance)
+                val longInternalSpots = reports.filter { report ->
+                    report.contains("senderCallsign=\"VK") && report.contains("receiverCallsign=\"VK") &&
+                    // Simple heuristic: distance field starting with a large digit (indicating > 300km approx)
+                    // Note: This is a rough string-based check since we are avoiding a full XML parser
+                    (report.contains("distance=\"4") || report.contains("distance=\"5") || 
+                     report.contains("distance=\"6") || report.contains("distance=\"7"))
+                }
+
+                if (longInternalSpots.isNotEmpty()) {
+                    return DuctingAlert(
+                        isActive = true,
+                        description = "Enhanced Tropo: Strong internal VHF paths (>400km) detected within Australia.",
+                        region = "South-East Australia",
+                        intensity = "Moderate"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ducting check failed: ${e.message}")
+        }
+
+        return DuctingAlert(
+            isActive = false,
+            description = "No tropospheric ducting detected in your local region.",
+            region = "Local Area",
+            intensity = "None"
         )
     }
 
-    private fun rateBand(meter: Int, sfi: Int, k: Double): String {
-        if (k > 4) return "Poor"
-        
-        return when (meter) {
-            80, 40 -> if (sfi < 150) "Excellent" else "Good"
-            20 -> if (sfi > 100) "Excellent" else "Good"
-            15, 10 -> when {
-                sfi > 180 -> "Excellent"
-                sfi > 140 -> "Good"
-                sfi > 100 -> "Fair"
-                else -> "Poor"
-            }
-            else -> "Fair"
+    private fun calculateBandConditions(sfi: Int, k: Double): List<BandCondition> {
+        val allBands = listOf(
+            "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"
+        )
+        return allBands.map { bandName ->
+            val meter = bandName.replace("m", "").replace("cm", "").toIntOrNull() ?: 20
+            BandCondition(bandName, rateBand(meter, sfi, k, bandName.contains("cm")), "Stable")
         }
     }
 
-    private fun calculateDucting(lat: Double?, lon: Double?): DuctingAlert {
-        if (lat == null || lon == null) {
-            return DuctingAlert(false, "Locating your shack for tropospheric checks...", "Unknown", "None")
-        }
+    private fun rateBand(meter: Int, sfi: Int, k: Double, isCm: Boolean): String {
+        if (k >= 4) return "Poor"
+        if (k >= 3) return "Fair"
 
-        // Logic for Australian Gippsland/Bass Strait corridor
-        val isGippsland = lat in -39.0..-37.0 && lon in 145.0..149.0
-        
-        return if (isGippsland) {
-            DuctingAlert(
-                isActive = true,
-                description = "Tropospheric Ducting into New Zealand from Gippsland right now!",
-                region = "Gippsland / Bass Strait",
-                intensity = "High"
-            )
+        return if (isCm || meter <= 6) {
+            if (k < 2) "Good" else "Fair"
         } else {
-            DuctingAlert(
-                isActive = false,
-                description = "No tropospheric ducting detected in your local region.",
-                region = "Local Area",
-                intensity = "None"
-            )
+            when {
+                meter >= 40 -> if (sfi < 150) "Excellent" else "Good"
+                meter in 17..30 -> if (sfi > 120) "Excellent" else "Good"
+                meter in 10..15 -> when {
+                    sfi > 180 -> "Excellent"
+                    sfi > 140 -> "Good"
+                    sfi > 100 -> "Fair"
+                    else -> "Poor"
+                }
+                else -> "Fair"
+            }
         }
     }
 }

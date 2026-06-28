@@ -15,48 +15,37 @@ class SolarDataRepository {
     private val TAG = "SolarDataRepository"
     private val json = Json { ignoreUnknownKeys = true }
 
-    /**
-     * Fetches solar data. While global indices from NOAA are used as the standard, 
-     * this repository interprets them with local context for Australian operators.
-     */
     fun getSolarData(lat: Double? = null, lon: Double? = null): Flow<SolarData> = flow {
         while (true) {
             try {
-                Log.d(TAG, "Starting solar data fetch...")
+                Log.d(TAG, "Starting fresh solar data fetch from internet...")
                 
                 // 1. Solar Flux (10.7cm) - Global measurement
                 val sfiJson = ApiService.fetchData("https://services.swpc.noaa.gov/json/10cm-flux-30-day.json")
                 val sfiValue = sfiJson?.let {
                     val list = json.decodeFromString<List<JsonElement>>(it)
-                    // The feed is a list of objects, we want the most recent flux
                     list.lastOrNull()?.jsonObject?.get("flux")?.jsonPrimitive?.doubleOrNull?.toInt()
                 } ?: 128
-                Log.d(TAG, "Fetched SFI: $sfiValue")
 
                 // 2. K-index & A-index
-                // We'll use the summary indices as it's a more reliable JSON object format than the array-based K-index feed
                 val summaryJson = ApiService.fetchData("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json")
                 var kValue = 2.0
                 var aValue = 8
                 
                 if (summaryJson != null) {
                     try {
-                        // The K-index feed is a JSON Array of Arrays
                         val rootArray = json.decodeFromString<JsonArray>(summaryJson)
                         if (rootArray.size > 1) {
                             val lastEntry = rootArray.last().jsonArray
-                            // Index 1 is Kp, Index 2 is a_index
                             kValue = lastEntry.getOrNull(1)?.jsonPrimitive?.doubleOrNull ?: 2.0
                             aValue = lastEntry.getOrNull(2)?.jsonPrimitive?.intOrNull ?: 8
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error parsing K-Index Array: ${e.message}")
-                        // Fallback: try the 3-day forecast which has a simpler structure if primary fails
                     }
                 }
-                Log.d(TAG, "Final K-Index: $kValue, A-Index: $aValue")
 
-                // 3. Localized MUF estimate for Australia/User Location
+                // 3. Localized MUF estimate
                 val baseMuf = (sfiValue / 4.0) + 5.0
                 val latFactor = if (lat != null) cos(lat * PI / 180.0) else 1.0
                 val localizedMuf = baseMuf * (0.8 + 0.4 * latFactor)
@@ -65,14 +54,14 @@ class SolarDataRepository {
                     solarFlux = sfiValue,
                     kIndex = kValue,
                     aIndex = aValue,
-                    muf = String.format(Locale.US, "%.1f MHz", localizedMuf)
+                    muf = String.format(Locale.US, "%.1f MHz", localizedMuf),
+                    lastUpdated = System.currentTimeMillis()
                 )
-                Log.d(TAG, "Emitting solar data: $data")
+                Log.d(TAG, "Successfully fetched and emitting fresh solar data")
                 emit(data)
             } catch (e: Exception) {
                 Log.e(TAG, "Critical error in SolarDataRepository: ${e.message}", e)
-                // Emit fallback data so UI isn't empty
-                emit(SolarData(128, 2.0, 8, "25.0 MHz"))
+                emit(SolarData(128, 2.0, 8, "25.0 MHz", System.currentTimeMillis()))
             }
             delay(15 * 60 * 1000)
         }

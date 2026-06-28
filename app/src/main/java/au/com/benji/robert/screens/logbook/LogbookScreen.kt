@@ -1,13 +1,18 @@
 package au.com.benji.robert.screens.logbook
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,19 +49,30 @@ fun LogbookScreen() {
                 .padding(padding)
                 .padding(Spacing.Medium)
         ) {
+            Text(text = "Logbook", style = MaterialTheme.typography.headlineMedium)
             Text(
-                text = "Logbook",
-                style = MaterialTheme.typography.headlineMedium
+                text = "Keep track of your contacts and signal reports.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
             )
 
             Spacer(modifier = Modifier.height(Spacing.Medium))
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(Spacing.Small),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(logs) { entry ->
-                    LogEntryItem(entry)
+            if (logs.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Your logbook is empty. Log your first QSO!", color = MaterialTheme.colorScheme.outline)
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(Spacing.Small),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(logs) { entry ->
+                        LogEntryItem(
+                            entry = entry,
+                            onDelete = { viewModel.deleteLog(entry) }
+                        )
+                    }
                 }
             }
         }
@@ -65,8 +81,8 @@ fun LogbookScreen() {
     if (showAddDialog) {
         AddLogDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { callsign, freq, band, mode ->
-                viewModel.addLog(callsign, freq, band, mode)
+            onConfirm = { callsign, freq, band, mode, notes ->
+                viewModel.addLog(callsign, freq, band, mode, notes)
                 showAddDialog = false
             }
         )
@@ -74,23 +90,67 @@ fun LogbookScreen() {
 }
 
 @Composable
-fun LogEntryItem(entry: LogEntryEntity) {
+fun LogEntryItem(
+    entry: LogEntryEntity,
+    onDelete: () -> Unit
+) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(Spacing.Medium)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = entry.callsign, style = MaterialTheme.typography.titleLarge)
-                Text(text = dateFormat.format(Date(entry.timestamp)), style = MaterialTheme.typography.bodySmall)
+        Row(
+            modifier = Modifier.padding(Spacing.Medium),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = entry.callsign.uppercase(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(text = dateFormat.format(Date(entry.timestamp)), style = MaterialTheme.typography.labelSmall)
+                }
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = entry.band,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = entry.mode,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    Text(text = "${entry.frequency} MHz", style = MaterialTheme.typography.bodySmall)
+                }
+
+                if (entry.notes.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = entry.notes, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            Text(text = "${entry.frequency} MHz (${entry.band}) • ${entry.mode}")
-            if (entry.notes.isNotBlank()) {
-                Text(text = entry.notes, style = MaterialTheme.typography.bodyMedium)
+            
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
             }
         }
     }
@@ -99,27 +159,66 @@ fun LogEntryItem(entry: LogEntryEntity) {
 @Composable
 fun AddLogDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String, String) -> Unit
+    onConfirm: (String, String, String, String, String) -> Unit
 ) {
     var callsign by remember { mutableStateOf("") }
     var frequency by remember { mutableStateOf("") }
     var band by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Log Entry") },
+        title = { Text("Log New QSO") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                TextField(value = callsign, onValueChange = { callsign = it }, label = { Text("Callsign") })
-                TextField(value = frequency, onValueChange = { frequency = it }, label = { Text("Frequency") })
-                TextField(value = band, onValueChange = { band = it }, label = { Text("Band") })
-                TextField(value = mode, onValueChange = { mode = it }, label = { Text("Mode") })
+                OutlinedTextField(
+                    value = callsign, 
+                    onValueChange = { callsign = it }, 
+                    label = { Text("Callsign") }, 
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = frequency, 
+                        onValueChange = { frequency = it }, 
+                        label = { Text("Freq (MHz)") }, 
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = band, 
+                        onValueChange = { band = it }, 
+                        label = { Text("Band") }, 
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+                OutlinedTextField(
+                    value = mode, 
+                    onValueChange = { mode = it }, 
+                    label = { Text("Mode (FT8, SSB...)") }, 
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = notes, 
+                    onValueChange = { notes = it }, 
+                    label = { Text("Notes") }, 
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(callsign, frequency, band, mode) }) {
-                Text("Add")
+            Button(
+                onClick = { onConfirm(callsign, frequency, band, mode, notes) },
+                enabled = callsign.isNotBlank()
+            ) {
+                Text("Save Entry")
             }
         },
         dismissButton = {
