@@ -1,77 +1,99 @@
 package au.com.benji.robert.repository
 
 import android.util.Log
+import android.util.Xml
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.network.ApiService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.serialization.json.*
-import java.util.Locale
-import kotlin.math.cos
-import kotlin.math.PI
+import kotlinx.coroutines.withContext
+import org.xmlpull.v1.XmlPullParser
+import java.io.StringReader
 
 class SolarDataRepository {
     private val TAG = "SolarDataRepository"
-    private val json = Json { ignoreUnknownKeys = true }
+    private var cachedData: SolarData? = null
 
     fun getSolarData(lat: Double? = null, lon: Double? = null): Flow<SolarData> = flow {
         while (true) {
             try {
-                Log.d(TAG, "Starting fresh solar data fetch...")
+                Log.d(TAG, "Fetching solar data from HamQSL...")
+                val xmlContent = ApiService.fetchData("https://www.hamqsl.com/solarxml.php")
                 
-                // 1. Solar Flux (10.7cm)
-                val sfiValue = try {
-                    val sfiJson = ApiService.fetchData("https://services.swpc.noaa.gov/json/10cm-flux-30-day.json")
-                    sfiJson?.let {
-                        val list = json.decodeFromString<List<JsonElement>>(it)
-                        list.lastOrNull()?.jsonObject?.get("flux")?.jsonPrimitive?.doubleOrNull?.toInt()
-                    } ?: 128
-                } catch (e: Exception) { 128 }
+                if (xmlContent != null) {
+                    val parsedData = parseSolarXml(xmlContent)
+                    cachedData = parsedData
+                    emit(parsedData)
+                    delay(15 * 60 * 1000) // 15 minutes
+                } else {
+                    Log.w(TAG, "Fetch failed, using cached data if available")
+                    cachedData?.let { emit(it) }
+                    delay(30 * 1000) // Retry in 30 seconds
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in SolarDataRepository: ${e.message}")
+                cachedData?.let { emit(it) }
+                delay(30 * 1000) // Retry in 30 seconds
+            }
+        }
+    }
 
-                // 2. K-index & A-index
-                var kValue = 2.0
-                var aValue = 8
-                try {
-                    val summaryJson = ApiService.fetchData("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json")
-                    if (summaryJson != null) {
-                        val rootArray = json.decodeFromString<JsonArray>(summaryJson)
-                        if (rootArray.size > 1) {
-                            val lastEntry = rootArray.last().jsonArray
-                            kValue = lastEntry.getOrNull(1)?.jsonPrimitive?.doubleOrNull ?: 2.0
-                            aValue = lastEntry.getOrNull(2)?.jsonPrimitive?.intOrNull ?: 8
+    private suspend fun parseSolarXml(xml: String): SolarData = withContext(Dispatchers.Default) {
+        val data = mutableMapOf<String, String>()
+        val hfDay = mutableMapOf<String, String>()
+        val hfNight = mutableMapOf<String, String>()
+        
+        try {
+            val parser = Xml.newPullParser()
+            parser.setInput(StringReader(xml))
+            var eventType = parser.eventType
+            var currentTag = ""
+
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> {
+                        currentTag = parser.name
+                        if (currentTag == "band") {
+                            val name = parser.getAttributeValue(null, "name")
+                            val time = parser.getAttributeValue(null, "time")
+                            val condition = parser.nextText()
+                            if (time == "day") hfDay[name] = condition
+                            else if (time == "night") hfNight[name] = condition
                         }
                     }
-                } catch (e: Exception) { Log.e(TAG, "K-Index parse error") }
-
-                // 3. Sunspots
-                val sunspotValue = try {
-                    val sunspotJson = ApiService.fetchData("https://services.swpc.noaa.gov/json/daily-sunspot-number.json")
-                    sunspotJson?.let {
-                        val list = json.decodeFromString<List<JsonElement>>(it)
-                        list.lastOrNull()?.jsonObject?.get("sunspot_number")?.jsonPrimitive?.intOrNull
-                    } ?: 0
-                } catch (e: Exception) { 0 }
-
-                // 4. MUF estimate
-                val baseMuf = (sfiValue / 4.0) + 5.0
-                val latFactor = if (lat != null) cos(lat * PI / 180.0) else 1.0
-                val localizedMuf = baseMuf * (0.8 + 0.4 * latFactor)
-                
-                val data = SolarData(
-                    solarFlux = sfiValue,
-                    kIndex = kValue,
-                    aIndex = aValue,
-                    sunspots = sunspotValue,
-                    muf = String.format(Locale.US, "%.1f MHz", localizedMuf),
-                    lastUpdated = System.currentTimeMillis()
-                )
-                emit(data)
-            } catch (e: Exception) {
-                Log.e(TAG, "Critical error in SolarDataRepository: ${e.message}")
-                emit(SolarData(128, 2.0, 8, 0, "25.0 MHz", System.currentTimeMillis()))
+                    XmlPullParser.TEXT -> {
+                        val text = parser.text.trim()
+                        if (text.isNotEmpty()) {
+                            data[currentTag] = text
+                        }
+                    }
+                }
+                eventType = parser.next()
             }
-            delay(15 * 60 * 1000)
+        } catch (e: Exception) {
+            Log.e(TAG, "XML Parsing error: ${e.message}")
         }
+
+        SolarData(
+            solarFlux = data["solarflux"]?.toIntOrNull() ?: 0,
+            sunspots = data["sunspots"]?.toIntOrNull() ?: 0,
+            aIndex = data["aindex"]?.toIntOrNull() ?: 0,
+            kIndex = data["kindex"]?.toIntOrNull() ?: 0,
+            xRay = data["xray"] ?: "---",
+            solarWind = data["solarwind"] ?: "---",
+            protonFlux = data["protonflux"] ?: "---",
+            electronFlux = data["electronflux"] ?: "---",
+            aurora = data["aurora"] ?: "---",
+            magneticField = data["magneticfield"] ?: "---",
+            foF2 = data["fof2"] ?: "---",
+            muf = data["muf"] ?: "---",
+            hfConditionsDay = hfDay,
+            hfConditionsNight = hfNight,
+            vhfAurora = data["vhfaurora"] ?: "---",
+            eSkip = data["eskip"] ?: "---",
+            lastUpdated = System.currentTimeMillis()
+        )
     }
 }

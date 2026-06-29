@@ -65,6 +65,7 @@ fun DashboardScreen(
     val equipment by viewModel.equipment.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val dxSpots by viewModel.dxSpots.collectAsStateWithLifecycle()
+    val isRefreshingDx by viewModel.isRefreshingDx.collectAsStateWithLifecycle()
     val recommendation by viewModel.recommendation.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
@@ -79,6 +80,7 @@ fun DashboardScreen(
     var itemToDelete by remember { mutableStateOf<ShackEntity?>(null) }
 
     val pullToRefreshState = rememberPullToRefreshState()
+    val dxPullToRefreshState = rememberPullToRefreshState()
 
     val locationPermissionState = rememberMultiplePermissionsState(
         listOf(
@@ -201,71 +203,89 @@ fun DashboardScreen(
                             }
                         }
                     }
-                }
 
                     // --- LIVE SPACE WEATHER ---
+                    var solarExpanded by remember { mutableStateOf(false) }
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().clickable { solarExpanded = !solarExpanded },
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            DashboardSectionTitle("Live Solar Conditions")
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                DashboardSectionTitle("Space Weather")
+                                Icon(
+                                    if (solarExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(start = 4.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             Text(
-                                text = "Auto-refreshes every 15m",
+                                text = "HamQSL Real-time",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(bottom = Spacing.Small)
+                                color = MaterialTheme.colorScheme.outline
                             )
                         }
                         
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            MetricCard(
-                                modifier = Modifier.weight(1f),
-                                title = "Solar Flux",
-                                value = solarData?.solarFlux?.toString() ?: "---",
-                                icon = Icons.Default.WbSunny
-                            )
-                            MetricCard(
-                                modifier = Modifier.weight(1f),
-                                title = "Sunspots",
-                                value = solarData?.sunspots?.toString() ?: "---",
-                                icon = Icons.Default.BrightnessLow
-                            )
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            MetricCard(
-                                modifier = Modifier.weight(1f),
-                                title = "K-Index",
-                                value = solarData?.kIndex?.toString() ?: "---",
-                                icon = Icons.Default.Public
-                            )
-                            MetricCard(
-                                modifier = Modifier.weight(1f),
-                                title = "A-Index",
-                                value = solarData?.aIndex?.toString() ?: "---",
-                                icon = Icons.AutoMirrored.Filled.TrendingUp
-                            )
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            MetricCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                title = "MUF",
-                                value = solarData?.muf?.replace(" MHz", "") ?: "---",
-                                unit = "MHz",
-                                icon = Icons.Default.Wifi
-                            )
+                        AnimatedVisibility(visible = solarExpanded) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "Solar Flux",
+                                        value = solarData.solarFlux.toString(),
+                                        icon = Icons.Default.WbSunny
+                                    )
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "Sunspots",
+                                        value = solarData.sunspots.toString(),
+                                        icon = Icons.Default.BrightnessLow
+                                    )
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "K-Index",
+                                        value = solarData.kIndex.toString(),
+                                        icon = Icons.Default.Public
+                                    )
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "A-Index",
+                                        value = solarData.aIndex.toString(),
+                                        icon = Icons.AutoMirrored.Filled.TrendingUp
+                                    )
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "MUF",
+                                        value = solarData.muf.replace(" MHz", ""),
+                                        unit = "MHz",
+                                        icon = Icons.Default.Wifi
+                                    )
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "X-Ray",
+                                        value = solarData.xRay,
+                                        icon = Icons.Default.Thunderstorm
+                                    )
+                                }
+                            }
                         }
                     }
+                }
 
                 // --- LOCAL STATION WEATHER ---
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
@@ -391,12 +411,19 @@ fun DashboardScreen(
                             CircularProgressIndicator()
                         }
                     } else {
-                        Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+                        PullToRefreshBox(
+                            isRefreshing = isRefreshingDx,
+                            onRefresh = { viewModel.refreshDxSpots() },
+                            state = dxPullToRefreshState,
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            for (spot in dxSpots) {
-                                DxSpotItem(spot)
+                            Column(
+                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+                            ) {
+                                for (spot in dxSpots) {
+                                    DxSpotItem(spot)
+                                }
                             }
                         }
                     }
@@ -627,7 +654,8 @@ fun DxSpotItem(spot: DxSpot) {
                         }
                     )
                 }
-                Text(text = spot.time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                Text(text = spot.timeZulu, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(text = "(${spot.timeLocal})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
             }
 
             Column(modifier = Modifier.weight(1f)) {

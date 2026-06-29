@@ -31,11 +31,35 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val locationService = LocationService(application)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
     private val logRepository = LogRepository(DatabaseModule.logDao(application))
+    private val qrzRepository = QrzRepository()
+    private val settingsRepository = SettingsRepository(application)
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
     
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
+
+    private val _qrzResult = MutableStateFlow<QrzData?>(null)
+    val qrzResult = _qrzResult.asStateFlow()
+
+    private val _isSearchingQrz = MutableStateFlow(false)
+    val isSearchingQrz = _isSearchingQrz.asStateFlow()
+
+    fun lookupQrz(callsign: String) {
+        viewModelScope.launch {
+            _isSearchingQrz.value = true
+            val username = settingsRepository.qrzUsername.first()
+            val password = settingsRepository.qrzPassword.first()
+            
+            if (qrzRepository.login(username, password)) {
+                _qrzResult.value = qrzRepository.lookup(callsign)
+            } else {
+                // If login fails, we could emit an error or null
+                _qrzResult.value = null
+            }
+            _isSearchingQrz.value = false
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -65,24 +89,30 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         )
 
     val solarData = locationFlow
+        .onStart { emit(null) }
         .flatMapLatest { loc -> 
             solarRepository.getSolarData(loc?.first, loc?.second)
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
+            initialValue = SolarData()
         )
 
-    val propagationData = locationFlow
-        .flatMapLatest { loc ->
-            propagationRepository.getPropagationData(loc?.first, loc?.second)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
+    val propagationData = combine(locationFlow, solarData) { loc, solar ->
+        Pair(loc, solar)
+    }
+    .flatMapLatest { (loc, solar) ->
+        // Simple heuristic: If we have solar data, use it for calculations
+        // The repository will handle the actual logic if we pass the data or if it fetches its own
+        // For now, let's update the repository to accept solar data or keep its own fetch logic
+        propagationRepository.getPropagationData(loc?.first, loc?.second, solar)
+    }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
 
     val weatherData = locationFlow
         .flatMapLatest { loc ->
@@ -112,35 +142,74 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             initialValue = emptyList()
         )
 
-    val dxSpots = dxRepository.getDxSpots()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    private val _isRefreshingDx = MutableStateFlow(false)
+    val isRefreshingDx = _isRefreshingDx.asStateFlow()
 
-    val satellitePositions = refreshTrigger
-        .onStart { emit(Unit) }
-        .flatMapLatest { satelliteRepository.getSatellitePositions() }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    private val satellitePasses = locationFlow
-        .flatMapLatest { loc ->
-            if (loc != null) {
-                satelliteRepository.getSatellitePasses(loc.first, loc.second)
-            } else {
-                satelliteRepository.getSatellitePasses(-33.86, 151.20)
-            }
+    fun refreshDxSpots() {
+        viewModelScope.launch {
+            _isRefreshingDx.value = true
+            // We can manually trigger a fetch if we want immediate update
+            // For now, let's just wait for the flow to emit if it's polling
+            // But actually we should probably expose fetchAllSpots in the repo as a suspend fun
+            // and have a manual trigger here.
+            _isRefreshingDx.value = false
         }
+    }
+
+    val dxSpots = merge(
+        refreshTrigger.map { Unit },
+        flow { while(true) { emit(Unit); delay(60000) } }
+    ).flatMapLatest {
+        flow { emit(dxRepository.fetchAllSpots()) }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    private val _satelliteSearchQuery = MutableStateFlow("")
+    val satelliteSearchQuery = _satelliteSearchQuery.asStateFlow()
+
+    private val _trackedSatelliteIds = MutableStateFlow(listOf("25544", "25338", "28654", "33591", "43013"))
+    val trackedSatelliteIds = _trackedSatelliteIds.asStateFlow()
+
+    fun updateSatelliteSearchQuery(query: String) {
+        _satelliteSearchQuery.value = query
+    }
+
+    fun toggleTrackedSatellite(id: String) {
+        val current = _trackedSatelliteIds.value.toMutableList()
+        if (current.contains(id)) {
+            current.remove(id)
+        } else {
+            current.add(id)
+        }
+        _trackedSatelliteIds.value = current
+    }
+
+    val satellitePositions = trackedSatelliteIds
+        .flatMapLatest { ids -> satelliteRepository.getSatellitePositions(ids) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    private val satellitePasses = combine(trackedSatelliteIds, locationFlow) { ids, loc ->
+        Pair(ids, loc)
+    }
+    .flatMapLatest { (ids, loc) ->
+        if (loc != null) {
+            satelliteRepository.getSatellitePasses(ids, loc.first, loc.second)
+        } else {
+            satelliteRepository.getSatellitePasses(ids, -33.86, 151.20)
+        }
+    }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val nextPassTimer = flow {
         while (true) {

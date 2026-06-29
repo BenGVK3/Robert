@@ -221,25 +221,78 @@ fun SolarDataCard(data: SolarData) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
         Column(modifier = Modifier.padding(Spacing.Medium)) {
+            Text(
+                text = "HAMQSL SOLAR INDICES",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+            
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricItem("SFI (Solar Flux)", data.solarFlux.toString())
-                MetricItem("K-Index", data.kIndex.toString())
-                MetricItem("A-Index", data.aIndex.toString())
+                MetricItem("SFI", data.solarFlux.toString())
+                MetricItem("SN", data.sunspots.toString())
+                MetricItem("A-Idx", data.aIndex.toString())
+                MetricItem("K-Idx", data.kIndex.toString())
             }
-            Spacer(modifier = Modifier.height(Spacing.Small))
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(4.dp)
-            ) {
-                Text(
-                    text = "ESTIMATED MUF: ${data.muf}", 
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(modifier = Modifier.weight(1f)) {
+                    DetailRow("X-Ray", data.xRay)
+                    DetailRow("Wind", data.solarWind)
+                    DetailRow("Magnetic", data.magneticField)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    DetailRow("Proton", data.protonFlux)
+                    DetailRow("Electron", data.electronFlux)
+                    DetailRow("Aurora", data.aurora)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(Spacing.Small)) {
+                        Text("MUF", style = MaterialTheme.typography.labelSmall)
+                        Text(data.muf, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                    }
+                }
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(Spacing.Small)) {
+                        Text("foF2", style = MaterialTheme.typography.labelSmall)
+                        Text(data.foF2, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+            Text("VHF CONDITIONS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("VHF Aurora: ${data.vhfAurora}", style = MaterialTheme.typography.bodySmall)
+                Text("E-Skip: ${data.eSkip}", style = MaterialTheme.typography.bodySmall)
             }
         }
+    }
+}
+
+@Composable
+fun DetailRow(label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+        Text(text = "$label: ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
     }
 }
 

@@ -19,9 +19,21 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
     val gridSquare: StateFlow<String> = repository.gridSquare
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "QF22og")
 
+    val qrzUsername: StateFlow<String> = repository.qrzUsername
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    val qrzPassword: StateFlow<String> = repository.qrzPassword
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
     fun saveSettings(callsign: String, name: String, gridSquare: String) {
         viewModelScope.launch {
             repository.saveSettings(callsign, name, gridSquare)
+        }
+    }
+
+    fun saveQrzCredentials(username: String, password: String) {
+        viewModelScope.launch {
+            repository.saveQrzCredentials(username, password)
         }
     }
 }
