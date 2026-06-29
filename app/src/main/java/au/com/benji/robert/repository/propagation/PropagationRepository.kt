@@ -75,7 +75,17 @@ class PropagationRepository {
         )
         return allBands.map { bandName ->
             val meter = bandName.replace("m", "").replace("cm", "").toIntOrNull() ?: 20
-            BandCondition(bandName, rateBand(meter, sfi, k, xRay, bandName.contains("cm")), "Stable")
+            val rating = rateBand(meter, sfi, k, xRay, bandName.contains("cm"))
+            
+            // Dynamic trend logic based on current indices
+            val trend = when {
+                k >= 4 || xRay == "M" || xRay == "X" -> "Declining"
+                meter <= 20 && sfi > 160 && k < 3 -> "Improving"
+                meter >= 40 && k < 1.5 -> "Improving"
+                else -> "Stable"
+            }
+            
+            BandCondition(bandName, rating, trend)
         }
     }
 

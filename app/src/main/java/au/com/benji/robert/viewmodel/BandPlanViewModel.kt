@@ -17,6 +17,9 @@ class BandPlanViewModel(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _showOnlyUsableBands = MutableStateFlow(false)
+    val showOnlyUsableBands: StateFlow<Boolean> = _showOnlyUsableBands.asStateFlow()
+
     val userCountry: StateFlow<String> = settingsRepository.country
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Australia")
 
@@ -27,8 +30,23 @@ class BandPlanViewModel(
         bandPlanRepository.getBandPlan(country)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val filteredBands: StateFlow<List<Band>> = combine(bandPlan, _searchQuery) { plan, query ->
-        val bands = plan?.bands ?: emptyList()
+    val filteredBands: StateFlow<List<Band>> = combine(
+        bandPlan,
+        _searchQuery,
+        userLicenceClass,
+        _showOnlyUsableBands
+    ) { plan, query, licence, onlyUsable ->
+        var bands = plan?.bands ?: emptyList()
+
+        if (onlyUsable) {
+            bands = bands.filter { band ->
+                band.allocations.any { allocation ->
+                    val restriction = allocation.licenceRestrictions[licence]
+                    restriction == RestrictionType.ALLOWED || restriction == RestrictionType.RESTRICTED
+                }
+            }
+        }
+
         if (query.isBlank()) {
             bands
         } else {
@@ -42,6 +60,10 @@ class BandPlanViewModel(
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    fun toggleOnlyUsableBands(enabled: Boolean) {
+        _showOnlyUsableBands.value = enabled
     }
 
     fun getRestriction(band: Band, licenceId: String): RestrictionType {

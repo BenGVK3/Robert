@@ -29,6 +29,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val weatherRepository = WeatherRepository()
     private val satelliteRepository = SatelliteRepository()
     private val propagationRepository = PropagationRepository()
+    private val aprsRepository = AprsRepository()
     private val dxRepository = DxRepository()
     private val locationService = LocationService(application)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
@@ -53,9 +54,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { 
             val loc = locationService.getCurrentLocation()
             if (loc != null) {
-                val name = locationService.getLocationName(loc.latitude, loc.longitude)
-                val maidenhead = calculateMaidenhead(loc.latitude, loc.longitude)
-                Quadruple(loc.latitude, loc.longitude, name, maidenhead)
+                // Round to 3 decimal places to avoid constant updates for tiny movements (~100m)
+                val lat = Math.round(loc.latitude * 1000.0) / 1000.0
+                val lon = Math.round(loc.longitude * 1000.0) / 1000.0
+                val name = locationService.getLocationName(lat, lon)
+                val maidenhead = calculateMaidenhead(lat, lon)
+                Quadruple(lat, lon, name, maidenhead)
             } else {
                 null
             }
@@ -130,25 +134,63 @@ data class Quadruple<out A, out B, out C, out D>(
             initialValue = emptyList()
         )
 
+    val aprsPackets = locationFlow
+        .flatMapLatest { loc ->
+            if (loc != null) {
+                aprsRepository.getRecentPackets(loc.first, loc.second)
+            } else {
+                flowOf(emptyList())
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     private val _isRefreshingDx = MutableStateFlow(false)
     val isRefreshingDx = _isRefreshingDx.asStateFlow()
 
     fun refreshDxSpots() {
         viewModelScope.launch {
             _isRefreshingDx.value = true
-            // We can manually trigger a fetch if we want immediate update
-            // For now, let's just wait for the flow to emit if it's polling
-            // But actually we should probably expose fetchAllSpots in the repo as a suspend fun
-            // and have a manual trigger here.
+            refreshTrigger.emit(Unit)
+            delay(1000)
             _isRefreshingDx.value = false
         }
     }
 
-    val dxSpots = merge(
+    private val _dxBandFilter = MutableStateFlow<String?>(null)
+    val dxBandFilter = _dxBandFilter.asStateFlow()
+
+    private val _dxModeFilter = MutableStateFlow<String?>(null)
+    val dxModeFilter = _dxModeFilter.asStateFlow()
+
+    private val _dxContinentFilter = MutableStateFlow<String?>(null)
+    val dxContinentFilter = _dxContinentFilter.asStateFlow()
+
+    fun setDxBandFilter(band: String?) { _dxBandFilter.value = band }
+    fun setDxModeFilter(mode: String?) { _dxModeFilter.value = mode }
+    fun setDxContinentFilter(continent: String?) { _dxContinentFilter.value = continent }
+
+    private val rawDxSpots = merge(
         refreshTrigger.map { Unit },
         flow { while(true) { emit(Unit); delay(60000) } }
     ).flatMapLatest {
         flow { emit(dxRepository.fetchAllSpots()) }
+    }
+
+    val dxSpots = combine(
+        rawDxSpots,
+        _dxBandFilter,
+        _dxModeFilter,
+        _dxContinentFilter
+    ) { spots, band, mode, continent ->
+        spots.filter { spot ->
+            (band == null || spot.band == band) &&
+            (mode == null || spot.normalizedMode == mode) &&
+            (continent == null || spot.continent == continent)
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),

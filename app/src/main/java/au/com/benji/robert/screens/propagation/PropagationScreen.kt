@@ -7,14 +7,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingFlat
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +51,21 @@ fun PropagationScreen(
     // PSK Reporter URL with grey line and 80m FT8 anyone last 15 mins settings
     val pskReporterUrl = "https://pskreporter.info/pskmap.html?show-daynight=1&band=3500000&mode=FT8&timerange=900"
     var isMapFullscreen by remember { mutableStateOf(false) }
+    var isMapExpanded by remember { mutableStateOf(false) }
+
+    // Auto refresh timer
+    var timeLeft by remember { mutableIntStateOf(60) }
+    LaunchedEffect(timeLeft, isRefreshing) {
+        if (isRefreshing) {
+            timeLeft = 60
+        } else if (timeLeft > 0) {
+            delay(1000)
+            timeLeft--
+        } else {
+            viewModel.refresh()
+            timeLeft = 60
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -67,41 +89,77 @@ fun PropagationScreen(
 
         item {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                Text(
-                    text = "LIVE PROPAGATION MAP",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(420.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        RobertMap(url = pskReporterUrl, modifier = Modifier.fillMaxSize())
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "LIVE PROPAGATION MAP",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     
-                    IconButton(
-                        onClick = { isMapFullscreen = true },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    TextButton(
+                        onClick = { isMapExpanded = !isMapExpanded },
+                        contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
+                        Text(if (isMapExpanded) "HIDE MAP" else "SHOW MAP")
+                        Icon(
+                            if (isMapExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
-                
-                Text(
-                    text = "Live FT8/Digital reception reports with integrated Grey Line.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
+
+                if (isMapExpanded) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(420.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            RobertMap(url = pskReporterUrl, modifier = Modifier.fillMaxSize())
+                        }
+                        
+                        IconButton(
+                            onClick = { isMapFullscreen = true },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
+                        }
+                    }
+                    
+                    Text(
+                        text = "Live FT8/Digital reception reports with integrated Grey Line.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                } else {
+                    Card(
+                        onClick = { isMapExpanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(Spacing.Medium),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(Spacing.Small))
+                            Text("Tap to view live digital traffic map", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
             }
         }
 
@@ -158,11 +216,22 @@ fun PropagationScreen(
         }
 
         item {
-            Text(
-                text = "Live Band Conditions",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Text(
+                    text = "Live Band Conditions",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Auto-refresh in ${timeLeft}s",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                )
+            }
         }
 
         propagationData?.let { data ->
@@ -326,6 +395,12 @@ fun BandConditionRow(band: BandCondition) {
         else -> MaterialTheme.colorScheme.primary
     }
 
+    val (trendIcon, trendColor) = when (band.trend) {
+        "Improving" -> Icons.AutoMirrored.Filled.TrendingUp to Color(0xFF4CAF50)
+        "Declining" -> Icons.AutoMirrored.Filled.TrendingDown to Color(0xFFF44336)
+        else -> Icons.AutoMirrored.Filled.TrendingFlat to MaterialTheme.colorScheme.outline
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -338,7 +413,20 @@ fun BandConditionRow(band: BandCondition) {
         ) {
             Column {
                 Text(text = band.band, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(text = band.trend, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = trendIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = trendColor
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = band.trend,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = trendColor
+                    )
+                }
             }
             
             Surface(

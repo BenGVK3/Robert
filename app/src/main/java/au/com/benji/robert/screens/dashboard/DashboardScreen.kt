@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -78,6 +79,7 @@ fun DashboardScreen(
     var showManageDxDialog by remember { mutableStateOf(false) }
     
     var selectedShackItem by remember { mutableStateOf<ShackEntity?>(null) }
+    var selectedDxSpot by remember { mutableStateOf<DxSpot?>(null) }
     var logToDelete by remember { mutableStateOf<LogEntryEntity?>(null) }
     var itemToDelete by remember { mutableStateOf<ShackEntity?>(null) }
 
@@ -461,7 +463,7 @@ fun DashboardScreen(
                                 verticalArrangement = Arrangement.spacedBy(Spacing.Small)
                             ) {
                                 for (spot in dxSpots) {
-                                    DxSpotItem(spot)
+                                    DxSpotItem(spot, onClick = { selectedDxSpot = spot })
                                 }
                             }
                         }
@@ -597,6 +599,13 @@ fun DashboardScreen(
         )
     }
 
+    selectedDxSpot?.let { spot ->
+        DxSpotDetailDialog(
+            spot = spot,
+            onDismiss = { selectedDxSpot = null }
+        )
+    }
+
     if (selectedImage != null) {
         Dialog(
             onDismissRequest = { selectedImage = null },
@@ -685,9 +694,9 @@ data class ControlAction(
 )
 
 @Composable
-fun DxSpotItem(spot: DxSpot) {
+fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -919,6 +928,109 @@ fun ShackDetailDialog(
             }
         }
     )
+}
+
+@Composable
+fun DxSpotDetailDialog(
+    spot: DxSpot,
+    onDismiss: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = spot.source.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (spot.source) {
+                        SpotSource.POTA -> Color(0xFF4CAF50)
+                        SpotSource.SOTA -> Color(0xFFFF9800)
+                        else -> MaterialTheme.colorScheme.primary
+                    },
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = spot.callsign,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.Large)
+                ) {
+                    DetailInfoItem(label = "FREQUENCY", value = "${spot.frequency} MHz", modifier = Modifier.weight(1f))
+                    DetailInfoItem(label = "MODE", value = spot.mode.ifEmpty { "N/A" }, modifier = Modifier.weight(1f))
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.Large)
+                ) {
+                    DetailInfoItem(label = "BAND", value = spot.band, modifier = Modifier.weight(1f))
+                    DetailInfoItem(label = "SPOTTER", value = spot.spotter, modifier = Modifier.weight(1f))
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.Large)
+                ) {
+                    DetailInfoItem(label = "ZULU TIME", value = spot.timeZulu, modifier = Modifier.weight(1f))
+                    DetailInfoItem(label = "LOCAL TIME", value = spot.timeLocal, modifier = Modifier.weight(1f))
+                }
+
+                if (spot.location.isNotEmpty()) {
+                    DetailInfoItem(label = "LOCATION", value = spot.location)
+                }
+
+                if (spot.comment.isNotEmpty()) {
+                    DetailInfoItem(label = "COMMENT", value = spot.comment)
+                }
+
+                Spacer(modifier = Modifier.height(Spacing.Small))
+                
+                Button(
+                    onClick = { uriHandler.openUri("https://www.qrz.com/db/${spot.callsign}") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("VIEW QRZ PROFILE")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CLOSE")
+            }
+        }
+    )
+}
+
+@Composable
+fun DetailInfoItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.secondary,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium
+        )
+    }
 }
 
 @Composable

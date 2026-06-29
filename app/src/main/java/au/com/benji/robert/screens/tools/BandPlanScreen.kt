@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,18 +36,19 @@ fun BandPlanScreen() {
     )
 
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val onlyUsable by viewModel.showOnlyUsableBands.collectAsStateWithLifecycle()
     val bands by viewModel.filteredBands.collectAsStateWithLifecycle()
     val userCountry by viewModel.userCountry.collectAsStateWithLifecycle()
     val userLicenceClass by viewModel.userLicenceClass.collectAsStateWithLifecycle()
     
     var showFrequencyLookup by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = Spacing.Medium)) {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { viewModel.updateSearchQuery(it) },
             label = { Text("Search Bands (e.g. 40m, 7.1)") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.Small),
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = {
                 IconButton(onClick = { showFrequencyLookup = true }) {
@@ -56,14 +58,30 @@ fun BandPlanScreen() {
         )
 
         Row(
-            modifier = Modifier.padding(vertical = Spacing.Small),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.Small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = "$userCountry - $userLicenceClass",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.secondary
             )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Only Usable",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Switch(
+                    checked = onlyUsable,
+                    onCheckedChange = { viewModel.toggleOnlyUsableBands(it) },
+                    modifier = Modifier.scale(0.8f)
+                )
+            }
         }
 
         LazyColumn(
