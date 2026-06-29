@@ -1,0 +1,10 @@
+{
+  "country": "United Kingdom",
+  "countryCode": "UK",
+  "licenceClasses": [
+    { "name": "Foundation", "id": "foundation" },
+    { "name": "Intermediate", "id": "intermediate" },
+    { "name": "Full", "id": "full" }
+  ],
+  "bands": []
+}

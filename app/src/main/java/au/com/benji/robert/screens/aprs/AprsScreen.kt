@@ -1,6 +1,8 @@
 package au.com.benji.robert.screens.aprs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +14,11 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,8 +31,14 @@ import androidx.compose.ui.window.DialogProperties
 import au.com.benji.robert.components.RobertMap
 import au.com.benji.robert.theme.Spacing
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AprsScreen() {
+fun AprsScreen(
+    viewModel: DashboardViewModel = viewModel()
+) {
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val pullToRefreshState = rememberPullToRefreshState()
+
     val packets = remember {
         listOf(
             AprsPacket("VK3ABC-9", "144.800", "En route to Ballarat", "5 mins ago"),
@@ -38,43 +51,49 @@ fun AprsScreen() {
     var isMapFullscreen by remember { mutableStateOf(false) }
     val aprsUrl = "https://aprs.fi/"
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Spacing.Medium),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.refresh() },
+        state = pullToRefreshState,
+        modifier = Modifier.fillMaxSize()
     ) {
-        Text(text = "APRS Tactical Map", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(350.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                RobertMap(url = aprsUrl, modifier = Modifier.fillMaxSize())
-            }
-            
-            IconButton(
-                onClick = { isMapFullscreen = true },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-            ) {
-                Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
-            }
-        }
-
-        Text(text = "Recent Packets Heard", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(Spacing.Small),
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(Spacing.Medium)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
-            items(packets) { packet ->
+            Text(text = "APRS Tactical Map", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(350.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    RobertMap(url = aprsUrl, modifier = Modifier.fillMaxSize())
+                }
+                
+                IconButton(
+                    onClick = { isMapFullscreen = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 64.dp, end = 12.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                ) {
+                    Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
+                }
+            }
+
+            Text(text = "Recent Packets Heard", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            // Since it's inside PullToRefreshBox with verticalScroll, we shouldn't use LazyColumn directly if we want the whole screen to scroll.
+            // Or we use LazyColumn as the main container.
+            // I'll use Column for now as there are few items.
+            for (packet in packets) {
                 PacketItem(packet)
             }
         }

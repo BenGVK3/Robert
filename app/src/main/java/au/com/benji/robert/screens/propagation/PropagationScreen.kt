@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,23 +31,32 @@ import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PropagationScreen(
     viewModel: DashboardViewModel = viewModel()
 ) {
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
     val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val pullToRefreshState = rememberPullToRefreshState()
     
     // PSK Reporter URL with grey line and 80m FT8 anyone last 15 mins settings
     val pskReporterUrl = "https://pskreporter.info/pskmap.html?show-daynight=1&band=3500000&mode=FT8&timerange=900"
     var isMapFullscreen by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Spacing.Medium),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.refresh() },
+        state = pullToRefreshState,
+        modifier = Modifier.fillMaxSize()
     ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(Spacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+        ) {
         item {
             Text(
                 text = "Propagation Center",
@@ -186,6 +197,7 @@ fun PropagationScreen(
         
         item { Spacer(modifier = Modifier.height(Spacing.Large)) }
     }
+}
 
     if (isMapFullscreen) {
         Dialog(

@@ -1,0 +1,8 @@
+{
+  "country": "New Zealand",
+  "countryCode": "NZ",
+  "licenceClasses": [
+    { "name": "General", "id": "general" }
+  ],
+  "bands": []
+}

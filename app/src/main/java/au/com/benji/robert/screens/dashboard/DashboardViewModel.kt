@@ -15,6 +15,7 @@ import au.com.benji.robert.repository.propagation.PropagationRepository
 import au.com.benji.robert.repository.propagation.PropagationData
 import au.com.benji.robert.repository.shack.RadioCapabilities
 import au.com.benji.robert.repository.shack.toRadioCapabilities
+import au.com.benji.robert.utils.calculateMaidenhead
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -53,7 +54,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             val loc = locationService.getCurrentLocation()
             if (loc != null) {
                 val name = locationService.getLocationName(loc.latitude, loc.longitude)
-                Triple(loc.latitude, loc.longitude, name)
+                val maidenhead = calculateMaidenhead(loc.latitude, loc.longitude)
+                Quadruple(loc.latitude, loc.longitude, name, maidenhead)
             } else {
                 null
             }
@@ -64,6 +66,15 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+data class Quadruple<out A, out B, out C, out D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D
+) : java.io.Serializable {
+    override fun toString(): String = "($first, $second, $third, $fourth)"
+}
 
     val solarData = locationFlow
         .onStart { emit(null) }

@@ -11,6 +11,7 @@ import au.com.benji.robert.screens.tools.ToolsScreen
 import au.com.benji.robert.screens.sdr.SdrScreen
 import au.com.benji.robert.screens.aprs.AprsScreen
 import au.com.benji.robert.screens.satellites.SatellitesScreen
+import au.com.benji.robert.screens.tools.BandPlanScreen
 
 @Composable
 fun RobertNavHost(
@@ -48,6 +49,10 @@ fun RobertNavHost(
 
         composable(Screen.Satellites.route) {
             SatellitesScreen()
+        }
+
+        composable(Screen.BandPlan.route) {
+            BandPlanScreen()
         }
     }
 }

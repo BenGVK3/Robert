@@ -1,0 +1,11 @@
+{
+  "country": "Japan",
+  "countryCode": "JP",
+  "licenceClasses": [
+    { "name": "4th Class", "id": "4th" },
+    { "name": "3rd Class", "id": "3rd" },
+    { "name": "2nd Class", "id": "2nd" },
+    { "name": "1st Class", "id": "1st" }
+  ],
+  "bands": []
+}

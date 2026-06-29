@@ -1,0 +1,8 @@
+{
+  "country": "IARU Region 2",
+  "countryCode": "IARU2",
+  "licenceClasses": [
+    { "name": "All", "id": "all" }
+  ],
+  "bands": []
+}

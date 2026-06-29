@@ -10,25 +10,40 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import au.com.benji.robert.repository.BandPlanRepository
 import au.com.benji.robert.repository.SettingsRepository
 import au.com.benji.robert.theme.Spacing
 import au.com.benji.robert.viewmodel.RobertViewModelFactory
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
     val repository = remember { SettingsRepository(context) }
+    val bandPlanRepository = remember { BandPlanRepository(context) }
     val viewModel: SettingsViewModel = viewModel(
-        factory = RobertViewModelFactory { SettingsViewModel(repository) }
+        factory = RobertViewModelFactory { SettingsViewModel(repository, bandPlanRepository) }
     )
 
     val savedCallsign by viewModel.callsign.collectAsStateWithLifecycle()
     val savedName by viewModel.name.collectAsStateWithLifecycle()
     val savedGridSquare by viewModel.gridSquare.collectAsStateWithLifecycle()
+    val savedCountry by viewModel.country.collectAsStateWithLifecycle()
+    val savedLicenceClass by viewModel.licenceClass.collectAsStateWithLifecycle()
 
     var callsign by remember(savedCallsign) { mutableStateOf(savedCallsign) }
     var name by remember(savedName) { mutableStateOf(savedName) }
     var gridSquare by remember(savedGridSquare) { mutableStateOf(savedGridSquare) }
+    var country by remember(savedCountry) { mutableStateOf(savedCountry) }
+    var licenceClass by remember(savedLicenceClass) { mutableStateOf(savedLicenceClass) }
+
+    var countryExpanded by remember { mutableStateOf(false) }
+    var licenceExpanded by remember { mutableStateOf(false) }
+
+    val countries = viewModel.getCountries()
+    val licenceClasses = viewModel.getLicenceClasses(country)
 
     Column(
         modifier = Modifier
@@ -66,15 +81,81 @@ fun SettingsScreen() {
             singleLine = true
         )
 
+        Text(text = "Licensing & Region", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+
+        ExposedDropdownMenuBox(
+            expanded = countryExpanded,
+            onExpandedChange = { countryExpanded = !countryExpanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = country,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Country / Region") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryExpanded) },
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = countryExpanded,
+                onDismissRequest = { countryExpanded = false }
+            ) {
+                countries.forEach { selectionOption ->
+                    DropdownMenuItem(
+                        text = { Text(selectionOption) },
+                        onClick = {
+                            country = selectionOption
+                            countryExpanded = false
+                            // Reset licence class to first available for new country
+                            val newClasses = viewModel.getLicenceClasses(selectionOption)
+                            if (newClasses.isNotEmpty()) {
+                                licenceClass = newClasses.first().id
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = licenceExpanded,
+            onExpandedChange = { licenceExpanded = !licenceExpanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val currentLicenceName = licenceClasses.find { it.id == licenceClass }?.name ?: licenceClass
+            OutlinedTextField(
+                value = currentLicenceName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Licence Class") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = licenceExpanded) },
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = licenceExpanded,
+                onDismissRequest = { licenceExpanded = false }
+            ) {
+                licenceClasses.forEach { selectionOption ->
+                    DropdownMenuItem(
+                        text = { Text(selectionOption.name) },
+                        onClick = {
+                            licenceClass = selectionOption.id
+                            licenceExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(Spacing.Large))
 
         Button(
             onClick = { 
-                viewModel.saveSettings(callsign, name, gridSquare)
+                viewModel.saveSettings(callsign, name, gridSquare, country, licenceClass)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save Station Info")
+            Text("Save All Settings")
         }
         
         Spacer(modifier = Modifier.height(Spacing.ExtraLarge))

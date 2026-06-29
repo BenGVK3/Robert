@@ -60,6 +60,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
+    val locationData by viewModel.locationFlow.collectAsStateWithLifecycle()
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
     val equipment by viewModel.equipment.collectAsStateWithLifecycle()
@@ -152,6 +153,24 @@ fun DashboardScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         RobertTopBar()
+                        
+                        locationData?.fourth?.let { maidenhead ->
+                            Spacer(modifier = Modifier.height(Spacing.Small))
+                            Surface(
+                                color = Color.White.copy(alpha = 0.2f),
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier.clickable { /* Copy or something */ }
+                            ) {
+                                Text(
+                                    text = maidenhead,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -281,6 +300,24 @@ fun DashboardScreen(
                                         title = "X-Ray",
                                         value = solarData.xRay,
                                         icon = Icons.Default.Thunderstorm
+                                    )
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "Sunrise",
+                                        value = weatherData?.sunrise ?: "--:--",
+                                        icon = Icons.Default.WbTwilight
+                                    )
+                                    MetricCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = "Sunset",
+                                        value = weatherData?.sunset ?: "--:--",
+                                        icon = Icons.Default.WbTwilight
                                     )
                                 }
                             }

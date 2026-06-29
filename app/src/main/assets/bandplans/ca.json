@@ -1,0 +1,10 @@
+{
+  "country": "Canada",
+  "countryCode": "CA",
+  "licenceClasses": [
+    { "name": "Basic", "id": "basic" },
+    { "name": "Basic with Honours", "id": "honours" },
+    { "name": "Advanced", "id": "advanced" }
+  ],
+  "bands": []
+}

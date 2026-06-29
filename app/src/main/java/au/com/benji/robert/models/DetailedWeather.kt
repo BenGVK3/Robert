@@ -10,5 +10,7 @@ data class DetailedWeather(
     val condition: String = "Unknown",
     val humidity: Int = 0,
     val windSpeed: Double = 0.0,
-    val apparentTemperature: Double = 0.0
+    val apparentTemperature: Double = 0.0,
+    val sunrise: String = "--:--",
+    val sunset: String = "--:--"
 )

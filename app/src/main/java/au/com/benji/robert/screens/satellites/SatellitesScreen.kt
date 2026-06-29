@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +41,8 @@ fun SatellitesScreen(
     val location by viewModel.locationFlow.collectAsStateWithLifecycle()
     val searchQuery by viewModel.satelliteSearchQuery.collectAsStateWithLifecycle()
     val trackedIds by viewModel.trackedSatelliteIds.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val pullToRefreshState = rememberPullToRefreshState()
     
     var selectedSatelliteId by remember { mutableStateOf("25544") } // Default to ISS
     var isMapExpanded by remember { mutableStateOf(false) }
@@ -70,13 +74,18 @@ fun SatellitesScreen(
                 )
             }
         ) { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = Spacing.Medium),
-                verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                state = pullToRefreshState,
+                modifier = Modifier.padding(padding).fillMaxSize()
             ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = Spacing.Medium),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+                ) {
                 // --- INTEGRATED MAP VIEW ---
                 item {
                     Card(
@@ -202,6 +211,7 @@ fun SatellitesScreen(
             }
         }
     }
+}
 
     if (showSatellitePicker) {
         SatellitePicker(

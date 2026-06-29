@@ -11,4 +11,5 @@ sealed class Screen(
     object Sdr : Screen("sdr")
     object Aprs : Screen("aprs")
     object Satellites : Screen("satellites")
+    object BandPlan : Screen("bandplan")
 }

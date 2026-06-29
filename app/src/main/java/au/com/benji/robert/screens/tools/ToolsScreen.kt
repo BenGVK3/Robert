@@ -1,5 +1,6 @@
 package au.com.benji.robert.screens.tools
 
+import au.com.benji.robert.utils.calculateMaidenhead
 import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -12,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -97,6 +99,13 @@ fun ToolsScreen(
                         icon = Icons.Default.Search,
                         onClick = { activeTool = "Callsign Lookup" }
                     )
+
+                    ToolCard(
+                        title = "Band Plan",
+                        description = "Regional frequency allocations and privileges",
+                        icon = Icons.AutoMirrored.Filled.FormatListBulleted,
+                        onClick = { activeTool = "Band Plan" }
+                    )
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
@@ -104,6 +113,7 @@ fun ToolsScreen(
                         "Maidenhead Locator" -> MaidenheadTool(viewModel)
                         "Prefix Map" -> PrefixMapTool()
                         "Callsign Lookup" -> CallsignLookupTool()
+                        "Band Plan" -> BandPlanScreen()
                     }
                 }
             }
@@ -499,18 +509,3 @@ fun findRegionForPrefix(query: String): SearchResult? {
     }
 }
 
-fun calculateMaidenhead(lat: Double, lon: Double): String {
-    val longitude = lon + 180
-    val latitude = lat + 90
-
-    val lonField = (longitude / 20).toInt().coerceIn(0, 17)
-    val latField = (latitude / 10).toInt().coerceIn(0, 17)
-
-    val lonSquare = ((longitude % 20) / 2).toInt().coerceIn(0, 9)
-    val latSquare = (latitude % 10).toInt().coerceIn(0, 9)
-
-    val lonSub = (((longitude % 2) / (2.0 / 24.0))).toInt().coerceIn(0, 23)
-    val latSub = ((latitude % 1) / (1.0 / 24.0)).toInt().coerceIn(0, 23)
-
-    return "${('A' + lonField)}${('A' + latField)}$lonSquare$latSquare${('a' + lonSub)}${('a' + latSub)}"
-}

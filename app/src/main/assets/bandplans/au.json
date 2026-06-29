@@ -1,0 +1,499 @@
+{
+  "country": "Australia",
+  "countryCode": "AU",
+  "licenceClasses": [
+    { "name": "Foundation", "id": "foundation" },
+    { "name": "Standard", "id": "standard" },
+    { "name": "Advanced", "id": "advanced" }
+  ],
+  "bands": [
+    {
+      "name": "2200m",
+      "frequencyRange": { "start": 0.1357, "end": 0.1378 },
+      "allocations": [
+        {
+          "name": "CW/Digital",
+          "frequencyRange": { "start": 0.1357, "end": 0.1378 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "NOT_PERMITTED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "advanced": "1W EIRP" }
+        }
+      ]
+    },
+    {
+      "name": "630m",
+      "frequencyRange": { "start": 0.472, "end": 0.479 },
+      "allocations": [
+        {
+          "name": "CW/Digital",
+          "frequencyRange": { "start": 0.472, "end": 0.479 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "NOT_PERMITTED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "advanced": "5W EIRP" }
+        }
+      ]
+    },
+    {
+      "name": "160m",
+      "frequencyRange": { "start": 1.8, "end": 1.875 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 1.8, "end": 1.84 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "All Modes (SSB)",
+          "frequencyRange": { "start": 1.84, "end": 1.875 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "80m",
+      "frequencyRange": { "start": 3.5, "end": 3.8 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 3.5, "end": 3.58 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "All Modes (SSB)",
+          "frequencyRange": { "start": 3.58, "end": 3.7 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "100W", "advanced": "400W" }
+        },
+        {
+          "name": "Extended All Modes",
+          "frequencyRange": { "start": 3.7, "end": 3.8 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "60m",
+      "frequencyRange": { "start": 5.3515, "end": 5.3665 },
+      "allocations": [
+        {
+          "name": "WRC-15 Allocation",
+          "frequencyRange": { "start": 5.3515, "end": 5.3665 },
+          "modes": ["CW", "Data", "SSB"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "NOT_PERMITTED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "advanced": "15W EIRP" }
+        }
+      ]
+    },
+    {
+      "name": "40m",
+      "frequencyRange": { "start": 7.0, "end": 7.3 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 7.0, "end": 7.06 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "All Modes (SSB)",
+          "frequencyRange": { "start": 7.06, "end": 7.3 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "30m",
+      "frequencyRange": { "start": 10.1, "end": 10.15 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 10.1, "end": 10.15 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "30W", "advanced": "120W" }
+        }
+      ]
+    },
+    {
+      "name": "20m",
+      "frequencyRange": { "start": 14.0, "end": 14.35 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 14.0, "end": 14.1 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "All Modes (SSB)",
+          "frequencyRange": { "start": 14.1, "end": 14.35 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "17m",
+      "frequencyRange": { "start": 18.068, "end": 18.168 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 18.068, "end": 18.11 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "All Modes (SSB)",
+          "frequencyRange": { "start": 18.11, "end": 18.168 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "15m",
+      "frequencyRange": { "start": 21.0, "end": 21.45 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 21.0, "end": 21.15 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "All Modes (SSB)",
+          "frequencyRange": { "start": 21.15, "end": 21.45 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "12m",
+      "frequencyRange": { "start": 24.89, "end": 24.99 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 24.89, "end": 24.94 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "All Modes (SSB)",
+          "frequencyRange": { "start": 24.94, "end": 24.99 },
+          "modes": ["CW", "Data", "SSB", "AM"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "10m",
+      "frequencyRange": { "start": 28.0, "end": 29.7 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 28.0, "end": 28.2 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "30W", "advanced": "120W" }
+        },
+        {
+          "name": "Beacons",
+          "frequencyRange": { "start": 28.2, "end": 28.3 },
+          "modes": ["CW"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          }
+        },
+        {
+          "name": "All Modes (inc FM)",
+          "frequencyRange": { "start": 28.3, "end": 29.7 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "6m",
+      "frequencyRange": { "start": 50.0, "end": 54.0 },
+      "allocations": [
+        {
+          "name": "Weak Signal (CW/SSB)",
+          "frequencyRange": { "start": 50.0, "end": 50.3 },
+          "modes": ["CW", "SSB", "Data"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        },
+        {
+          "name": "All Modes (inc FM/Repeater)",
+          "frequencyRange": { "start": 50.3, "end": 54.0 },
+          "modes": ["CW", "Data", "SSB", "FM"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "2m",
+      "frequencyRange": { "start": 144.0, "end": 148.0 },
+      "allocations": [
+        {
+          "name": "Weak Signal (CW/SSB)",
+          "frequencyRange": { "start": 144.0, "end": 144.7 },
+          "modes": ["CW", "SSB", "Data"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "100W", "advanced": "400W" }
+        },
+        {
+          "name": "All Modes (inc FM/Repeater)",
+          "frequencyRange": { "start": 144.7, "end": 148.0 },
+          "modes": ["CW", "Data", "FM", "SSB"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "70cm",
+      "frequencyRange": { "start": 430.0, "end": 450.0 },
+      "allocations": [
+        {
+          "name": "All Modes",
+          "frequencyRange": { "start": 430.0, "end": 450.0 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM", "ATV"],
+          "licenceRestrictions": {
+            "foundation": "ALLOWED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "foundation": "10W", "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "23cm",
+      "frequencyRange": { "start": 1240.0, "end": 1300.0 },
+      "allocations": [
+        {
+          "name": "All Modes",
+          "frequencyRange": { "start": 1240.0, "end": 1300.0 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM", "ATV"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "13cm",
+      "frequencyRange": { "start": 2400.0, "end": 2450.0 },
+      "allocations": [
+        {
+          "name": "All Modes",
+          "frequencyRange": { "start": 2400.0, "end": 2450.0 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM", "ATV"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "9cm",
+      "frequencyRange": { "start": 3300.0, "end": 3400.0 },
+      "allocations": [
+        {
+          "name": "All Modes",
+          "frequencyRange": { "start": 3300.0, "end": 3400.0 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM", "ATV"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "NOT_PERMITTED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "6cm",
+      "frequencyRange": { "start": 5650.0, "end": 5850.0 },
+      "allocations": [
+        {
+          "name": "All Modes",
+          "frequencyRange": { "start": 5650.0, "end": 5850.0 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM", "ATV"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "3cm",
+      "frequencyRange": { "start": 10000.0, "end": 10500.0 },
+      "allocations": [
+        {
+          "name": "All Modes",
+          "frequencyRange": { "start": 10000.0, "end": 10500.0 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM", "ATV"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    },
+    {
+      "name": "1.2cm",
+      "frequencyRange": { "start": 24000.0, "end": 24250.0 },
+      "allocations": [
+        {
+          "name": "All Modes",
+          "frequencyRange": { "start": 24000.0, "end": 24250.0 },
+          "modes": ["CW", "Data", "SSB", "AM", "FM", "ATV"],
+          "licenceRestrictions": {
+            "foundation": "NOT_PERMITTED",
+            "standard": "ALLOWED",
+            "advanced": "ALLOWED"
+          },
+          "powerLimits": { "standard": "100W", "advanced": "400W" }
+        }
+      ]
+    }
+  ]
+}

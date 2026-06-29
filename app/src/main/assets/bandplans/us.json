@@ -1,0 +1,37 @@
+{
+  "country": "United States",
+  "countryCode": "US",
+  "licenceClasses": [
+    { "name": "Technician", "id": "technician" },
+    { "name": "General", "id": "general" },
+    { "name": "Amateur Extra", "id": "extra" }
+  ],
+  "bands": [
+    {
+      "name": "80m",
+      "frequencyRange": { "start": 3.5, "end": 4.0 },
+      "allocations": [
+        {
+          "name": "CW/Data",
+          "frequencyRange": { "start": 3.5, "end": 3.6 },
+          "modes": ["CW", "Data"],
+          "licenceRestrictions": {
+            "technician": "NOT_PERMITTED",
+            "general": "ALLOWED",
+            "extra": "ALLOWED"
+          }
+        },
+        {
+          "name": "Phone",
+          "frequencyRange": { "start": 3.8, "end": 4.0 },
+          "modes": ["SSB", "AM"],
+          "licenceRestrictions": {
+            "technician": "NOT_PERMITTED",
+            "general": "ALLOWED",
+            "extra": "ALLOWED"
+          }
+        }
+      ]
+    }
+  ]
+}
