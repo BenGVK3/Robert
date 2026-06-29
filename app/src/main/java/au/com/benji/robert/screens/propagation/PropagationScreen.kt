@@ -36,8 +36,8 @@ fun PropagationScreen(
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
     val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
     
-    // PSK Reporter URL with show-daynight=1 for the grey line integration
-    val pskReporterUrl = "https://pskreporter.info/pskmap.html?show-daynight=1"
+    // PSK Reporter URL with grey line and 80m FT8 anyone last 15 mins settings
+    val pskReporterUrl = "https://pskreporter.info/pskmap.html?show-daynight=1&band=3500000&mode=FT8&timerange=900"
     var isMapFullscreen by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -67,7 +67,7 @@ fun PropagationScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(350.dp)
+                            .height(420.dp)
                             .clip(RoundedCornerShape(12.dp)),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {

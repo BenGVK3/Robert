@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import au.com.benji.robert.theme.Spacing
 
 @Composable
@@ -18,7 +19,7 @@ fun QuickActionCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.height(80.dp),
         onClick = onClick,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -26,23 +27,26 @@ fun QuickActionCard(
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shape = MaterialTheme.shapes.medium
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(Spacing.Medium),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+                .fillMaxSize()
+                .padding(Spacing.Small),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(28.dp)
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 1
             )
         }
     }

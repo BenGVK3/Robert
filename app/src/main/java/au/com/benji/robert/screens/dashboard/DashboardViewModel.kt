@@ -3,6 +3,7 @@ package au.com.benji.robert.screens.dashboard
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.net.toUri
 import au.com.benji.robert.database.DatabaseModule
 import au.com.benji.robert.database.LogEntryEntity
 import au.com.benji.robert.database.ShackEntity
@@ -31,35 +32,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val locationService = LocationService(application)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
     private val logRepository = LogRepository(DatabaseModule.logDao(application))
-    private val qrzRepository = QrzRepository()
-    private val settingsRepository = SettingsRepository(application)
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
     
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
-
-    private val _qrzResult = MutableStateFlow<QrzData?>(null)
-    val qrzResult = _qrzResult.asStateFlow()
-
-    private val _isSearchingQrz = MutableStateFlow(false)
-    val isSearchingQrz = _isSearchingQrz.asStateFlow()
-
-    fun lookupQrz(callsign: String) {
-        viewModelScope.launch {
-            _isSearchingQrz.value = true
-            val username = settingsRepository.qrzUsername.first()
-            val password = settingsRepository.qrzPassword.first()
-            
-            if (qrzRepository.login(username, password)) {
-                _qrzResult.value = qrzRepository.lookup(callsign)
-            } else {
-                // If login fails, we could emit an error or null
-                _qrzResult.value = null
-            }
-            _isSearchingQrz.value = false
-        }
-    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -373,6 +350,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         imagePath: String = ""
     ) {
         viewModelScope.launch {
+            val persistentPath = if (imagePath.isNotEmpty()) {
+                saveImageToInternalStorage(imagePath)
+            } else {
+                ""
+            }
+            
             shackRepository.addEquipment(
                 ShackEntity(
                     category = category,
@@ -381,9 +364,30 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     nickname = nickname.trim(),
                     serialNumber = serialNumber.trim(),
                     notes = notes.trim(),
-                    imagePath = imagePath
+                    imagePath = persistentPath
                 )
             )
+        }
+    }
+
+    private fun saveImageToInternalStorage(uriString: String): String {
+        if (uriString.isEmpty()) return ""
+        if (uriString.startsWith("file://") || uriString.startsWith("/")) return uriString
+
+        return try {
+            val uri = uriString.toUri()
+            val inputStream = getApplication<Application>().contentResolver.openInputStream(uri)
+            val fileName = "shack_${System.currentTimeMillis()}.jpg"
+            val file = java.io.File(getApplication<Application>().filesDir, fileName)
+            inputStream?.use { input ->
+                file.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            uriString
         }
     }
 

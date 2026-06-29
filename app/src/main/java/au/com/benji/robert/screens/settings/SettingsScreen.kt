@@ -2,15 +2,12 @@ package au.com.benji.robert.screens.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.repository.SettingsRepository
@@ -28,14 +25,10 @@ fun SettingsScreen() {
     val savedCallsign by viewModel.callsign.collectAsStateWithLifecycle()
     val savedName by viewModel.name.collectAsStateWithLifecycle()
     val savedGridSquare by viewModel.gridSquare.collectAsStateWithLifecycle()
-    val savedQrzUser by viewModel.qrzUsername.collectAsStateWithLifecycle()
-    val savedQrzPass by viewModel.qrzPassword.collectAsStateWithLifecycle()
 
     var callsign by remember(savedCallsign) { mutableStateOf(savedCallsign) }
     var name by remember(savedName) { mutableStateOf(savedName) }
     var gridSquare by remember(savedGridSquare) { mutableStateOf(savedGridSquare) }
-    var qrzUser by remember(savedQrzUser) { mutableStateOf(savedQrzUser) }
-    var qrzPass by remember(savedQrzPass) { mutableStateOf(savedQrzPass) }
 
     Column(
         modifier = Modifier
@@ -73,39 +66,15 @@ fun SettingsScreen() {
             singleLine = true
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.Small))
-
-        Text(text = "QRZ.com Integration", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-        Text(text = "Required for real-time callsign lookups and log data.", style = MaterialTheme.typography.bodySmall)
-
-        OutlinedTextField(
-            value = qrzUser,
-            onValueChange = { qrzUser = it },
-            label = { Text("QRZ Username") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        OutlinedTextField(
-            value = qrzPass,
-            onValueChange = { qrzPass = it },
-            label = { Text("QRZ Password / API Key") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true
-        )
-
         Spacer(modifier = Modifier.height(Spacing.Large))
 
         Button(
             onClick = { 
                 viewModel.saveSettings(callsign, name, gridSquare)
-                viewModel.saveQrzCredentials(qrzUser, qrzPass)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save All Settings")
+            Text("Save Station Info")
         }
         
         Spacer(modifier = Modifier.height(Spacing.ExtraLarge))

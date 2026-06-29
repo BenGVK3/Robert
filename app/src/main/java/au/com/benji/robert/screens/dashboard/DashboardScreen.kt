@@ -76,6 +76,7 @@ fun DashboardScreen(
     var showManageShackDialog by remember { mutableStateOf(false) }
     var showManageDxDialog by remember { mutableStateOf(false) }
     
+    var selectedShackItem by remember { mutableStateOf<ShackEntity?>(null) }
     var logToDelete by remember { mutableStateOf<LogEntryEntity?>(null) }
     var itemToDelete by remember { mutableStateOf<ShackEntity?>(null) }
 
@@ -205,7 +206,7 @@ fun DashboardScreen(
                     }
 
                     // --- LIVE SPACE WEATHER ---
-                    var solarExpanded by remember { mutableStateOf(false) }
+                    var solarExpanded by remember { mutableStateOf(true) }
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable { solarExpanded = !solarExpanded },
@@ -285,95 +286,96 @@ fun DashboardScreen(
                             }
                         }
                     }
-                }
 
-                // --- LOCAL STATION WEATHER ---
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    DashboardSectionTitle("Local Weather: ${weatherData?.locationName ?: "Locating..."}")
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(Spacing.Large)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "${weatherData?.temperature ?: "--"}${weatherData?.unit ?: "°C"}",
-                                        style = MaterialTheme.typography.displayMedium,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                    Text(
-                                        text = weatherData?.condition?.uppercase() ?: "CHECKING...",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
+                    // --- LOCAL STATION WEATHER ---
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                        DashboardSectionTitle("Local Weather: ${weatherData?.locationName ?: "Locating..."}")
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(Spacing.Large)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "${weatherData?.temperature ?: "--"}${weatherData?.unit ?: "°C"}",
+                                            style = MaterialTheme.typography.displayMedium,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                        Text(
+                                            text = weatherData?.condition?.uppercase() ?: "CHECKING...",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Cloud,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                                     )
                                 }
-                                Icon(
-                                    imageVector = Icons.Default.Cloud,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                                )
+                                
+                                Spacer(modifier = Modifier.height(Spacing.Large))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                Spacer(modifier = Modifier.height(Spacing.Large))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    WeatherDetailItem("Feels like", "${weatherData?.apparentTemperature ?: "--"}°", Icons.Default.Thermostat)
+                                    WeatherDetailItem("Humidity", "${weatherData?.humidity ?: "--"}%", Icons.Default.WaterDrop)
+                                    WeatherDetailItem("Wind", "${weatherData?.windSpeed ?: "--"} km/h", Icons.Default.Air)
+                                }
                             }
-                            
-                            Spacer(modifier = Modifier.height(Spacing.Large))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Spacer(modifier = Modifier.height(Spacing.Large))
-                            
+                        }
+                    }
+
+                    // --- COMMAND CENTER ---
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                        DashboardSectionTitle("Command Center")
+                        
+                        val controlActions = listOf(
+                            ControlAction("Propagation", Icons.Default.SignalCellularAlt, { navController.navigate(Screen.Propagation.route) }),
+                            ControlAction("DX Spots", Icons.Default.Radar, { showManageDxDialog = true }),
+                            ControlAction("Logbook", Icons.Default.EditNote, { showManageLogsDialog = true }),
+                            ControlAction("The Shack", Icons.Default.HomeWork, { showManageShackDialog = true }),
+                            ControlAction("SDR Control", Icons.Default.Radio, { navController.navigate(Screen.Sdr.route) }),
+                            ControlAction("APRS Map", Icons.Default.LocationOn, { navController.navigate(Screen.Aprs.route) }),
+                            ControlAction("Satellites", Icons.Default.Explore, { navController.navigate(Screen.Satellites.route) }),
+                            ControlAction("Radio Tools", Icons.Default.Construction, { navController.navigate(Screen.Tools.route) }),
+                            ControlAction("Settings", Icons.Default.Settings, { navController.navigate(Screen.Settings.route) })
+                        )
+
+                        for (rowActions in controlActions.chunked(3)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
                             ) {
-                                WeatherDetailItem("Feels like", "${weatherData?.apparentTemperature ?: "--"}°", Icons.Default.Thermostat)
-                                WeatherDetailItem("Humidity", "${weatherData?.humidity ?: "--"}%", Icons.Default.WaterDrop)
-                                WeatherDetailItem("Wind", "${weatherData?.windSpeed ?: "--"} km/h", Icons.Default.Air)
+                                for (action in rowActions) {
+                                    QuickActionCard(
+                                        modifier = Modifier.weight(1f),
+                                        icon = action.icon,
+                                        title = action.title,
+                                        onClick = action.onClick
+                                    )
+                                }
+                                repeat(3 - rowActions.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
                 }
 
-                // --- COMMAND CENTER ---
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    DashboardSectionTitle("Command Center")
-                    
-                    val controlActions = listOf(
-                        ControlAction("Propagation", Icons.Default.SignalCellularAlt, { navController.navigate(Screen.Propagation.route) }),
-                        ControlAction("DX Spots", Icons.Default.Radar, { showManageDxDialog = true }),
-                        ControlAction("Logbook", Icons.Default.EditNote, { showManageLogsDialog = true }),
-                        ControlAction("The Shack", Icons.Default.HomeWork, { showManageShackDialog = true }),
-                        ControlAction("SDR Control", Icons.Default.Radio, { navController.navigate(Screen.Sdr.route) }),
-                        ControlAction("APRS Map", Icons.Default.LocationOn, { navController.navigate(Screen.Aprs.route) }),
-                        ControlAction("Satellites", Icons.Default.Explore, { navController.navigate(Screen.Satellites.route) }),
-                        ControlAction("Radio Tools", Icons.Default.Construction, { navController.navigate(Screen.Tools.route) }),
-                        ControlAction("Settings", Icons.Default.Settings, { navController.navigate(Screen.Settings.route) })
-                    )
-
-                    for (rowActions in controlActions.chunked(2)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-                        ) {
-                            for (action in rowActions) {
-                                QuickActionCard(
-                                    modifier = Modifier.weight(1f),
-                                    icon = action.icon,
-                                    title = action.title,
-                                    onClick = action.onClick
-                                )
-                            }
-                            if (rowActions.size == 1) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                }
                 
                 Spacer(modifier = Modifier.height(Spacing.ExtraLarge))
             }
@@ -517,6 +519,7 @@ fun DashboardScreen(
                             for (item in equipment) {
                                 ShackItemCard(
                                     item = item, 
+                                    onClick = { selectedShackItem = item },
                                     onDelete = { itemToDelete = item },
                                     onImageClick = { selectedImage = it }
                                 )
@@ -549,18 +552,41 @@ fun DashboardScreen(
         )
     }
 
+    selectedShackItem?.let { item ->
+        ShackDetailDialog(
+            item = item,
+            onDismiss = { selectedShackItem = null },
+            onImageClick = { selectedImage = it }
+        )
+    }
+
     if (selectedImage != null) {
-        Dialog(onDismissRequest = { selectedImage = null }) {
+        Dialog(
+            onDismissRequest = { selectedImage = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
             Surface(
-                modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                shape = MaterialTheme.shapes.large
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black
             ) {
-                AsyncImage(
-                    model = selectedImage,
-                    contentDescription = "Full Size View",
-                    modifier = Modifier.fillMaxWidth().height(400.dp),
-                    contentScale = ContentScale.Fit
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = selectedImage,
+                        contentDescription = "Full Size View",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                    
+                    IconButton(
+                        onClick = { selectedImage = null },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
             }
         }
     }
@@ -711,11 +737,12 @@ fun EmptySectionCard(text: String) {
 @Composable
 fun ShackItemCard(
     item: ShackEntity,
+    onClick: () -> Unit,
     onDelete: () -> Unit,
     onImageClick: (String) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -761,6 +788,100 @@ fun ShackItemCard(
             }
         }
     }
+}
+
+@Composable
+fun ShackDetailDialog(
+    item: ShackEntity,
+    onDismiss: () -> Unit,
+    onImageClick: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = item.manufacturer.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = item.model,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+            ) {
+                if (item.imagePath.isNotEmpty()) {
+                    AsyncImage(
+                        model = item.imagePath,
+                        contentDescription = item.model,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable { onImageClick(item.imagePath) },
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                if (item.nickname.isNotEmpty()) {
+                    Column {
+                        Text(
+                            text = "NICKNAME",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = item.nickname,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Column {
+                    Text(
+                        text = "CATEGORY",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = item.category,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                if (item.notes.isNotEmpty()) {
+                    Column {
+                        Text(
+                            text = "NOTES",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = item.notes,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CLOSE")
+            }
+        }
+    )
 }
 
 @Composable
