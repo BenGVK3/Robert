@@ -364,7 +364,7 @@ data class Quadruple<out A, out B, out C, out D>(
 
     val quickActions = listOf(
         QuickAction("📡", "Propagation", Screen.Propagation.route),
-        QuickAction("📻", "SDR", Screen.Sdr.route),
+        QuickAction("📻", "KiwiSDR", Screen.Sdr.route),
         QuickAction("📍", "APRS", Screen.Aprs.route),
         QuickAction("🛰", "Satellites", Screen.Satellites.route),
         QuickAction("🛠", "Tools", Screen.Tools.route),

@@ -387,7 +387,7 @@ fun DashboardScreen(
                             ControlAction("DX Spots", Icons.Default.Radar, { showManageDxDialog = true }),
                             ControlAction("Logbook", Icons.Default.EditNote, { showManageLogsDialog = true }),
                             ControlAction("The Shack", Icons.Default.HomeWork, { showManageShackDialog = true }),
-                            ControlAction("SDR Control", Icons.Default.Radio, { navController.navigate(Screen.Sdr.route) }),
+                            ControlAction("KiwiSDR", Icons.Default.Radio, { navController.navigate(Screen.Sdr.route) }),
                             ControlAction("APRS Map", Icons.Default.LocationOn, { navController.navigate(Screen.Aprs.route) }),
                             ControlAction("Satellites", Icons.Default.Explore, { navController.navigate(Screen.Satellites.route) }),
                             ControlAction("Radio Tools", Icons.Default.Construction, { navController.navigate(Screen.Tools.route) }),

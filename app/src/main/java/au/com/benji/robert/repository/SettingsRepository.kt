@@ -19,6 +19,7 @@ class SettingsRepository(private val context: Context) {
         val GRID_SQUARE = stringPreferencesKey("grid_square")
         val COUNTRY = stringPreferencesKey("country")
         val LICENCE_CLASS = stringPreferencesKey("licence_class")
+        val KIWISDR_URL = stringPreferencesKey("kiwisdr_url")
     }
 
     val callsign: Flow<String> = context.dataStore.data.map { it[CALLSIGN] ?: "VK3XYZ" }
@@ -26,6 +27,13 @@ class SettingsRepository(private val context: Context) {
     val gridSquare: Flow<String> = context.dataStore.data.map { it[GRID_SQUARE] ?: "QF22og" }
     val country: Flow<String> = context.dataStore.data.map { it[COUNTRY] ?: "Australia" }
     val licenceClass: Flow<String> = context.dataStore.data.map { it[LICENCE_CLASS] ?: "foundation" }
+    val kiwisdrUrl: Flow<String> = context.dataStore.data.map { it[KIWISDR_URL] ?: "https://kiwisdr.com/public/" }
+
+    suspend fun saveKiwisdrUrl(url: String) {
+        context.dataStore.edit { settings ->
+            settings[KIWISDR_URL] = url
+        }
+    }
 
     suspend fun saveSettings(callsign: String, name: String, gridSquare: String, country: String, licenceClass: String) {
         context.dataStore.edit { settings ->
