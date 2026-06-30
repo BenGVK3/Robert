@@ -12,7 +12,6 @@ import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
@@ -101,16 +100,18 @@ fun PropagationScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     
-                    TextButton(
-                        onClick = { isMapExpanded = !isMapExpanded },
-                        contentPadding = PaddingValues(horizontal = 8.dp)
-                    ) {
-                        Text(if (isMapExpanded) "HIDE MAP" else "SHOW MAP")
-                        Icon(
-                            if (isMapExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    if (isMapExpanded) {
+                        TextButton(
+                            onClick = { isMapExpanded = false },
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text("HIDE MAP")
+                            Icon(
+                                Icons.Default.ExpandLess,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
 
@@ -156,7 +157,7 @@ fun PropagationScreen(
                         ) {
                             Icon(Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(Spacing.Small))
-                            Text("Tap to view live digital traffic map", style = MaterialTheme.typography.bodySmall)
+                            Text("SHOW MAP: Tap to view live digital traffic map", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

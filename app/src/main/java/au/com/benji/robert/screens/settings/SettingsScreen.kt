@@ -32,6 +32,7 @@ fun SettingsScreen() {
     val savedGridSquare by viewModel.gridSquare.collectAsStateWithLifecycle()
     val savedCountry by viewModel.country.collectAsStateWithLifecycle()
     val savedLicenceClass by viewModel.licenceClass.collectAsStateWithLifecycle()
+    val savedThemeMode by viewModel.themeMode.collectAsStateWithLifecycle()
 
     var callsign by remember(savedCallsign) { mutableStateOf(savedCallsign) }
     var name by remember(savedName) { mutableStateOf(savedName) }
@@ -144,6 +145,22 @@ fun SettingsScreen() {
                         }
                     )
                 }
+            }
+        }
+
+        Text(text = "Appearance", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+        ) {
+            listOf("System", "Light", "Dark").forEach { mode ->
+                FilterChip(
+                    selected = savedThemeMode == mode,
+                    onClick = { viewModel.saveThemeMode(mode) },
+                    label = { Text(mode) },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 

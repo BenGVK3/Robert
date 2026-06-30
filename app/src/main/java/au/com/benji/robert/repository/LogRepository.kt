@@ -11,5 +11,7 @@ class LogRepository(
 
     suspend fun addLog(entry: LogEntryEntity) = dao.insert(entry)
 
+    suspend fun updateLog(entry: LogEntryEntity) = dao.update(entry)
+
     suspend fun deleteLog(entry: LogEntryEntity) = dao.delete(entry)
 }

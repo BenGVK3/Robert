@@ -29,6 +29,9 @@ class SettingsViewModel(
     val licenceClass: StateFlow<String> = repository.licenceClass
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "foundation")
 
+    val themeMode: StateFlow<String> = repository.themeMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "System")
+
     fun getCountries() = bandPlanRepository.getSupportedCountries()
 
     fun getLicenceClasses(country: String): List<au.com.benji.robert.models.LicenceClass> {
@@ -38,6 +41,12 @@ class SettingsViewModel(
     fun saveSettings(callsign: String, name: String, gridSquare: String, country: String, licenceClass: String) {
         viewModelScope.launch {
             repository.saveSettings(callsign, name, gridSquare, country, licenceClass)
+        }
+    }
+
+    fun saveThemeMode(mode: String) {
+        viewModelScope.launch {
+            repository.saveThemeMode(mode)
         }
     }
 }

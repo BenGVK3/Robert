@@ -20,6 +20,7 @@ class SettingsRepository(private val context: Context) {
         val COUNTRY = stringPreferencesKey("country")
         val LICENCE_CLASS = stringPreferencesKey("licence_class")
         val KIWISDR_URL = stringPreferencesKey("kiwisdr_url")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     val callsign: Flow<String> = context.dataStore.data.map { it[CALLSIGN] ?: "VK3XYZ" }
@@ -28,10 +29,17 @@ class SettingsRepository(private val context: Context) {
     val country: Flow<String> = context.dataStore.data.map { it[COUNTRY] ?: "Australia" }
     val licenceClass: Flow<String> = context.dataStore.data.map { it[LICENCE_CLASS] ?: "foundation" }
     val kiwisdrUrl: Flow<String> = context.dataStore.data.map { it[KIWISDR_URL] ?: "https://kiwisdr.com/public/" }
+    val themeMode: Flow<String> = context.dataStore.data.map { it[THEME_MODE] ?: "System" }
 
     suspend fun saveKiwisdrUrl(url: String) {
         context.dataStore.edit { settings ->
             settings[KIWISDR_URL] = url
+        }
+    }
+
+    suspend fun saveThemeMode(mode: String) {
+        context.dataStore.edit { settings ->
+            settings[THEME_MODE] = mode
         }
     }
 

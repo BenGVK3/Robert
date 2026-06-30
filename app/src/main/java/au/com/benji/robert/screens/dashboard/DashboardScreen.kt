@@ -85,6 +85,7 @@ fun DashboardScreen(
     
     var selectedShackItem by remember { mutableStateOf<ShackEntity?>(null) }
     var selectedDxSpot by remember { mutableStateOf<DxSpot?>(null) }
+    var selectedLogEntry by remember { mutableStateOf<LogEntryEntity?>(null) }
     var logToDelete by remember { mutableStateOf<LogEntryEntity?>(null) }
     var itemToDelete by remember { mutableStateOf<ShackEntity?>(null) }
 
@@ -250,11 +251,6 @@ fun DashboardScreen(
                             verticalAlignment = Alignment.Bottom
                         ) {
                             DashboardSectionTitle("Space Weather")
-                            Text(
-                                text = "Real-time Data",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
                         }
                         
                         Card(
@@ -503,7 +499,11 @@ fun DashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
                             for (entry in logs) {
-                                LogEntryItem(entry = entry, onDelete = { logToDelete = entry })
+                                LogEntryItem(
+                                    entry = entry, 
+                                    onClick = { selectedLogEntry = entry },
+                                    onDelete = { logToDelete = entry }
+                                )
                             }
                         }
                     }
@@ -565,11 +565,40 @@ fun DashboardScreen(
 
     // --- ADDING DIALOGS ---
     if (showAddLogDialog) {
-        AddLogDialog(
+        LogDialog(
             onDismiss = { showAddLogDialog = false },
-            onConfirm = { callsign, freq, band, mode, notes ->
-                viewModel.addLog(callsign, freq, band, mode, notes)
+            onConfirm = { entry ->
+                viewModel.addLog(
+                    callsign = entry.callsign,
+                    name = entry.name,
+                    qth = entry.qth,
+                    frequency = entry.frequency,
+                    band = entry.band,
+                    mode = entry.mode,
+                    rstSent = entry.rstSent,
+                    rstReceived = entry.rstReceived,
+                    power = entry.power,
+                    timestamp = entry.timestamp,
+                    notes = entry.notes,
+                    sotaRef = entry.sotaRef,
+                    potaRef = entry.potaRef,
+                    wwffRef = entry.wwffRef,
+                    hemaRef = entry.hemaRef,
+                    siotaRef = entry.siotaRef,
+                    vkShireRef = entry.vkShireRef
+                )
                 showAddLogDialog = false
+            }
+        )
+    }
+
+    selectedLogEntry?.let { entry ->
+        LogDialog(
+            existingEntry = entry,
+            onDismiss = { selectedLogEntry = null },
+            onConfirm = { updatedEntry ->
+                viewModel.updateLog(updatedEntry)
+                selectedLogEntry = null
             }
         )
     }
@@ -1197,14 +1226,16 @@ fun DetailInfoItem(label: String, value: String, modifier: Modifier = Modifier) 
 @Composable
 fun LogEntryItem(
     entry: LogEntryEntity,
+    onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val zuluFormat = remember { SimpleDateFormat("HH:mm'Z'", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") } }
     val localFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val dateFormat = remember { SimpleDateFormat("MMM d", Locale.getDefault()) }
+    val uriHandler = LocalUriHandler.current
     
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -1218,7 +1249,16 @@ fun LogEntryItem(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = entry.callsign.uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = entry.callsign.uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(Spacing.Small))
+                        IconButton(
+                            onClick = { uriHandler.openUri("https://www.qrz.com/db/${entry.callsign}") },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Public, contentDescription = "QRZ", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.outline)
+                        }
+                    }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(text = dateFormat.format(Date(entry.timestamp)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1233,10 +1273,31 @@ fun LogEntryItem(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val info = mutableListOf<String>()
+                    info.add("${entry.band} • ${entry.mode}")
+                    if (entry.frequency.isNotEmpty()) info.add("${entry.frequency} kHz")
+                    if (entry.power.isNotEmpty()) info.add("${entry.power}W")
+                    
                     Text(
-                        text = "${entry.band} • ${entry.mode} • ${entry.frequency} MHz", 
+                        text = info.joinToString(" • "), 
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium
+                    )
+                    
+                    if (entry.rstSent.isNotEmpty() || entry.rstReceived.isNotEmpty()) {
+                        Text(
+                            text = "S:${entry.rstSent} R:${entry.rstReceived}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+                
+                if (entry.name.isNotEmpty() || entry.qth.isNotEmpty()) {
+                    Text(
+                        text = listOf(entry.name, entry.qth).filter { it.isNotEmpty() }.joinToString(", "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary
                     )
                 }
             }
@@ -1246,42 +1307,6 @@ fun LogEntryItem(
             }
         }
     }
-}
-
-@Composable
-fun AddLogDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, String, String, String) -> Unit
-) {
-    var callsign by remember { mutableStateOf("") }
-    var frequency by remember { mutableStateOf("") }
-    var band by remember { mutableStateOf("") }
-    var mode by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Log New QSO", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                RobertTextField(value = callsign, onValueChange = { callsign = it }, label = "Callsign")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(modifier = Modifier.weight(1f)) { RobertTextField(value = frequency, onValueChange = { frequency = it }, label = "Freq (MHz)") }
-                    Box(modifier = Modifier.weight(1f)) { RobertTextField(value = band, onValueChange = { band = it }, label = "Band") }
-                }
-                RobertTextField(value = mode, onValueChange = { mode = it }, label = "Mode (FT8, SSB...)")
-                RobertTextField(value = notes, onValueChange = { notes = it }, label = "Notes")
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(callsign, frequency, band, mode, notes) }, enabled = callsign.isNotBlank()) {
-                Text("Save Entry")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

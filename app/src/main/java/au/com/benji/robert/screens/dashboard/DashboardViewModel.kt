@@ -379,17 +379,53 @@ data class Quadruple<out A, out B, out C, out D>(
     )
 
     // Logbook Actions
-    fun addLog(callsign: String, frequency: String, band: String, mode: String, notes: String = "") {
+    fun addLog(
+        callsign: String,
+        name: String = "",
+        qth: String = "",
+        frequency: String,
+        band: String,
+        mode: String,
+        rstSent: String = "59",
+        rstReceived: String = "59",
+        power: String = "",
+        timestamp: Long = System.currentTimeMillis(),
+        notes: String = "",
+        sotaRef: String = "",
+        potaRef: String = "",
+        wwffRef: String = "",
+        hemaRef: String = "",
+        siotaRef: String = "",
+        vkShireRef: String = ""
+    ) {
         viewModelScope.launch {
             logRepository.addLog(
                 LogEntryEntity(
                     callsign = callsign.trim(),
+                    name = name.trim(),
+                    qth = qth.trim(),
                     frequency = frequency.trim(),
                     band = band.trim(),
                     mode = mode.trim(),
-                    notes = notes.trim()
+                    rstSent = rstSent,
+                    rstReceived = rstReceived,
+                    power = power.trim(),
+                    timestamp = timestamp,
+                    notes = notes.trim(),
+                    sotaRef = sotaRef.trim(),
+                    potaRef = potaRef.trim(),
+                    wwffRef = wwffRef.trim(),
+                    hemaRef = hemaRef.trim(),
+                    siotaRef = siotaRef.trim(),
+                    vkShireRef = vkShireRef.trim()
                 )
             )
+        }
+    }
+
+    fun updateLog(entry: LogEntryEntity) {
+        viewModelScope.launch {
+            logRepository.updateLog(entry)
         }
     }
 

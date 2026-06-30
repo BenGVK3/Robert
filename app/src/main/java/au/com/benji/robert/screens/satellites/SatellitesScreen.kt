@@ -37,7 +37,6 @@ fun SatellitesScreen(
     viewModel: DashboardViewModel = viewModel()
 ) {
     val positions by viewModel.satellitePositions.collectAsStateWithLifecycle()
-    val timer by viewModel.nextPassTimer.collectAsStateWithLifecycle()
     val location by viewModel.locationFlow.collectAsStateWithLifecycle()
     val searchQuery by viewModel.satelliteSearchQuery.collectAsStateWithLifecycle()
     val trackedIds by viewModel.trackedSatelliteIds.collectAsStateWithLifecycle()
@@ -153,25 +152,6 @@ fun SatellitesScreen(
                     )
                 }
 
-                // --- UPCOMING PASS CARD ---
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(Spacing.Medium),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.SatelliteAlt, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(Spacing.Medium))
-                            Column {
-                                Text(text = "NEXT PRIORITY PASS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black)
-                                Text(text = timer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
 
                 // --- SATELLITE LIST ---
                 val filteredPositions = positions.filter { 
