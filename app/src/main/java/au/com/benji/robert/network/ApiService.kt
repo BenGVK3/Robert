@@ -19,7 +19,8 @@ object ApiService {
         Log.d(TAG, "Fetching: $url")
         val request = Request.Builder()
             .url(url)
-            .header("Cache-Control", "no-cache") // Ensure fresh data from server
+            .header("Cache-Control", "no-cache")
+            .header("User-Agent", "Robert-Ham-App/1.0") // Add User-Agent to avoid being blocked
             .build()
 
         try {

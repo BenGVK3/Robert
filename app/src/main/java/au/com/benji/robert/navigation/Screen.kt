@@ -12,4 +12,9 @@ sealed class Screen(
     object Aprs : Screen("aprs")
     object Satellites : Screen("satellites")
     object BandPlan : Screen("bandplan")
+    object RepeaterList : Screen("repeaterlist")
+    object RepeaterMap : Screen("repeatermap")
+    object RepeaterDetail : Screen("repeaterdetail/{callsign}/{frequency}") {
+        fun createRoute(callsign: String, frequency: String) = "repeaterdetail/$callsign/$frequency"
+    }
 }

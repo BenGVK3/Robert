@@ -389,6 +389,7 @@ fun DashboardScreen(
                             ControlAction("The Shack", Icons.Default.HomeWork, { showManageShackDialog = true }),
                             ControlAction("KiwiSDR", Icons.Default.Radio, { navController.navigate(Screen.Sdr.route) }),
                             ControlAction("APRS Map", Icons.Default.LocationOn, { navController.navigate(Screen.Aprs.route) }),
+                            ControlAction("Repeaters", Icons.Default.CellTower, { navController.navigate(Screen.RepeaterList.route) }),
                             ControlAction("Satellites", Icons.Default.Explore, { navController.navigate(Screen.Satellites.route) }),
                             ControlAction("Radio Tools", Icons.Default.Construction, { navController.navigate(Screen.Tools.route) }),
                             ControlAction("Settings", Icons.Default.Settings, { navController.navigate(Screen.Settings.route) })

@@ -62,6 +62,11 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
 
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.serialization)
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.maps)
+
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.play.services.location)

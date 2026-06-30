@@ -37,3 +37,10 @@ fun calculateBearing(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Do
     val x = cos(l1) * sin(l2) - sin(l1) * cos(l2) * cos(dl)
     return (Math.toDegrees(atan2(y, x)) + 360) % 360
 }
+
+fun getCompassDirection(bearing: Double): String {
+    val directions = listOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
+    val index = (((bearing + 11.25) % 360) / 22.5).toInt()
+    return directions[index % 16]
+}
+

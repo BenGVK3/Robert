@@ -39,12 +39,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.R
+import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ToolsScreen(
+    navController: androidx.navigation.NavController,
     viewModel: DashboardViewModel = viewModel()
 ) {
     var activeTool by remember { mutableStateOf<String?>(null) }
@@ -478,6 +480,7 @@ fun findRegionForPrefix(query: String): SearchResult? {
         q.startsWith("LA") || q.startsWith("LB") || q.startsWith("LI") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(-400f, -200f), 4f)
         q.startsWith("SM") || q.startsWith("SK") || q.startsWith("SL") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(-100f, 0f), 4f)
         q.startsWith("OH") || q.startsWith("OI") || q.startsWith("OF") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(300f, -100f), 4f)
+        q.startsWith("OH") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(300f, -100f), 4f)
         q.startsWith("OZ") || q.startsWith("OU") || q.startsWith("OV") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(-200f, 400f), 5f)
         
         // Russia
@@ -508,4 +511,3 @@ fun findRegionForPrefix(query: String): SearchResult? {
         else -> null
     }
 }
-
