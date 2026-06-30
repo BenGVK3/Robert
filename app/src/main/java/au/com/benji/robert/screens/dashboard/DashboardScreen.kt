@@ -9,6 +9,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +64,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
+    val callsign by viewModel.callsign.collectAsStateWithLifecycle()
     val locationData by viewModel.locationFlow.collectAsStateWithLifecycle()
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
@@ -69,6 +73,7 @@ fun DashboardScreen(
     val dxSpots by viewModel.dxSpots.collectAsStateWithLifecycle()
     val isRefreshingDx by viewModel.isRefreshingDx.collectAsStateWithLifecycle()
     val recommendation by viewModel.recommendation.collectAsStateWithLifecycle()
+    val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
     var showAddLogDialog by remember { mutableStateOf(false) }
@@ -118,29 +123,29 @@ fun DashboardScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Large)
             ) {
-                // --- HERO BANNER ---
+                // --- MODERN HERO HEADER ---
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
+                        .height(200.dp)
                 ) {
-                    AsyncImage(
-                        model = "https://i.imgur.com/HumKlMe.png",
+                    Image(
+                        painter = painterResource(id = au.com.benji.robert.R.drawable.robertheader),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        error = painterResource(android.R.drawable.ic_menu_gallery),
-                        placeholder = painterResource(android.R.drawable.ic_menu_gallery)
+                        contentScale = ContentScale.Crop
                     )
+                    
+                    // Dark overlay for readability
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Black.copy(alpha = 0.2f),
-                                        Color.Black.copy(alpha = 0.5f),
-                                        Color.Black.copy(alpha = 0.85f)
+                                        Color.Black.copy(alpha = 0.3f),
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
+                                        MaterialTheme.colorScheme.background
                                     )
                                 )
                             )
@@ -150,28 +155,38 @@ fun DashboardScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.Center)
-                            .padding(horizontal = Spacing.Medium)
-                            .padding(top = 40.dp),
+                            .padding(top = Spacing.Medium),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        RobertTopBar()
+                        Text(
+                            text = "R.O.B.E.R.T",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 6.sp,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
                         
-                        locationData?.fourth?.let { maidenhead ->
-                            Spacer(modifier = Modifier.height(Spacing.Small))
-                            Surface(
-                                color = Color.White.copy(alpha = 0.2f),
-                                shape = MaterialTheme.shapes.small,
-                                modifier = Modifier.clickable { /* Copy or something */ }
-                            ) {
-                                Text(
-                                    text = maidenhead,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    letterSpacing = 1.sp
-                                )
-                            }
+                        Text(
+                            text = "Radio Operator's Band Exploration & Resource Tool",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            fontWeight = FontWeight.Medium
+                        )
+                        
+                        Spacer(modifier = Modifier.height(Spacing.Large))
+                        
+                        // Status Badges
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            HeaderBadge(text = callsign, icon = Icons.Default.Person)
+                            HeaderBadge(text = locationData?.fourth ?: "---", icon = Icons.Default.LocationOn)
+                            HeaderBadge(
+                                text = "OPERATIONAL", 
+                                icon = Icons.Default.CheckCircle,
+                                color = Color(0xFF4CAF50)
+                            )
                         }
                     }
                 }
@@ -180,150 +195,125 @@ fun DashboardScreen(
                     modifier = Modifier.padding(horizontal = Spacing.Medium),
                     verticalArrangement = Arrangement.spacedBy(Spacing.Large)
                 ) {
-                    // --- PRO OPERATOR CARD ---
+                    // --- PREMIUM OPERATOR INSIGHT ---
                     Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(Spacing.Large),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            MaterialTheme.colorScheme.surface
+                                        )
+                                    )
+                                )
+                                .padding(horizontal = Spacing.Medium, vertical = Spacing.Small)
                         ) {
-                            Surface(
-                                modifier = Modifier.size(56.dp),
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Default.AutoAwesome, 
-                                        contentDescription = null, 
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(32.dp)
+                                Icon(
+                                    Icons.Default.Insights, 
+                                    contentDescription = null, 
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "OPERATOR'S INSIGHT",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Text(
+                                        text = recommendation,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
-                            }
-                            Column {
-                                Text(
-                                    text = "OPERATOR'S INSIGHT",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.5.sp
-                                )
-                                Text(
-                                    text = recommendation,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
                             }
                         }
                     }
 
-                    // --- LIVE SPACE WEATHER ---
-                    var solarExpanded by remember { mutableStateOf(true) }
+                    // --- COMPACT SPACE WEATHER ---
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable { solarExpanded = !solarExpanded },
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Bottom
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                DashboardSectionTitle("Space Weather")
-                                Icon(
-                                    if (solarExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(start = 4.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                            DashboardSectionTitle("Space Weather")
                             Text(
-                                text = "HamQSL Real-time",
+                                text = "Real-time Data",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
                         }
                         
-                        AnimatedVisibility(visible = solarExpanded) {
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            shape = RoundedCornerShape(24.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+                                // Important Values Row
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Medium),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    MetricCard(
-                                        modifier = Modifier.weight(1f),
+                                    ImportantMetric(
+                                        modifier = Modifier.weight(1.2f),
                                         title = "Solar Flux",
                                         value = solarData.solarFlux.toString(),
                                         icon = Icons.Default.WbSunny
                                     )
-                                    MetricCard(
-                                        modifier = Modifier.weight(1f),
-                                        title = "Sunspots",
-                                        value = solarData.sunspots.toString(),
-                                        icon = Icons.Default.BrightnessLow
-                                    )
-                                }
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    MetricCard(
+                                    ImportantMetric(
                                         modifier = Modifier.weight(1f),
                                         title = "K-Index",
                                         value = solarData.kIndex.toString(),
                                         icon = Icons.Default.Public
                                     )
-                                    MetricCard(
-                                        modifier = Modifier.weight(1f),
-                                        title = "A-Index",
-                                        value = solarData.aIndex.toString(),
-                                        icon = Icons.AutoMirrored.Filled.TrendingUp
-                                    )
-                                }
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    MetricCard(
-                                        modifier = Modifier.weight(1f),
+                                    ImportantMetric(
+                                        modifier = Modifier.weight(1.2f),
                                         title = "MUF",
                                         value = solarData.muf.replace(" MHz", ""),
                                         unit = "MHz",
                                         icon = Icons.Default.Wifi
                                     )
-                                    MetricCard(
-                                        modifier = Modifier.weight(1f),
-                                        title = "X-Ray",
-                                        value = solarData.xRay,
-                                        icon = Icons.Default.Thunderstorm
-                                    )
                                 }
-
+                                
+                                // Secondary Values Grid
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    MetricCard(
-                                        modifier = Modifier.weight(1f),
-                                        title = "Sunrise",
-                                        value = weatherData?.sunrise ?: "--:--",
-                                        icon = Icons.Default.WbTwilight
-                                    )
-                                    MetricCard(
-                                        modifier = Modifier.weight(1f),
-                                        title = "Sunset",
-                                        value = weatherData?.sunset ?: "--:--",
-                                        icon = Icons.Default.WbTwilight
-                                    )
+                                    CompactMetric(modifier = Modifier.weight(1f), label = "Sunspots", value = solarData.sunspots.toString())
+                                    CompactMetric(modifier = Modifier.weight(1f), label = "A-Index", value = solarData.aIndex.toString())
+                                    CompactMetric(modifier = Modifier.weight(1f), label = "X-Ray", value = solarData.xRay)
                                 }
                             }
                         }
+                        
+                        // Propagation Summary
+                        val summary = remember(propagationData) {
+                            val goodBands = propagationData?.bands?.filter { it.rating == "Excellent" || it.rating == "Good" } ?: emptyList()
+                            if (goodBands.isEmpty()) "Conditions stable across most bands"
+                            else "${goodBands.take(2).joinToString(" and ") { it.band }} currently active"
+                        }
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = Spacing.Small)
+                        )
                     }
 
                     // --- LOCAL STATION WEATHER ---
@@ -379,7 +369,7 @@ fun DashboardScreen(
                     }
 
                     // --- COMMAND CENTER ---
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
                         DashboardSectionTitle("Command Center")
                         
                         val controlActions = listOf(
@@ -395,21 +385,23 @@ fun DashboardScreen(
                             ControlAction("Settings", Icons.Default.Settings, { navController.navigate(Screen.Settings.route) })
                         )
 
-                        for (rowActions in controlActions.chunked(3)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-                            ) {
-                                for (action in rowActions) {
-                                    QuickActionCard(
-                                        modifier = Modifier.weight(1f),
-                                        icon = action.icon,
-                                        title = action.title,
-                                        onClick = action.onClick
-                                    )
-                                }
-                                repeat(3 - rowActions.size) {
-                                    Spacer(modifier = Modifier.weight(1f))
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            for (rowActions in controlActions.chunked(2)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+                                ) {
+                                    for (action in rowActions) {
+                                        PremiumActionCard(
+                                            modifier = Modifier.weight(1f),
+                                            icon = action.icon,
+                                            title = action.title,
+                                            onClick = action.onClick
+                                        )
+                                    }
+                                    if (rowActions.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
@@ -685,6 +677,174 @@ fun DashboardScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun HeaderBadge(
+    text: String,
+    icon: ImageVector,
+    color: Color = MaterialTheme.colorScheme.primary
+) {
+    Surface(
+        color = color.copy(alpha = 0.1f),
+        shape = CircleShape,
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.2f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = color
+            )
+            Text(
+                text = text.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = color,
+                letterSpacing = 0.5.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun ImportantMetric(
+    title: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    unit: String? = null
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (unit != null) {
+                Text(
+                    text = unit,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(bottom = 2.dp, start = 2.dp),
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.outline
+        )
+    }
+}
+
+@Composable
+fun CompactMetric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
+            fontSize = 9.sp
+        )
+    }
+}
+
+@Composable
+fun PremiumActionCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "scale"
+    )
+
+    Card(
+        modifier = modifier
+            .height(80.dp)
+            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = if (isPressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) 
+                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = Spacing.Medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+        ) {
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = if (isPressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = if (isPressed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 

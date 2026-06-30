@@ -32,6 +32,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val aprsRepository = AprsRepository()
     private val dxRepository = DxRepository()
     private val locationService = LocationService(application)
+    private val settingsRepository = SettingsRepository(application)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
     private val logRepository = LogRepository(DatabaseModule.logDao(application))
 
@@ -39,6 +40,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
+
+    val callsign = settingsRepository.callsign.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "VK3XYZ"
+    )
 
     fun refresh() {
         viewModelScope.launch {
