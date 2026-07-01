@@ -42,13 +42,6 @@ class DashboardRepository {
                 icon = "🌤",
                 title = "Weather",
                 value = "14°C • Clear"
-            ),
-
-            InfoCardModel(
-                type = CardType.SATELLITE,
-                icon = "🛰",
-                title = "Next Pass",
-                value = "ISS • 18 min"
             )
         )
     }

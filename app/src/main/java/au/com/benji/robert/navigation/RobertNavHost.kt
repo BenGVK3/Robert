@@ -1,6 +1,7 @@
 package au.com.benji.robert.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -8,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import au.com.benji.robert.screens.dashboard.DashboardScreen
 import au.com.benji.robert.screens.propagation.PropagationScreen
+import au.com.benji.robert.screens.logbook.LogbookScreen
 import au.com.benji.robert.screens.settings.SettingsScreen
 import au.com.benji.robert.screens.tools.ToolsScreen
 import au.com.benji.robert.screens.sdr.SdrScreen
@@ -20,12 +22,14 @@ import au.com.benji.robert.screens.repeater.RepeaterDetailScreen
 
 @Composable
 fun RobertNavHost(
-    navController: NavHostController
+    navController: NavHostController,
+    modifier: Modifier = Modifier
 ) {
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Dashboard.route
+        startDestination = Screen.Dashboard.route,
+        modifier = modifier
     ) {
 
         composable(Screen.Dashboard.route) {
@@ -34,6 +38,10 @@ fun RobertNavHost(
 
         composable(Screen.Propagation.route) {
             PropagationScreen()
+        }
+
+        composable(Screen.Logbook.route) {
+            LogbookScreen()
         }
 
         composable(Screen.Tools.route) {

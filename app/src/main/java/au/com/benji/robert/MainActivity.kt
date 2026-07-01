@@ -56,13 +56,15 @@ fun RobertApp() {
     val navController = rememberNavController()
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         bottomBar = {
             BottomNavigationBar(navController)
         }
     ) { innerPadding ->
-
         Surface(
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
             RobertNavHost(navController)
         }

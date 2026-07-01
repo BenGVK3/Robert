@@ -10,12 +10,15 @@ import au.com.benji.robert.database.ShackEntity
 import au.com.benji.robert.location.LocationService
 import au.com.benji.robert.models.*
 import au.com.benji.robert.navigation.Screen
+import au.com.benji.robert.network.SatellitePosition
+import au.com.benji.robert.network.SatellitePass
 import au.com.benji.robert.repository.*
 import au.com.benji.robert.repository.propagation.PropagationRepository
 import au.com.benji.robert.repository.propagation.PropagationData
 import au.com.benji.robert.repository.shack.RadioCapabilities
 import au.com.benji.robert.repository.shack.toRadioCapabilities
 import au.com.benji.robert.utils.calculateMaidenhead
+import au.com.benji.robert.utils.MufCalculator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -27,10 +30,10 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = DashboardRepository()
     private val solarRepository = SolarDataRepository()
     private val weatherRepository = WeatherRepository()
-    private val satelliteRepository = SatelliteRepository()
     private val propagationRepository = PropagationRepository()
     private val aprsRepository = AprsRepository()
     private val dxRepository = DxRepository()
+    private val satelliteRepository = SatelliteRepository()
     private val locationService = LocationService(application)
     private val settingsRepository = SettingsRepository(application)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
@@ -98,13 +101,18 @@ data class Quadruple<out A, out B, out C, out D>(
             initialValue = SolarData()
         )
 
+    val mufResult = combine(solarData, locationFlow) { solar, loc ->
+        MufCalculator.calculateMuf(solar, loc?.first, loc?.second)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = MufCalculator.MufResult(0.0, true, MufCalculator.Confidence.Low)
+    )
+
     val propagationData = combine(locationFlow, solarData) { loc, solar ->
         Pair(loc, solar)
     }
     .flatMapLatest { (loc, solar) ->
-        // Simple heuristic: If we have solar data, use it for calculations
-        // The repository will handle the actual logic if we pass the data or if it fetches its own
-        // For now, let's update the repository to accept solar data or keep its own fetch logic
         propagationRepository.getPropagationData(loc?.first, loc?.second, solar)
     }
     .stateIn(
@@ -207,88 +215,56 @@ data class Quadruple<out A, out B, out C, out D>(
     private val _satelliteSearchQuery = MutableStateFlow("")
     val satelliteSearchQuery = _satelliteSearchQuery.asStateFlow()
 
-    private val _trackedSatelliteIds = MutableStateFlow(listOf("25544", "25338", "28654", "33591", "43013"))
-    val trackedSatelliteIds = _trackedSatelliteIds.asStateFlow()
+    private val _selectedSatelliteId = MutableStateFlow("25544")
+    val selectedSatelliteId = _selectedSatelliteId.asStateFlow()
+
+    private val _favoriteSatelliteIds = MutableStateFlow(setOf("25544", "25338", "43013"))
+    val favoriteSatelliteIds = _favoriteSatelliteIds.asStateFlow()
+
+    val availableSatellites = satelliteRepository.availableSatellites
+
+    fun selectSatellite(id: String) {
+        _selectedSatelliteId.value = id
+    }
+
+    fun toggleFavoriteSatellite(id: String) {
+        val current = _favoriteSatelliteIds.value.toMutableSet()
+        if (current.contains(id)) current.remove(id) else current.add(id)
+        _favoriteSatelliteIds.value = current
+    }
 
     fun updateSatelliteSearchQuery(query: String) {
         _satelliteSearchQuery.value = query
     }
 
-    fun toggleTrackedSatellite(id: String) {
-        val current = _trackedSatelliteIds.value.toMutableList()
-        if (current.contains(id)) {
-            current.remove(id)
-        } else {
-            current.add(id)
-        }
-        _trackedSatelliteIds.value = current
-    }
-
-    val satellitePositions = trackedSatelliteIds
-        .flatMapLatest { ids -> satelliteRepository.getSatellitePositions(ids) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    private val satellitePasses = combine(trackedSatelliteIds, locationFlow) { ids, loc ->
-        Pair(ids, loc)
-    }
-    .flatMapLatest { (ids, loc) ->
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val satellitePosition = combine(_selectedSatelliteId, locationFlow) { id, loc ->
+        Pair(id, loc)
+    }.flatMapLatest { (id, loc) ->
         if (loc != null) {
-            satelliteRepository.getSatellitePasses(ids, loc.first, loc.second)
+            satelliteRepository.getPosition(id, loc.first, loc.second)
         } else {
-            satelliteRepository.getSatellitePasses(ids, -33.86, 151.20)
-        }
-    }
-    .stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val nextPassTimer = flow {
-        while (true) {
-            val passes = satellitePasses.value
-            val currentTime = System.currentTimeMillis()
-            
-            val activePass = passes.firstOrNull { pass ->
-                val startMs = pass.startTime * 1000
-                val endMs = (pass.startTime + pass.duration) * 1000
-                currentTime in startMs..endMs
-            }
-            
-            if (activePass != null) {
-                emit("${activePass.name} • ACTIVE NOW")
-            } else {
-                val nextPass = passes.firstOrNull { it.startTime * 1000 > currentTime }
-                if (nextPass != null) {
-                    val diff = (nextPass.startTime * 1000) - currentTime
-                    val hours = diff / 1000 / 3600
-                    val mins = (diff / 1000 / 60) % 60
-                    val secs = (diff / 1000) % 60
-                    
-                    val timeStr = when {
-                        hours > 0 -> "${hours}h ${mins}m"
-                        mins > 0 -> "${mins}m ${secs}s"
-                        else -> "${secs}s"
-                    }
-                    emit("${nextPass.name} • In $timeStr")
-                } else {
-                    if (satellitePasses.value.isEmpty()) {
-                        emit("Searching for passes...")
-                    } else {
-                        emit("No upcoming ISS passes")
-                    }
-                }
-            }
-            delay(1000)
+            flowOf<SatellitePosition?>(null)
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "Locating satellites..."
+        initialValue = null
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val upcomingPasses = combine(_selectedSatelliteId, locationFlow) { id, loc ->
+        Pair(id, loc)
+    }.flatMapLatest { (id, loc) ->
+        if (loc != null) {
+            satelliteRepository.getUpcomingPasses(id, loc.first, loc.second)
+        } else {
+            flowOf<List<SatellitePass>>(emptyList())
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
     )
 
     val recommendation = combine(propagationData, equipment) { propagation, gear ->
@@ -299,7 +275,36 @@ data class Quadruple<out A, out B, out C, out D>(
         initialValue = "Analyzing conditions..."
     )
 
-    val cards = combine(solarData, weatherData, nextPassTimer, propagationData, equipment) { solar, weather, timer, propagation, gear ->
+    val nextPassTimer = flow {
+        while (true) {
+            val passesList = upcomingPasses.value
+            val currentTime = System.currentTimeMillis() / 1000
+            
+            val nextPass = passesList.firstOrNull { it.startTime > currentTime }
+            if (nextPass != null) {
+                val diff = nextPass.startTime - currentTime
+                val mins = diff / 60
+                val secs = diff % 60
+                emit("${nextPass.name} • In ${mins}m ${secs}s")
+            } else {
+                emit("No upcoming passes")
+            }
+            delay(1000)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "Scanning sky..."
+    )
+
+    val cards = combine(solarData, weatherData, nextPassTimer, propagationData, equipment, mufResult) { args ->
+        val solar = args[0] as SolarData
+        val weather = args[1] as? DetailedWeather
+        val timer = args[2] as String
+        val propagation = args[3] as? PropagationData
+        val gear = args[4] as List<ShackEntity>
+        val muf = args[5] as MufCalculator.MufResult
+
         val baseCards = mutableListOf(
             InfoCardModel(
                 type = CardType.BAND,
@@ -311,19 +316,19 @@ data class Quadruple<out A, out B, out C, out D>(
                 type = CardType.SOLAR,
                 icon = "☀️",
                 title = "Solar Flux",
-                value = solar?.solarFlux?.toString() ?: "---"
+                value = solar.solarFlux.toString()
             ),
             InfoCardModel(
                 type = CardType.SOLAR,
                 icon = "🌍",
                 title = "K Index",
-                value = solar?.kIndex?.toString() ?: "---"
+                value = solar.kIndex.toString()
             ),
             InfoCardModel(
                 type = CardType.SOLAR,
-                icon = "📶",
-                title = "MUF",
-                value = solar?.muf ?: "---"
+                icon = "🌍",
+                title = if (muf.isEstimated) "Estimated MUF" else "Reported MUF",
+                value = String.format("%.1f MHz", muf.value) + if (muf.isEstimated) " (${muf.confidence})" else ""
             ),
             InfoCardModel(
                 type = CardType.WEATHER,
@@ -348,14 +353,11 @@ data class Quadruple<out A, out B, out C, out D>(
     private fun getPersonalizedRecommendation(data: PropagationData?, gear: List<ShackEntity>): String {
         if (data == null) return "Checking conditions..."
         
-        // Find bands with "Excellent" or "Good" ratings
         val goodBands = data.bands.filter { it.rating == "Excellent" || it.rating == "Good" }
         if (goodBands.isEmpty()) return "20m is your best bet"
 
-        // Map equipment to capabilities
         val radios = gear.mapNotNull { it.toRadioCapabilities() }
         
-        // Find a radio that supports one of the good bands
         for (band in goodBands) {
             val matchingRadio = radios.firstOrNull { radio -> 
                 radio.bands.contains(band.band) 
@@ -365,7 +367,6 @@ data class Quadruple<out A, out B, out C, out D>(
             }
         }
 
-        // Fallback if no specific gear matches the "Excellent" bands
         return "${goodBands.first().band} is opening up!"
     }
 

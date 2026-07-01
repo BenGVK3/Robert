@@ -18,4 +18,7 @@ data class SolarData(
     val vhfAurora: String = "---",
     val eSkip: String = "---",
     val lastUpdated: Long = System.currentTimeMillis()
-)
+) {
+    val mufReported: String?
+        get() = if (muf != "---" && muf != "NoRpt") muf else null
+}

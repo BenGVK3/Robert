@@ -1,24 +1,23 @@
 package au.com.benji.robert.screens.satellites
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -26,291 +25,326 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import au.com.benji.robert.components.RobertMap
+import androidx.compose.ui.text.style.TextAlign
 import au.com.benji.robert.network.SatellitePosition
+import au.com.benji.robert.network.SatellitePass
+import au.com.benji.robert.network.SatelliteCommInfo
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SatellitesScreen(
     viewModel: DashboardViewModel = viewModel()
 ) {
-    val positions by viewModel.satellitePositions.collectAsStateWithLifecycle()
+    val position by viewModel.satellitePosition.collectAsStateWithLifecycle()
     val location by viewModel.locationFlow.collectAsStateWithLifecycle()
+    val passes by viewModel.upcomingPasses.collectAsStateWithLifecycle()
     val searchQuery by viewModel.satelliteSearchQuery.collectAsStateWithLifecycle()
-    val trackedIds by viewModel.trackedSatelliteIds.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val pullToRefreshState = rememberPullToRefreshState()
-    
-    var selectedSatelliteId by remember { mutableStateOf("25544") } // Default to ISS
-    var isMapExpanded by remember { mutableStateOf(false) }
-    var showSatellitePicker by remember { mutableStateOf(false) }
+    val selectedId by viewModel.selectedSatelliteId.collectAsStateWithLifecycle()
+    val favorites by viewModel.favoriteSatelliteIds.collectAsStateWithLifecycle()
+    val available = viewModel.availableSatellites
 
-    val lat = location?.first ?: -37.81
-    val lon = location?.second ?: 144.96
+    var isSearchActive by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf("All") }
 
-    if (isMapExpanded) {
-        FullScreenMap(
-            satelliteId = selectedSatelliteId,
-            userLat = lat,
-            userLon = lon,
-            onClose = { isMapExpanded = false }
-        )
-    } else {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Orbital Tracking", fontWeight = FontWeight.Bold) },
-                    actions = {
-                        IconButton(onClick = { showSatellitePicker = true }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Satellite")
-                        }
-                        IconButton(onClick = { viewModel.refresh() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                        }
+    val userLat = (location?.first ?: -37.81).takeIf { !it.isNaN() } ?: -37.81
+    val userLon = (location?.second ?: 144.96).takeIf { !it.isNaN() } ?: 144.96
+
+    val categories = listOf("All", "Amateur", "ISS", "Weather", "Experimental")
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    if (!isSearchActive) {
+                        Text("Satellite Tracking", fontWeight = FontWeight.Bold)
+                    } else {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.updateSatelliteSearchQuery(it) },
+                            placeholder = { Text("Search...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent
+                            ),
+                            singleLine = true
+                        )
                     }
-                )
-            }
-        ) { padding ->
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
+                },
+                actions = {
+                    IconButton(onClick = { isSearchActive = !isSearchActive }) {
+                        Icon(if (isSearchActive) Icons.Default.Close else Icons.Default.Search, contentDescription = "Search")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            // --- FIXED MAP AT TOP ---
+            SatelliteMap(
+                position = position,
+                selectedId = selectedId,
+                userLat = userLat,
+                userLon = userLon,
                 onRefresh = { viewModel.refresh() },
-                state = pullToRefreshState,
-                modifier = Modifier.padding(padding).fillMaxSize()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(320.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            // --- SCROLLABLE CONTENT BELOW ---
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 32.dp)
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = Spacing.Medium),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
-                ) {
-                // --- INTEGRATED MAP VIEW ---
+                // Categories Row
                 item {
-                    Card(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(400.dp)
-                            .clip(RoundedCornerShape(16.dp)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            RobertMap(
-                                url = "https://www.n2yo.com/widgets/widget-tracker.php?s=$selectedSatelliteId&size=large&all=1&lat=$lat&lon=$lon",
-                                modifier = Modifier.fillMaxSize()
+                        categories.forEach { category ->
+                            FilterChip(
+                                selected = selectedCategory == category,
+                                onClick = { selectedCategory = category },
+                                label = { Text(category, fontSize = 11.sp) }
                             )
-                            
-                            // Map Controls
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(Spacing.Small),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.Small)
-                            ) {
-                                FloatingActionButton(
-                                    onClick = { isMapExpanded = true },
-                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    Icon(Icons.Default.Fullscreen, contentDescription = "Expand")
-                                }
-                            }
-                            
-                            // Satellite Selection Overlay
-                            Surface(
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(Spacing.Small),
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val currentName = positions.find { it.name.contains(selectedSatelliteId) || it.name == selectedSatelliteId }?.name ?: "Tracking..."
-                                    Text(
-                                        text = "Viewing: $currentName",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
                         }
                     }
                 }
 
-                // --- SEARCH / QUICK SELECT ---
-                item {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { viewModel.updateSatelliteSearchQuery(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Search tracked satellites...") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        shape = RoundedCornerShape(12.dp)
+                // Next Pass Card
+                val nextPass = passes.firstOrNull { it.startTime > System.currentTimeMillis() / 1000 }
+                if (nextPass != null) {
+                    item {
+                        NextPassCard(nextPass)
+                    }
+                }
+
+                // Telemetry
+                item { SectionHeader("Live Telemetry") }
+                item { TelemetryGrid(position) }
+
+                // Communications
+                val selectedMetadata = available.find { it.id == selectedId }
+                if (selectedMetadata?.commInfo != null) {
+                    item { SectionHeader("Communications") }
+                    item { CommunicationCard(selectedMetadata.commInfo, position?.rangeRate ?: 0.0) }
+                }
+
+                // Next Passes
+                if (passes.isNotEmpty()) {
+                    item { SectionHeader("Upcoming Passes") }
+                    items(passes.take(3)) { pass ->
+                        PassListItem(pass)
+                    }
+                }
+
+                // List Selection
+                item { SectionHeader("Available Satellites") }
+                val filteredList = available.filter { 
+                    (selectedCategory == "All" || it.category == selectedCategory) &&
+                    (it.name.contains(searchQuery, ignoreCase = true) || it.id.contains(searchQuery))
+                }
+                items(filteredList) { sat ->
+                    SatelliteListItem(
+                        metadata = sat,
+                        isSelected = selectedId == sat.id,
+                        isFavorite = favorites.contains(sat.id),
+                        isVisible = position?.isVisible == true && selectedId == sat.id,
+                        onSelect = { viewModel.selectSatellite(sat.id) },
+                        onToggleFavorite = { viewModel.toggleFavoriteSatellite(sat.id) }
                     )
                 }
-
-
-                // --- SATELLITE LIST ---
-                val filteredPositions = positions.filter { 
-                    it.name.contains(searchQuery, ignoreCase = true) 
-                }
-
-                if (filteredPositions.isEmpty() && positions.isNotEmpty()) {
-                    item {
-                        Text("No matching satellites found.", modifier = Modifier.padding(Spacing.Large))
-                    }
-                } else if (positions.isEmpty()) {
-                    item {
-                        Box(modifier = Modifier.fillMaxWidth().padding(Spacing.ExtraLarge), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                }
-
-                items(filteredPositions) { satellite ->
-                    SatelliteDetailCard(
-                        satellite = satellite,
-                        isSelected = selectedSatelliteId == satellite.name, // Note: This might need adjustment based on how wheretheiss returns names
-                        onClick = { 
-                            // Since wheretheiss doesn't return the ID in the position object, 
-                            // we'll need to be clever. For now, let's assume name or a mapping.
-                            // In a real app, I'd include the ID in the SatellitePosition model.
-                            // Temporary hack: search for the ID based on common name
-                            val id = trackedIds.find { id -> 
-                                satellite.name.contains(id) || satellite.name == "ISS" && id == "25544" 
-                            } ?: "25544"
-                            selectedSatelliteId = id
-                        }
-                    )
-                }
-                
-                item { Spacer(modifier = Modifier.height(Spacing.ExtraLarge)) }
             }
         }
     }
 }
 
-    if (showSatellitePicker) {
-        SatellitePicker(
-            onDismiss = { showSatellitePicker = false },
-            onToggle = { id -> viewModel.toggleTrackedSatellite(id) },
-            trackedIds = trackedIds
-        )
-    }
+@Composable
+fun SectionHeader(title: String) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Black,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
+        letterSpacing = 1.sp
+    )
 }
 
 @Composable
-fun FullScreenMap(
-    satelliteId: String,
-    userLat: Double,
-    userLon: Double,
-    onClose: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        RobertMap(
-            url = "https://www.n2yo.com/widgets/widget-tracker.php?s=$satelliteId&size=large&all=1&lat=$userLat&lon=$userLon",
-            modifier = Modifier.fillMaxSize()
-        )
-        
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier
-                .statusBarsPadding()
-                .padding(Spacing.Medium)
-                .align(Alignment.TopStart)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), CircleShape)
-        ) {
-            Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen")
-        }
-    }
-}
+fun NextPassCard(pass: SatellitePass) {
+    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    val currentTime = System.currentTimeMillis() / 1000
+    val countdown = (pass.startTime - currentTime).coerceAtLeast(0)
+    val mins = countdown / 60
+    val secs = countdown % 60
 
-@Composable
-fun SatelliteDetailCard(
-    satellite: SatellitePosition,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(Spacing.Medium)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = satellite.name, 
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
-                if (isSelected) {
-                    Icon(Icons.Default.LocationOn, contentDescription = "Currently Tracking", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(Spacing.Small))
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                SatelliteMetricCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Public,
-                    label = "Lat",
-                    value = String.format("%.4f", satellite.latitude)
-                )
-                SatelliteMetricCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Public,
-                    label = "Lon",
-                    value = String.format("%.4f", satellite.longitude)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.Small))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                SatelliteMetricCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Height,
-                    label = "Alt",
-                    value = "${satellite.altitude.toInt()} km"
-                )
-                SatelliteMetricCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Speed,
-                    label = "Velocity",
-                    value = "${satellite.velocity.toInt()} km/h"
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(Spacing.Small))
-            
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Surface(
-                    color = if (satellite.visibility == "daylight") Color(0xFFFFD54F).copy(alpha = 0.2f) else MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(4.dp)
-                ) {
+                Column {
+                    Text("AOS COUNTDOWN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     Text(
-                        text = satellite.visibility.uppercase(), 
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (satellite.visibility == "daylight") Color(0xFF795548) else MaterialTheme.colorScheme.onSecondaryContainer
+                        text = if (countdown > 0) String.format(Locale.US, "%02dm %02ds", mins, secs) else "IN PROGRESS",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black
                     )
                 }
                 
+                val quality = pass.quality.ifEmpty { "Fair" }
+                Surface(
+                    color = when(quality) {
+                        "Excellent" -> Color(0xFF4CAF50)
+                        "Good" -> Color(0xFF8BC34A)
+                        else -> Color(0xFFFFC107)
+                    },
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        quality.uppercase(), 
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+            
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                PassInfoItem("AOS", sdf.format(Date(pass.startTime * 1000)))
+                PassInfoItem("MAX EL", "${pass.maxElevation.toInt()}°")
+                PassInfoItem("DUR", "${pass.duration / 60}m")
+            }
+        }
+    }
+}
+
+@Composable
+fun PassInfoItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun TelemetryGrid(position: SatellitePosition?) {
+    val pos = position
+    Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TelemetryCard(Modifier.weight(1f), "Altitude", if (pos != null && !pos.altitude.isNaN()) "${pos.altitude.toInt()} km" else "---", Icons.Default.Height)
+            TelemetryCard(Modifier.weight(1f), "Velocity", if (pos != null && !pos.velocity.isNaN()) "${String.format(Locale.US, "%,d", pos.velocity.toInt())} km/h" else "---", Icons.Default.Speed)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TelemetryCard(Modifier.weight(1f), "Azimuth", if (pos != null && !pos.azimuth.isNaN()) "${String.format(Locale.US, "%.1f", pos.azimuth)}°" else "---", Icons.Default.Explore)
+            TelemetryCard(Modifier.weight(1f), "Elevation", if (pos != null && !pos.elevation.isNaN()) "${String.format(Locale.US, "%.1f", pos.elevation)}°" else "---", Icons.Default.VerticalAlignTop)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TelemetryCard(Modifier.weight(1f), "Lat", if (pos != null && !pos.latitude.isNaN()) String.format(Locale.US, "%.4f", pos.latitude) else "---", Icons.Default.LocationOn)
+            TelemetryCard(Modifier.weight(1f), "Lon", if (pos != null && !pos.longitude.isNaN()) String.format(Locale.US, "%.4f", pos.longitude) else "---", Icons.Default.LocationOn)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TelemetryCard(Modifier.weight(1f), "Dist", if (pos != null && !pos.distance.isNaN()) "${pos.distance.toInt()} km" else "---", Icons.Default.Straighten)
+            TelemetryCard(Modifier.weight(1f), "Grid", pos?.gridLocator?.takeIf { it.isNotEmpty() } ?: "---", Icons.Default.GridOn)
+        }
+    }
+}
+
+@Composable
+fun TelemetryCard(modifier: Modifier, label: String, value: String, icon: ImageVector) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(icon, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Column {
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun CommunicationCard(info: SatelliteCommInfo, rangeRate: Double = 0.0) {
+    val c = 299792.458 // Speed of light in km/s
+    
+    fun calculateDoppler(freqStr: String, isUplink: Boolean): String {
+        val freq = freqStr.toDoubleOrNull() ?: return freqStr
+        // Downlink: f_ground = f_sat * (1 - vr/c)
+        // Uplink: f_tx = f_sat * (1 + vr/c) -> To compensate so sat receives nominal
+        val factor = if (isUplink) (1.0 + (rangeRate / c)) else (1.0 - (rangeRate / c))
+        val corrected = freq * factor
+        return String.format(Locale.US, "%.4f", corrected)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                CommItem("Downlink", "${info.downlink} MHz", Modifier.weight(1f), calculateDoppler(info.downlink, false))
+                CommItem("Uplink", "${info.uplink} MHz", Modifier.weight(1f), calculateDoppler(info.uplink, true))
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                CommItem("Mode", info.mode, Modifier.weight(1f))
+                CommItem("Tone/Pol", "${info.plTone} / ${info.polarization}", Modifier.weight(1f))
+            }
+            
+            if (rangeRate != 0.0) {
+                val shiftKhz = (rangeRate / c) * 145.8 * 1000.0
                 Text(
-                    text = "ID: Tracking...", // In a real app, I'd pass the ID through
+                    text = "Live Doppler Correction Active",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Relative Velocity: ${String.format(Locale.US, "%.2f", rangeRate)} km/s • Shift: ${String.format(Locale.US, "%.2f", shiftKhz)} kHz",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -318,73 +352,122 @@ fun SatelliteDetailCard(
 }
 
 @Composable
-fun SatellitePicker(
-    onDismiss: () -> Unit,
-    onToggle: (String) -> Unit,
-    trackedIds: List<String>
-) {
-    val satellites = mapOf(
-        "25544" to "ISS (Zarya)",
-        "25338" to "NOAA 15",
-        "28654" to "NOAA 18",
-        "33591" to "NOAA 19",
-        "43013" to "AO-91 (RadFxSat)",
-        "43770" to "AO-92 (Fox-1D)",
-        "40069" to "XW-2A (Cas-3A)",
-        "44443" to "FO-99 (NEXUS)",
-        "40967" to "LilacSat-2 (CAS-3H)",
-        "40903" to "SaudiSat-4"
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Manage Satellites", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                satellites.forEach { (id, name) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onToggle(id) }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(text = name, style = MaterialTheme.typography.bodyLarge)
-                            Text(text = "NORAD ID: $id", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                        }
-                        Checkbox(
-                            checked = trackedIds.contains(id),
-                            onCheckedChange = { onToggle(id) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("DONE") }
+fun CommItem(label: String, value: String, modifier: Modifier, subValue: String? = null) {
+    Column(modifier = modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        if (subValue != null && subValue != value.replace(" MHz", "")) {
+            Text(
+                text = "$subValue MHz",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
-    )
+    }
 }
 
 @Composable
-fun SatelliteMetricCard(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    label: String,
-    value: String
+fun SatelliteListItem(
+    metadata: au.com.benji.robert.repository.SatelliteMetadata,
+    isSelected: Boolean,
+    isFavorite: Boolean,
+    isVisible: Boolean,
+    onSelect: () -> Unit,
+    onToggleFavorite: () -> Unit
 ) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable { onSelect() },
+        color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 2.dp,
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(text = label, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(if (isVisible) Color(0xFF4CAF50).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.SatelliteAlt, 
+                    contentDescription = null, 
+                    tint = if (isVisible) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
+                )
             }
-            Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = metadata.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    if (isVisible) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            color = Color(0xFF4CAF50),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "LIVE", 
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                Text(text = metadata.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            }
+            
+            IconButton(onClick = onToggleFavorite) {
+                Icon(
+                    if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PassListItem(pass: SatellitePass) {
+    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.width(8.dp))
+                Text(text = sdf.format(Date(pass.startTime * 1000)), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(16.dp))
+                Icon(Icons.AutoMirrored.Filled.TrendingUp, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.width(4.dp))
+                Text(text = "${pass.maxElevation.toInt()}°", style = MaterialTheme.typography.bodySmall)
+            }
+            
+            Text(
+                text = "${pass.duration / 60}m",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

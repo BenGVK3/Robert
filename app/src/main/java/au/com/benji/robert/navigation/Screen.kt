@@ -5,6 +5,7 @@ sealed class Screen(
 ) {
     object Dashboard : Screen("dashboard")
     object Propagation : Screen("propagation")
+    object Logbook : Screen("logbook")
     object Tools : Screen("tools")
     object Settings : Screen("settings")
 

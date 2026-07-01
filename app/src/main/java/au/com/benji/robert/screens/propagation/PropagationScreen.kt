@@ -1,5 +1,6 @@
 package au.com.benji.robert.screens.propagation
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,14 +26,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.components.RobertMap
 import au.com.benji.robert.models.SolarData
+import au.com.benji.robert.utils.MufCalculator
 import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
@@ -43,6 +48,7 @@ fun PropagationScreen(
     viewModel: DashboardViewModel = viewModel()
 ) {
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
+    val mufResult by viewModel.mufResult.collectAsStateWithLifecycle()
     val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -79,11 +85,22 @@ fun PropagationScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
         item {
-            Text(
-                text = "Propagation Center",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                Image(
+                    painter = painterResource(id = au.com.benji.robert.R.drawable.propagation),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(62.dp)
+                        .offset(x = 5.dp),
+                    colorFilter = null,
+                    contentScale = ContentScale.Fit
+                )
+                Text(
+                    text = "Propagation Center",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         item {
@@ -166,7 +183,7 @@ fun PropagationScreen(
 
         item {
             solarData?.let { data ->
-                SolarDataCard(data)
+                SolarDataCard(data, mufResult)
             }
         }
 
@@ -189,10 +206,14 @@ fun PropagationScreen(
                 ) {
                     Column(modifier = Modifier.padding(Spacing.Medium)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Waves,
+                            Image(
+                                painter = painterResource(id = au.com.benji.robert.R.drawable.propagation),
                                 contentDescription = null,
-                                tint = if (ducting.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .offset(x = 5.dp),
+                                colorFilter = null,
+                                contentScale = ContentScale.Fit
                             )
                             Spacer(modifier = Modifier.width(Spacing.Small))
                             Text(
@@ -297,7 +318,7 @@ fun PropagationScreen(
 }
 
 @Composable
-fun SolarDataCard(data: SolarData) {
+fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -344,8 +365,36 @@ fun SolarDataCard(data: SolarData) {
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(Spacing.Small)) {
-                        Text("MUF", style = MaterialTheme.typography.labelSmall)
-                        Text(data.muf, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                        Text(
+                            text = if (mufResult.isEstimated) "Estimated MUF" else "Reported MUF",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mufResult.isEstimated) MaterialTheme.colorScheme.primary else Color.Unspecified
+                        )
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                text = String.format("%.1f", mufResult.value),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = " MHz",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        }
+                        if (mufResult.isEstimated) {
+                            Text(
+                                text = "Conf: ${mufResult.confidence}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when(mufResult.confidence) {
+                                    MufCalculator.Confidence.High -> Color(0xFF4CAF50)
+                                    MufCalculator.Confidence.Medium -> Color(0xFFFFC107)
+                                    MufCalculator.Confidence.Low -> Color(0xFFF44336)
+                                }
+                            )
+                        }
                     }
                 }
                 Surface(
