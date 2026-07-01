@@ -1,5 +1,7 @@
 package au.com.benji.robert.components
 
+import android.view.ViewGroup
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,15 +25,23 @@ fun PropagationMap(
     // Using a Leaflet-based map to avoid crashes due to missing Google Maps API keys
     val html = remember(spots, showGreyLine, userLat, userLon) {
         val spotsJson = spots.take(200).map { spot ->
+            val slat = if (spot.senderLat.isNaN()) 0.0 else spot.senderLat
+            val slon = if (spot.senderLon.isNaN()) 0.0 else spot.senderLon
+            val rlat = if (spot.receiverLat.isNaN()) 0.0 else spot.receiverLat
+            val rlon = if (spot.receiverLon.isNaN()) 0.0 else spot.receiverLon
             """
             {
-                "slat": ${spot.senderLat}, "slon": ${spot.senderLon},
-                "rlat": ${spot.receiverLat}, "rlon": ${spot.receiverLon},
-                "dist": ${spot.distance}, "scall": "${spot.senderCallsign}",
+                "slat": $slat, "slon": $slon,
+                "rlat": $rlat, "rlon": $rlon,
+                "dist": ${if (spot.distance.isNaN()) 0.0 else spot.distance}, 
+                "scall": "${spot.senderCallsign}",
                 "rcall": "${spot.receiverCallsign}", "id": "${spot.id}"
             }
             """.trimIndent()
         }.joinToString(",")
+
+        val lat = if (userLat == null || userLat.isNaN()) 20.0 else userLat
+        val lon = if (userLon == null || userLon.isNaN()) 0.0 else userLon
 
         """
         <!DOCTYPE html>
@@ -42,8 +52,8 @@ fun PropagationMap(
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <script src="https://unpkg.com/leaflet-terminator"></script>
             <style>
-                body { margin: 0; padding: 0; background: #000; }
-                #map { height: 100vh; width: 100vw; background: #000; }
+                html, body { margin: 0; padding: 0; background: #000; height: 100%; width: 100%; }
+                #map { height: 100%; width: 100%; background: #000; }
                 .leaflet-container { background: #000 !important; }
                 .user-location-icon {
                     background-color: #2196F3;
@@ -61,14 +71,16 @@ fun PropagationMap(
                 var map = L.map('map', { 
                     zoomControl: false,
                     attributionControl: false 
-                }).setView([${userLat ?: 20.0}, ${userLon ?: 0.0}], 3);
+                }).setView([$lat, $lon], 3);
                 
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19
+                    maxZoom: 19,
+                    detectRetina: true,
+                    attribution: '&copy; CARTO'
                 }).addTo(map);
 
                 if (${userLat != null && userLon != null}) {
-                    L.marker([${userLat ?: 0.0}, ${userLon ?: 0.0}], {
+                    L.marker([$lat, $lon], {
                         icon: L.divIcon({
                             className: 'user-location-icon',
                             iconSize: [12, 12]
@@ -79,12 +91,14 @@ fun PropagationMap(
 
                 if ($showGreyLine) {
                     try {
-                        L.terminator({
-                            fillColor: '#000',
-                            fillOpacity: 0.5,
-                            color: '#fff',
-                            weight: 1
-                        }).addTo(map);
+                        if (typeof L.terminator === 'function') {
+                            L.terminator({
+                                fillColor: '#000',
+                                fillOpacity: 0.5,
+                                color: '#fff',
+                                weight: 1
+                            }).addTo(map);
+                        }
                     } catch(e) { console.error('Terminator error:', e); }
                 }
 
@@ -113,6 +127,10 @@ fun PropagationMap(
                         fillOpacity: 0.5 
                     }).addTo(map).on('click', function() { Android.onSpotClick(s.id); });
                 });
+                
+                setTimeout(function() {
+                    map.invalidateSize();
+                }, 500);
             </script>
         </body>
         </html>
@@ -123,13 +141,26 @@ fun PropagationMap(
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     loadWithOverviewMode = true
                     useWideViewPort = true
+                    databaseEnabled = true
                 }
                 webViewClient = WebViewClient()
+                webChromeClient = WebChromeClient()
+                
+                // Fix for nested scrolling
+                setOnTouchListener { v, event ->
+                    v.parent.requestDisallowInterceptTouchEvent(true)
+                    false
+                }
+
                 addJavascriptInterface(object {
                     @android.webkit.JavascriptInterface
                     fun onSpotClick(id: String) {
@@ -138,11 +169,14 @@ fun PropagationMap(
                         }
                     }
                 }, "Android")
-                loadDataWithBaseURL("https://appassets.androidview.com/", html, "text/html", "UTF-8", null)
             }
         },
         update = { webView ->
-            webView.loadDataWithBaseURL("https://appassets.androidview.com/", html, "text/html", "UTF-8", null)
+            val lastHtml = webView.tag as? String
+            if (lastHtml != html) {
+                webView.tag = html
+                webView.loadDataWithBaseURL("https://appassets.androidview.com/", html, "text/html", "UTF-8", null)
+            }
         }
     )
 }

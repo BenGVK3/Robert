@@ -40,6 +40,12 @@ fun RobertMap(
                     }
                 }
                 
+                // Fix for nested scrolling
+                setOnTouchListener { v, event ->
+                    v.parent.requestDisallowInterceptTouchEvent(true)
+                    false
+                }
+
                 // Performance and features
                 settings.apply {
                     javaScriptEnabled = true

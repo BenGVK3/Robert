@@ -71,6 +71,7 @@ fun PropagationScreen(
     val pullToRefreshState = rememberPullToRefreshState()
     
     var isMapVisible by remember { mutableStateOf(false) }
+    var isMapFullscreen by remember { mutableStateOf(false) }
     var showGreyLine by remember { mutableStateOf(true) }
     var selectedSpot by remember { mutableStateOf<PropagationSpot?>(null) }
 
@@ -124,11 +125,16 @@ fun PropagationScreen(
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        IconButton(onClick = { isMapVisible = !isMapVisible }) {
-                            Icon(
-                                imageVector = if (isMapVisible) Icons.Default.ExpandLess else Icons.Default.Map,
-                                contentDescription = if (isMapVisible) "Collapse" else "Expand"
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { isMapFullscreen = true }) {
+                                Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen")
+                            }
+                            IconButton(onClick = { isMapVisible = !isMapVisible }) {
+                                Icon(
+                                    imageVector = if (isMapVisible) Icons.Default.ExpandLess else Icons.Default.Map,
+                                    contentDescription = if (isMapVisible) "Collapse" else "Expand"
+                                )
+                            }
                         }
                     }
                     
@@ -231,6 +237,42 @@ fun PropagationScreen(
             }
             
             item { Spacer(modifier = Modifier.height(Spacing.Large)) }
+        }
+    }
+
+    if (isMapFullscreen) {
+        Dialog(
+            onDismissRequest = { isMapFullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PropagationMap(
+                        spots = state.spots,
+                        userLat = locationData?.first,
+                        userLon = locationData?.second,
+                        showGreyLine = showGreyLine,
+                        modifier = Modifier.fillMaxSize(),
+                        onSpotSelected = { 
+                            selectedSpot = it
+                            isMapFullscreen = false 
+                        }
+                    )
+                    
+                    IconButton(
+                        onClick = { isMapFullscreen = false },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+            }
         }
     }
 }
