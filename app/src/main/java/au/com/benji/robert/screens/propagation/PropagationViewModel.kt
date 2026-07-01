@@ -21,9 +21,6 @@ class PropagationViewModel(application: Application) : AndroidViewModel(applicat
     private val _selectedBand = MutableStateFlow("20m")
     val selectedBand = _selectedBand.asStateFlow()
 
-    private val _selectedMode = MutableStateFlow("FT8")
-    val selectedMode = _selectedMode.asStateFlow()
-
     private val _selectedTimeWindow = MutableStateFlow(15) // minutes
     val selectedTimeWindow = _selectedTimeWindow.asStateFlow()
 
@@ -37,7 +34,8 @@ class PropagationViewModel(application: Application) : AndroidViewModel(applicat
     private fun observeSpots() {
         combine(_selectedBand, _selectedTimeWindow) { band, window ->
             Pair(band, window)
-        }.flatMapLatest { (band, window) ->
+        }.distinctUntilChanged()
+        .flatMapLatest { (band, window) ->
             val minTimestamp = System.currentTimeMillis() - (window * 60 * 1000)
             propagationDao.getSpotsByBand(band, minTimestamp)
         }.onEach { entities ->
@@ -52,7 +50,7 @@ class PropagationViewModel(application: Application) : AndroidViewModel(applicat
         refreshJob = viewModelScope.launch {
             while (true) {
                 fetchLatestSpots()
-                delay(5 * 60 * 1000) // Refresh every 5 minutes
+                delay(2 * 60 * 1000) // Refresh every 2 minutes
             }
         }
     }
@@ -64,10 +62,12 @@ class PropagationViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private suspend fun fetchLatestSpots() {
-        _state.update { it.copy(isLoading = true, error = null) }
         val band = _selectedBand.value
-        val mode = _selectedMode.value
+        val mode = "FT8"
         val window = _selectedTimeWindow.value
+        
+        android.util.Log.d("PropagationViewModel", "Fetching spots for Band=$band, Mode=$mode, Window=$window")
+        _state.update { it.copy(isLoading = true, error = null) }
 
         try {
             val allSpots = mutableListOf<PropagationSpot>()
@@ -75,8 +75,9 @@ class PropagationViewModel(application: Application) : AndroidViewModel(applicat
                 try {
                     val spots = provider.fetchSpots(band, mode, window)
                     allSpots.addAll(spots)
+                    android.util.Log.d("PropagationViewModel", "Provider ${provider.name} returned ${spots.size} spots for $band")
                 } catch (e: Exception) {
-                    // Handle provider failure gracefully
+                    android.util.Log.e("PropagationViewModel", "Provider ${provider.name} failed", e)
                 }
             }
 
@@ -96,22 +97,22 @@ class PropagationViewModel(application: Application) : AndroidViewModel(applicat
                 ) 
             }
         } catch (e: Exception) {
+            android.util.Log.e("PropagationViewModel", "Fetch failed", e)
             _state.update { it.copy(isLoading = false, error = e.message) }
         }
     }
 
     fun setBand(band: String) {
-        _selectedBand.value = band
-        manualRefresh()
-    }
-
-    fun setMode(mode: String) {
-        _selectedMode.value = mode
-        manualRefresh()
+        if (_selectedBand.value != band) {
+            _selectedBand.value = band
+            manualRefresh()
+        }
     }
 
     fun setTimeWindow(minutes: Int) {
-        _selectedTimeWindow.value = minutes
-        manualRefresh()
+        if (_selectedTimeWindow.value != minutes) {
+            _selectedTimeWindow.value = minutes
+            manualRefresh()
+        }
     }
 }

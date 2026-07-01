@@ -2,12 +2,16 @@ package au.com.benji.robert.screens.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.repository.BandPlanRepository
@@ -181,6 +185,57 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(Spacing.ExtraLarge))
+
+            // App Information Footer
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = Spacing.Large),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+            ) {
+                Text(
+                    text = "Created by Ben (VK3ESE)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                
+                SelectionContainer {
+                    Text(
+                        text = "VK3ESE@Gmail.com",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    )
+                }
+
+                Text(
+                    text = "This app is entirely free, open source, and ad-free.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
+                )
+
+                TextButton(
+                    onClick = { /* Future donation page link */ },
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text(
+                        text = "Support development: Buy me a coffee",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Text(
+                    text = "Version 1.0.0 (Beta)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(top = Spacing.Small)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.Medium))
         }
     }
 }

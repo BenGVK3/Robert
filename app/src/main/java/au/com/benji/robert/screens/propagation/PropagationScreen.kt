@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Fullscreen
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -65,7 +67,6 @@ fun PropagationScreen(
     
     val state by propagationViewModel.state.collectAsStateWithLifecycle()
     val selectedBand by propagationViewModel.selectedBand.collectAsStateWithLifecycle()
-    val selectedMode by propagationViewModel.selectedMode.collectAsStateWithLifecycle()
     val selectedTimeWindow by propagationViewModel.selectedTimeWindow.collectAsStateWithLifecycle()
 
     val pullToRefreshState = rememberPullToRefreshState()
@@ -119,13 +120,28 @@ fun PropagationScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "LIVE PROPAGATION MAP",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.primary
-                        )
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "LIVE PROPAGATION MAP",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = " (FT8)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { showGreyLine = !showGreyLine }) {
+                                Icon(
+                                    imageVector = Icons.Default.Brightness4,
+                                    contentDescription = "Toggle Grey Line",
+                                    tint = if (showGreyLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                )
+                            }
                             IconButton(onClick = { isMapFullscreen = true }) {
                                 Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen")
                             }
@@ -156,6 +172,26 @@ fun PropagationScreen(
                                     modifier = Modifier.fillMaxSize(),
                                     onSpotSelected = { selectedSpot = it }
                                 )
+
+                                if (state.isLoading && state.spots.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                    }
+                                } else if (!state.isLoading && state.spots.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "No recent spots found for ${selectedBand}.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                                 
                                 if (state.error != null) {
                                     Text(
@@ -165,18 +201,6 @@ fun PropagationScreen(
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
-                                
-                                // Grey Line Toggle
-                                FilterChip(
-                                    selected = showGreyLine,
-                                    onClick = { showGreyLine = !showGreyLine },
-                                    label = { Text("GREY LINE", style = MaterialTheme.typography.labelSmall) },
-                                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                        selectedLabelColor = Color.White
-                                    )
-                                )
                             }
                         }
                     }
@@ -186,9 +210,21 @@ fun PropagationScreen(
                     }
 
                     // Filters
-                    BandFilterRow(selectedBand) { propagationViewModel.setBand(it) }
-                    ModeFilterRow(selectedMode) { propagationViewModel.setMode(it) }
-                    TimeFilterRow(selectedTimeWindow) { propagationViewModel.setTimeWindow(it) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+                    ) {
+                        BandDropdown(
+                            selectedBand = selectedBand,
+                            onSelect = { propagationViewModel.setBand(it) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        TimeDropdown(
+                            selectedMinutes = selectedTimeWindow,
+                            onSelect = { propagationViewModel.setTimeWindow(it) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 
@@ -250,17 +286,23 @@ fun PropagationScreen(
                 color = Color.Black
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    PropagationMap(
-                        spots = state.spots,
-                        userLat = locationData?.first,
-                        userLon = locationData?.second,
-                        showGreyLine = showGreyLine,
-                        modifier = Modifier.fillMaxSize(),
-                        onSpotSelected = { 
-                            selectedSpot = it
-                            isMapFullscreen = false 
+                    if (state.spots.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No recent FT8 spots found.", color = Color.Gray)
                         }
-                    )
+                    } else {
+                        PropagationMap(
+                            spots = state.spots,
+                            userLat = locationData?.first,
+                            userLon = locationData?.second,
+                            showGreyLine = showGreyLine,
+                            modifier = Modifier.fillMaxSize(),
+                            onSpotSelected = { 
+                                selectedSpot = it
+                                isMapFullscreen = false 
+                            }
+                        )
+                    }
                     
                     IconButton(
                         onClick = { isMapFullscreen = false },
@@ -353,36 +395,53 @@ fun StatusItem(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BandFilterRow(selectedBand: String, onSelect: (String) -> Unit) {
+fun BandDropdown(selectedBand: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     val bands = listOf("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm")
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(bands) { band ->
-            FilterChip(
-                selected = selectedBand == band,
-                onClick = { onSelect(band) },
-                label = { Text(band) }
-            )
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = "Band: $selectedBand",
+            onValueChange = {},
+            readOnly = true,
+            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+            label = { Text("Select Band", style = MaterialTheme.typography.labelSmall) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            textStyle = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            bands.forEach { band ->
+                DropdownMenuItem(
+                    text = { Text(band, style = MaterialTheme.typography.bodyMedium) },
+                    onClick = {
+                        onSelect(band)
+                        expanded = false
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                )
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModeFilterRow(selectedMode: String, onSelect: (String) -> Unit) {
-    val modes = listOf("FT8", "FT4", "WSPR", "CW", "SSB", "Digital", "All")
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(modes) { mode ->
-            FilterChip(
-                selected = selectedMode == mode,
-                onClick = { onSelect(mode) },
-                label = { Text(mode) }
-            )
-        }
-    }
-}
-
-@Composable
-fun TimeFilterRow(selectedMinutes: Int, onSelect: (Int) -> Unit) {
+fun TimeDropdown(selectedMinutes: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val timeWindows = listOf(
         15 to "15m",
         30 to "30m",
@@ -392,17 +451,46 @@ fun TimeFilterRow(selectedMinutes: Int, onSelect: (Int) -> Unit) {
         720 to "12h",
         1440 to "24h"
     )
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(timeWindows) { (mins, label) ->
-            FilterChip(
-                selected = selectedMinutes == mins,
-                onClick = { onSelect(mins) },
-                label = { Text(label) }
-            )
+    var expanded by remember { mutableStateOf(false) }
+    val currentLabel = timeWindows.find { it.first == selectedMinutes }?.second ?: "${selectedMinutes}m"
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = "Window: $currentLabel",
+            onValueChange = {},
+            readOnly = true,
+            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+            label = { Text("Time Window", style = MaterialTheme.typography.labelSmall) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            textStyle = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            timeWindows.forEach { (mins, label) ->
+                DropdownMenuItem(
+                    text = { Text(label, style = MaterialTheme.typography.bodyMedium) },
+                    onClick = {
+                        onSelect(mins)
+                        expanded = false
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                )
+            }
         }
     }
 }
-
 
 @Composable
 fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult) {

@@ -11,7 +11,7 @@ interface PropagationDao {
     @Query("SELECT * FROM propagation_spots ORDER BY timestamp DESC")
     fun getAllSpots(): Flow<List<PropagationSpotEntity>>
 
-    @Query("SELECT * FROM propagation_spots WHERE band = :band AND timestamp >= :minTimestamp ORDER BY timestamp DESC")
+    @Query("SELECT * FROM propagation_spots WHERE band = :band AND timestamp >= :minTimestamp ORDER BY timestamp DESC LIMIT 800")
     fun getSpotsByBand(band: String, minTimestamp: Long): Flow<List<PropagationSpotEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

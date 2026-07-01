@@ -8,56 +8,51 @@ object TerminatorUtils {
     /**
      * Calculates the points for the day/night terminator.
      * Returns a list of [Pair<Double, Double>] representing (latitude, longitude).
+     * The points form a loop around the globe.
      */
     fun calculateTerminator(date: Date = Date()): List<Pair<Double, Double>> {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        calendar.time = date
-        
         val julianDay = getJulianDay(date)
         val gst = getGreenwichSiderealTime(julianDay)
         
-        // Solar coordinates
         val sunCoords = getSunCoordinates(julianDay)
-        val sunDeclination = sunCoords.first
-        val sunRightAscension = sunCoords.second
+        val sunDec = Math.toRadians(sunCoords.first)
+        val sunRA = sunCoords.second
 
         val points = mutableListOf<Pair<Double, Double>>()
         
-        // Calculate longitude for each latitude
-        for (i in -90..90 step 2) {
+        // Calculate points from -90 to 90 latitude
+        // We'll calculate both sunrise and sunset longitudes
+        val sunrisePoints = mutableListOf<Pair<Double, Double>>()
+        val sunsetPoints = mutableListOf<Pair<Double, Double>>()
+
+        for (i in -90..90 step 1) {
             val lat = i.toDouble()
             val latRad = Math.toRadians(lat)
-            val decRad = Math.toRadians(sunDeclination)
 
-            // The terminator is where the sun's altitude is 0
-            // cos(h) = (sin(alt) - sin(lat)*sin(dec)) / (cos(lat)*cos(dec))
-            // with alt = 0, sin(alt) = 0
-            val cosH = -tan(latRad) * tan(decRad)
+            val cosH = -tan(latRad) * tan(sunDec)
             
             if (cosH >= 1.0) {
-                // Constant night or day
+                // Constant night (winter pole)
                 continue
             } else if (cosH <= -1.0) {
-                // Constant night or day
+                // Constant day (summer pole)
                 continue
             }
             
             val h = Math.toDegrees(acos(cosH))
             
-            // Local sidereal time for sunrise/sunset
-            val lst1 = sunRightAscension + h
-            val lst2 = sunRightAscension - h
+            val lon1 = normalizeLongitude(sunRA + h - gst)
+            val lon2 = normalizeLongitude(sunRA - h - gst)
             
-            // Longitude = LST - GST
-            val lon1 = normalizeLongitude(lst1 - gst)
-            val lon2 = normalizeLongitude(lst2 - gst)
-            
-            points.add(Pair(lat, lon1))
-            points.add(Pair(lat, lon2))
+            sunrisePoints.add(Pair(lat, lon1))
+            sunsetPoints.add(Pair(lat, lon2))
         }
         
-        // Sort points to form a continuous line around the globe
-        return points.sortedBy { it.second }
+        // Combine to form a loop
+        points.addAll(sunrisePoints)
+        points.addAll(sunsetPoints.reversed())
+        
+        return points
     }
 
     private fun getJulianDay(date: Date): Double {
@@ -66,7 +61,7 @@ object TerminatorUtils {
 
     private fun getGreenwichSiderealTime(jd: Double): Double {
         val t = (jd - 2451545.0) / 36525.0
-        var gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * t * t - t * t * t / 38710000.0
+        val gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * t * t - t * t * t / 38710000.0
         return normalizeDegrees(gmst)
     }
 
@@ -74,7 +69,6 @@ object TerminatorUtils {
         val t = (jd - 2451545.0) / 36525.0
         val l0 = 280.46646 + 36000.76983 * t + 0.0003032 * t * t
         val m = 357.52911 + 35999.05029 * t - 0.0001537 * t * t
-        val e = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t
         
         val c = (1.914602 - 0.004817 * t - 0.000014 * t * t) * sin(Math.toRadians(m)) +
                 (0.019993 - 0.000101 * t) * sin(Math.toRadians(2 * m)) +
