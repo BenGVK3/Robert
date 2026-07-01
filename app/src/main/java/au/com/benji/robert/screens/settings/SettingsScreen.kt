@@ -10,8 +10,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import au.com.benji.robert.repository.BandPlanRepository
 import au.com.benji.robert.repository.SettingsRepository
 import au.com.benji.robert.theme.Spacing
@@ -19,7 +17,9 @@ import au.com.benji.robert.viewmodel.RobertViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    paddingValues: PaddingValues
+) {
     val context = LocalContext.current
     val repository = remember { SettingsRepository(context) }
     val bandPlanRepository = remember { BandPlanRepository(context) }
@@ -46,135 +46,141 @@ fun SettingsScreen() {
     val countries = viewModel.getCountries()
     val licenceClasses = viewModel.getLicenceClasses(country)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Spacing.Medium)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
-    ) {
-
-        Text(text = "Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-
-        Text(text = "Station Information", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-
-        OutlinedTextField(
-            value = callsign,
-            onValueChange = { callsign = it },
-            label = { Text("Home Callsign") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Operator Name") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        OutlinedTextField(
-            value = gridSquare,
-            onValueChange = { gridSquare = it },
-            label = { Text("Home Grid Square") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Text(text = "Licensing & Region", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-
-        ExposedDropdownMenuBox(
-            expanded = countryExpanded,
-            onExpandedChange = { countryExpanded = !countryExpanded },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = country,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Country / Region") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryExpanded) },
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
+    Scaffold(
+        modifier = Modifier.padding(paddingValues),
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                actions = {
+                    TextButton(
+                        onClick = { 
+                            viewModel.saveSettings(callsign, name, gridSquare, country, licenceClass)
+                        }
+                    ) {
+                        Text("SAVE")
+                    }
+                }
             )
-            ExposedDropdownMenu(
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = Spacing.Medium)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+        ) {
+            Text(text = "Station Information", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+
+            OutlinedTextField(
+                value = callsign,
+                onValueChange = { callsign = it },
+                label = { Text("Home Callsign") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Operator Name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = gridSquare,
+                onValueChange = { gridSquare = it },
+                label = { Text("Home Grid Square") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Text(text = "Licensing & Region", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+
+            ExposedDropdownMenuBox(
                 expanded = countryExpanded,
-                onDismissRequest = { countryExpanded = false }
+                onExpandedChange = { countryExpanded = !countryExpanded },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                countries.forEach { selectionOption ->
-                    DropdownMenuItem(
-                        text = { Text(selectionOption) },
-                        onClick = {
-                            country = selectionOption
-                            countryExpanded = false
-                            // Reset licence class to first available for new country
-                            val newClasses = viewModel.getLicenceClasses(selectionOption)
-                            if (newClasses.isNotEmpty()) {
-                                licenceClass = newClasses.first().id
-                            }
-                        }
-                    )
-                }
-            }
-        }
-
-        ExposedDropdownMenuBox(
-            expanded = licenceExpanded,
-            onExpandedChange = { licenceExpanded = !licenceExpanded },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            val currentLicenceName = licenceClasses.find { it.id == licenceClass }?.name ?: licenceClass
-            OutlinedTextField(
-                value = currentLicenceName,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Licence Class") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = licenceExpanded) },
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
-            )
-            ExposedDropdownMenu(
-                expanded = licenceExpanded,
-                onDismissRequest = { licenceExpanded = false }
-            ) {
-                licenceClasses.forEach { selectionOption ->
-                    DropdownMenuItem(
-                        text = { Text(selectionOption.name) },
-                        onClick = {
-                            licenceClass = selectionOption.id
-                            licenceExpanded = false
-                        }
-                    )
-                }
-            }
-        }
-
-        Text(text = "Appearance", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-        ) {
-            listOf("System", "Light", "Dark").forEach { mode ->
-                FilterChip(
-                    selected = savedThemeMode == mode,
-                    onClick = { viewModel.saveThemeMode(mode) },
-                    label = { Text(mode) },
-                    modifier = Modifier.weight(1f)
+                OutlinedTextField(
+                    value = country,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Country / Region") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryExpanded) },
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
                 )
+                ExposedDropdownMenu(
+                    expanded = countryExpanded,
+                    onDismissRequest = { countryExpanded = false }
+                ) {
+                    countries.forEach { selectionOption ->
+                        DropdownMenuItem(
+                            text = { Text(selectionOption) },
+                            onClick = {
+                                country = selectionOption
+                                countryExpanded = false
+                                // Reset licence class to first available for new country
+                                val newClasses = viewModel.getLicenceClasses(selectionOption)
+                                if (newClasses.isNotEmpty()) {
+                                    licenceClass = newClasses.first().id
+                                }
+                            }
+                        )
+                    }
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(Spacing.Large))
+            ExposedDropdownMenuBox(
+                expanded = licenceExpanded,
+                onExpandedChange = { licenceExpanded = !licenceExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val currentLicenceName = licenceClasses.find { it.id == licenceClass }?.name ?: licenceClass
+                OutlinedTextField(
+                    value = currentLicenceName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Licence Class") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = licenceExpanded) },
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = licenceExpanded,
+                    onDismissRequest = { licenceExpanded = false }
+                ) {
+                    licenceClasses.forEach { selectionOption ->
+                        DropdownMenuItem(
+                            text = { Text(selectionOption.name) },
+                            onClick = {
+                                licenceClass = selectionOption.id
+                                licenceExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
-        Button(
-            onClick = { 
-                viewModel.saveSettings(callsign, name, gridSquare, country, licenceClass)
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Save All Settings")
+            Text(text = "Appearance", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+            ) {
+                listOf("System", "Light", "Dark").forEach { mode ->
+                    FilterChip(
+                        selected = savedThemeMode == mode,
+                        onClick = { viewModel.saveThemeMode(mode) },
+                        label = { Text(mode) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.ExtraLarge))
         }
-        
-        Spacer(modifier = Modifier.height(Spacing.ExtraLarge))
     }
 }

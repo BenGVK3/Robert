@@ -36,6 +36,7 @@ import au.com.benji.robert.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AprsScreen(
+    paddingValues: PaddingValues,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -57,7 +58,7 @@ fun AprsScreen(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.refresh() },
         state = pullToRefreshState,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().padding(paddingValues)
     ) {
         Column(
             modifier = Modifier

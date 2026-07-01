@@ -13,12 +13,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.components.*
 import au.com.benji.robert.database.LogEntryEntity
-import au.com.benji.robert.screens.dashboard.*
+import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 
 @Composable
 fun LogbookScreen(
+    paddingValues: PaddingValues,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val logs by viewModel.logs.collectAsStateWithLifecycle()
@@ -28,6 +30,7 @@ fun LogbookScreen(
     var logToDelete by remember { mutableStateOf<LogEntryEntity?>(null) }
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             Column(modifier = Modifier.padding(Spacing.Medium)) {
                 Text(
@@ -78,7 +81,6 @@ fun LogbookScreen(
         }
     }
 
-    // Reuse Dialogs from DashboardScreen (or components if they are moved)
     if (showAddLogDialog) {
         LogDialog(
             onDismiss = { showAddLogDialog = false },

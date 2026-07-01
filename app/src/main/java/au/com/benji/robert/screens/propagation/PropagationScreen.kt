@@ -42,41 +42,40 @@ import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 
+import au.com.benji.robert.repository.propagation.PropagationState
+import androidx.compose.foundation.lazy.LazyRow
+import au.com.benji.robert.components.PropagationMap
+import java.text.SimpleDateFormat
+import java.util.*
+
+import au.com.benji.robert.repository.propagation.PropagationSpot
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PropagationScreen(
-    viewModel: DashboardViewModel = viewModel()
+    paddingValues: PaddingValues,
+    dashboardViewModel: DashboardViewModel = viewModel(),
+    propagationViewModel: PropagationViewModel = viewModel()
 ) {
-    val solarData by viewModel.solarData.collectAsStateWithLifecycle()
-    val mufResult by viewModel.mufResult.collectAsStateWithLifecycle()
-    val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val solarData by dashboardViewModel.solarData.collectAsStateWithLifecycle()
+    val mufResult by dashboardViewModel.mufResult.collectAsStateWithLifecycle()
+    val bandConditions by dashboardViewModel.propagationData.collectAsStateWithLifecycle()
+    
+    val state by propagationViewModel.state.collectAsStateWithLifecycle()
+    val selectedBand by propagationViewModel.selectedBand.collectAsStateWithLifecycle()
+    val selectedMode by propagationViewModel.selectedMode.collectAsStateWithLifecycle()
+    val selectedTimeWindow by propagationViewModel.selectedTimeWindow.collectAsStateWithLifecycle()
+
     val pullToRefreshState = rememberPullToRefreshState()
     
-    // PSK Reporter URL with grey line and 80m FT8 anyone last 15 mins settings
-    val pskReporterUrl = "https://pskreporter.info/pskmap.html?show-daynight=1&band=3500000&mode=FT8&timerange=900"
-    var isMapFullscreen by remember { mutableStateOf(false) }
-    var isMapExpanded by remember { mutableStateOf(false) }
-
-    // Auto refresh timer
-    var timeLeft by remember { mutableIntStateOf(60) }
-    LaunchedEffect(timeLeft, isRefreshing) {
-        if (isRefreshing) {
-            timeLeft = 60
-        } else if (timeLeft > 0) {
-            delay(1000)
-            timeLeft--
-        } else {
-            viewModel.refresh()
-            timeLeft = 60
-        }
-    }
+    var showGreyLine by remember { mutableStateOf(true) }
+    var selectedSpot by remember { mutableStateOf<PropagationSpot?>(null) }
 
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = { viewModel.refresh() },
+        isRefreshing = state.isLoading,
+        onRefresh = { propagationViewModel.manualRefresh() },
         state = pullToRefreshState,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().padding(paddingValues)
     ) {
         LazyColumn(
             modifier = Modifier
@@ -84,32 +83,33 @@ fun PropagationScreen(
                 .padding(Spacing.Medium),
             verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                Image(
-                    painter = painterResource(id = au.com.benji.robert.R.drawable.propagation),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(62.dp)
-                        .offset(x = 5.dp),
-                    colorFilter = null,
-                    contentScale = ContentScale.Fit
-                )
-                Text(
-                    text = "Propagation Center",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                    Image(
+                        painter = painterResource(id = au.com.benji.robert.R.drawable.propagation),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(62.dp)
+                            .offset(x = 5.dp),
+                        colorFilter = null,
+                        contentScale = ContentScale.Fit
+                    )
+                    Text(
+                        text = "Propagation Center",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-        }
 
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            // Status Card
+            item {
+                StatusCard(state)
+            }
+
+            // Map and Filters
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                     Text(
                         text = "LIVE PROPAGATION MAP",
                         style = MaterialTheme.typography.labelLarge,
@@ -117,205 +117,231 @@ fun PropagationScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     
-                    if (isMapExpanded) {
-                        TextButton(
-                            onClick = { isMapExpanded = false },
-                            contentPadding = PaddingValues(horizontal = 8.dp)
-                        ) {
-                            Text("HIDE MAP")
-                            Icon(
-                                Icons.Default.ExpandLess,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (isMapExpanded) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(420.dp)
-                                .clip(RoundedCornerShape(12.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            RobertMap(url = pskReporterUrl, modifier = Modifier.fillMaxSize())
-                        }
-                        
-                        IconButton(
-                            onClick = { isMapFullscreen = true },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                        ) {
-                            Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
-                        }
-                    }
-                    
-                    Text(
-                        text = "Live FT8/Digital reception reports with integrated Grey Line.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                } else {
+                    // Map Area
                     Card(
-                        onClick = { isMapExpanded = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(400.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(Spacing.Medium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(Spacing.Small))
-                            Text("SHOW MAP: Tap to view live digital traffic map", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            PropagationMap(
+                                spots = state.spots,
+                                showGreyLine = showGreyLine,
+                                modifier = Modifier.fillMaxSize(),
+                                onSpotSelected = { selectedSpot = it }
+                            )
+                            
+                            if (state.error != null) {
+                                Text(
+                                    text = "Map Error: ${state.error}",
+                                    modifier = Modifier.align(Alignment.Center).padding(16.dp),
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            
+                            // Grey Line Toggle
+                            FilterChip(
+                                selected = showGreyLine,
+                                onClick = { showGreyLine = !showGreyLine },
+                                label = { Text("GREY LINE", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                    selectedLabelColor = Color.White
+                                )
+                            )
                         }
                     }
+
+                    selectedSpot?.let { spot ->
+                        SpotDetailCard(spot) { selectedSpot = null }
+                    }
+
+                    // Filters
+                    BandFilterRow(selectedBand) { propagationViewModel.setBand(it) }
+                    ModeFilterRow(selectedMode) { propagationViewModel.setMode(it) }
+                    TimeFilterRow(selectedTimeWindow) { propagationViewModel.setTimeWindow(it) }
                 }
             }
-        }
 
-        item {
-            solarData?.let { data ->
-                SolarDataCard(data, mufResult)
-            }
-        }
-
-        propagationData?.ducting?.let { ducting ->
             item {
-                Text(
-                    text = "Atmospheric Ducting",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(Spacing.ExtraSmall))
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (ducting.isActive) 
-                            MaterialTheme.colorScheme.primaryContainer 
-                        else 
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(Spacing.Medium)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                painter = painterResource(id = au.com.benji.robert.R.drawable.propagation),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .offset(x = 5.dp),
-                                colorFilter = null,
-                                contentScale = ContentScale.Fit
-                            )
-                            Spacer(modifier = Modifier.width(Spacing.Small))
-                            Text(
-                                text = if (ducting.isActive) "ENHANCED PROPAGATION" else "NORMAL CONDITIONS",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(Spacing.Small))
-                        Text(text = ducting.description, style = MaterialTheme.typography.bodyLarge)
-                        if (ducting.isActive) {
-                            Spacer(modifier = Modifier.height(Spacing.Small))
-                            Text(
-                                text = "Intensity: ${ducting.intensity}",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                solarData?.let { data ->
+                    SolarDataCard(data, mufResult)
                 }
             }
-        }
 
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
+            item {
                 Text(
                     text = "Live Band Conditions",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = "Auto-refresh in ${timeLeft}s",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                )
             }
-        }
 
-        propagationData?.let { data ->
-            items(data.bands) { band ->
-                BandConditionRow(band)
-            }
-        } ?: item { 
-            Box(modifier = Modifier.fillMaxWidth().padding(Spacing.Large), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(Spacing.Small))
-                    Text("Calculating band stability...", style = MaterialTheme.typography.bodySmall)
+            bandConditions?.let { data ->
+                items(data.bands) { band ->
+                    BandConditionRow(band)
                 }
-            }
-        }
-        
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(Spacing.Small))
-                    Text(
-                        text = "Data combines real-time NOAA solar indices and PSK Reporter live traffic density.",
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-        }
-        
-        item { Spacer(modifier = Modifier.height(Spacing.Large)) }
-    }
-}
-
-    if (isMapFullscreen) {
-        Dialog(
-            onDismissRequest = { isMapFullscreen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Black
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    RobertMap(url = pskReporterUrl, modifier = Modifier.fillMaxSize())
-                    
-                    IconButton(
-                        onClick = { isMapFullscreen = false },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            } ?: item { 
+                Box(modifier = Modifier.fillMaxWidth().padding(Spacing.Large), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(Spacing.Small))
+                        Text("Calculating band stability...", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
+            
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(Spacing.Small))
+                        Text(
+                            text = "Data combines real-time NOAA solar indices and multi-provider live traffic density.",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+            
+            item { Spacer(modifier = Modifier.height(Spacing.Large)) }
         }
     }
 }
+
+@Composable
+fun SpotDetailCard(spot: PropagationSpot, onClose: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(Spacing.Medium)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "${spot.senderCallsign} ➔ ${spot.receiverCallsign}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(Spacing.Small))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                DetailItem("Band", spot.band)
+                DetailItem("Mode", spot.mode)
+                DetailItem("Distance", "${spot.distance.toInt()} km")
+                DetailItem("SNR", spot.snr?.let { "$it dB" } ?: "---")
+            }
+            
+            Spacer(modifier = Modifier.height(Spacing.Small))
+            
+            val timeText = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(spot.timestamp))
+            Text(text = "Time: $timeText UTC", style = MaterialTheme.typography.labelSmall)
+            Text(text = "From: ${spot.senderLocator} | To: ${spot.receiverLocator}", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+fun DetailItem(label: String, value: String) {
+    Column {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun StatusCard(state: PropagationState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(Spacing.Medium)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                StatusItem("STATIONS", state.spots.map { it.senderCallsign }.distinct().size.toString())
+                StatusItem("PATHS", state.spots.size.toString())
+                StatusItem("PROVIDERS", state.activeProviders.size.toString())
+                val lastUpdateText = if (state.lastUpdate > 0) {
+                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(state.lastUpdate))
+                } else "---"
+                StatusItem("UPDATED", lastUpdateText)
+            }
+            if (state.activeProviders.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(Spacing.Small))
+                Text(
+                    text = "Sources: ${state.activeProviders.joinToString(", ")}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun StatusItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+        Text(text = value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+    }
+}
+
+@Composable
+fun BandFilterRow(selectedBand: String, onSelect: (String) -> Unit) {
+    val bands = listOf("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm")
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(bands) { band ->
+            FilterChip(
+                selected = selectedBand == band,
+                onClick = { onSelect(band) },
+                label = { Text(band) }
+            )
+        }
+    }
+}
+
+@Composable
+fun ModeFilterRow(selectedMode: String, onSelect: (String) -> Unit) {
+    val modes = listOf("FT8", "FT4", "WSPR", "CW", "SSB", "Digital", "All")
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(modes) { mode ->
+            FilterChip(
+                selected = selectedMode == mode,
+                onClick = { onSelect(mode) },
+                label = { Text(mode) }
+            )
+        }
+    }
+}
+
+@Composable
+fun TimeFilterRow(selectedMinutes: Int, onSelect: (Int) -> Unit) {
+    val timeWindows = listOf(
+        15 to "15m",
+        30 to "30m",
+        60 to "1h",
+        180 to "3h",
+        360 to "6h",
+        720 to "12h",
+        1440 to "24h"
+    )
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(timeWindows) { (mins, label) ->
+            FilterChip(
+                selected = selectedMinutes == mins,
+                onClick = { onSelect(mins) },
+                label = { Text(label) }
+            )
+        }
+    }
+}
+
 
 @Composable
 fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult) {
@@ -380,19 +406,6 @@ fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult) {
                                 text = " MHz",
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(bottom = 2.dp)
-                            )
-                        }
-                        if (mufResult.isEstimated) {
-                            Text(
-                                text = "Conf: ${mufResult.confidence}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = when(mufResult.confidence) {
-                                    MufCalculator.Confidence.High -> Color(0xFF4CAF50)
-                                    MufCalculator.Confidence.Medium -> Color(0xFFFFC107)
-                                    MufCalculator.Confidence.Low -> Color(0xFFF44336)
-                                }
                             )
                         }
                     }

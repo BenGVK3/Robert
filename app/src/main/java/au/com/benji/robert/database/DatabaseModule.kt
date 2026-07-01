@@ -22,4 +22,14 @@ object DatabaseModule {
 
         return database(context).logDao()
     }
+
+    fun repeaterDao(context: Context): RepeaterDao {
+
+        return database(context).repeaterDao()
+    }
+
+    fun propagationDao(context: Context): PropagationDao {
+
+        return database(context).propagationDao()
+    }
 }

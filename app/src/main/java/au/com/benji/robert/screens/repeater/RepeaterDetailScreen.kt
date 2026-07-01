@@ -31,6 +31,7 @@ fun RepeaterDetailScreen(
     callsign: String,
     frequency: String,
     onBack: () -> Unit,
+    paddingValues: PaddingValues,
     viewModel: RepeaterViewModel = viewModel()
 ) {
     val repeaters by viewModel.filteredRepeaters.collectAsStateWithLifecycle()
@@ -47,6 +48,7 @@ fun RepeaterDetailScreen(
     }
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { Text(callsign) },

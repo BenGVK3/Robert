@@ -47,6 +47,7 @@ import au.com.benji.robert.theme.Spacing
 @Composable
 fun ToolsScreen(
     navController: androidx.navigation.NavController,
+    paddingValues: PaddingValues,
     viewModel: DashboardViewModel = viewModel()
 ) {
     var activeTool by remember { mutableStateOf<String?>(null) }
@@ -54,6 +55,7 @@ fun ToolsScreen(
     val pullToRefreshState = rememberPullToRefreshState()
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { Text(activeTool ?: "Radio Tools", fontWeight = FontWeight.Bold) },

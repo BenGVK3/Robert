@@ -1,5 +1,6 @@
 package au.com.benji.robert.navigation
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -23,6 +24,7 @@ import au.com.benji.robert.screens.repeater.RepeaterDetailScreen
 @Composable
 fun RobertNavHost(
     navController: NavHostController,
+    paddingValues: PaddingValues,
     modifier: Modifier = Modifier
 ) {
 
@@ -33,46 +35,47 @@ fun RobertNavHost(
     ) {
 
         composable(Screen.Dashboard.route) {
-            DashboardScreen(navController)
+            DashboardScreen(navController, paddingValues)
         }
 
         composable(Screen.Propagation.route) {
-            PropagationScreen()
+            PropagationScreen(paddingValues)
         }
 
         composable(Screen.Logbook.route) {
-            LogbookScreen()
+            LogbookScreen(paddingValues)
         }
 
         composable(Screen.Tools.route) {
-            ToolsScreen(navController)
+            ToolsScreen(navController, paddingValues)
         }
 
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(paddingValues)
         }
 
         composable(Screen.Sdr.route) {
-            SdrScreen()
+            SdrScreen(paddingValues)
         }
 
         composable(Screen.Aprs.route) {
-            AprsScreen()
+            AprsScreen(paddingValues)
         }
 
         composable(Screen.Satellites.route) {
-            SatellitesScreen()
+            SatellitesScreen(paddingValues)
         }
 
         composable(Screen.BandPlan.route) {
-            BandPlanScreen()
+            BandPlanScreen(paddingValues)
         }
 
         composable(Screen.RepeaterList.route) {
             RepeaterListScreen(
                 onNavigateToDetail = { callsign, freq ->
                     navController.navigate(Screen.RepeaterDetail.createRoute(callsign, freq))
-                }
+                },
+                paddingValues = paddingValues
             )
         }
 
@@ -81,7 +84,8 @@ fun RobertNavHost(
                 onBack = { navController.popBackStack() },
                 onNavigateToDetail = { callsign, freq ->
                     navController.navigate(Screen.RepeaterDetail.createRoute(callsign, freq))
-                }
+                },
+                paddingValues = paddingValues
             )
         }
 
@@ -97,7 +101,8 @@ fun RobertNavHost(
             RepeaterDetailScreen(
                 callsign = callsign,
                 frequency = frequency,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                paddingValues = paddingValues
             )
         }
     }

@@ -26,6 +26,7 @@ import au.com.benji.robert.theme.Spacing
 @Composable
 fun RepeaterListScreen(
     onNavigateToDetail: (String, String) -> Unit,
+    paddingValues: PaddingValues,
     viewModel: RepeaterViewModel = viewModel()
 ) {
     val repeaters by viewModel.filteredRepeaters.collectAsStateWithLifecycle()
@@ -45,6 +46,7 @@ fun RepeaterListScreen(
     }
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -99,8 +101,7 @@ fun RepeaterListScreen(
                     )
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 80.dp)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         items(repeaters, key = { it.callsign + it.frequency }) { repeater ->
                             RepeaterCard(

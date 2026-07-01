@@ -29,6 +29,7 @@ import kotlinx.serialization.json.Json
 fun RepeaterMapScreen(
     onBack: () -> Unit,
     onNavigateToDetail: (String, String) -> Unit,
+    paddingValues: PaddingValues,
     viewModel: RepeaterViewModel = viewModel()
 ) {
     val location by viewModel.userLocation.collectAsStateWithLifecycle()
@@ -43,6 +44,7 @@ fun RepeaterMapScreen(
     )
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { Text("Repeater Map") },

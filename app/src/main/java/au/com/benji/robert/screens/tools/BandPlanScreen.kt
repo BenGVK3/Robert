@@ -27,7 +27,9 @@ import au.com.benji.robert.viewmodel.RobertViewModelFactory
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
-fun BandPlanScreen() {
+fun BandPlanScreen(
+    paddingValues: PaddingValues = PaddingValues()
+) {
     val context = LocalContext.current
     val settingsRepository = remember { SettingsRepository(context) }
     val bandPlanRepository = remember { BandPlanRepository(context) }
@@ -43,7 +45,7 @@ fun BandPlanScreen() {
     
     var showFrequencyLookup by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = Spacing.Medium)) {
+    Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = Spacing.Medium)) {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { viewModel.updateSearchQuery(it) },
@@ -86,8 +88,7 @@ fun BandPlanScreen() {
 
         LazyColumn(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
-            contentPadding = PaddingValues(bottom = Spacing.Large)
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
             items(bands) { band ->
                 BandCard(band, userLicenceClass)

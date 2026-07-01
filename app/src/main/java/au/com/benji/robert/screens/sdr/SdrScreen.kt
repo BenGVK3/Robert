@@ -18,6 +18,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SdrScreen(
+    paddingValues: PaddingValues,
     viewModel: SdrViewModel = viewModel()
 ) {
     val kiwisdrUrl by viewModel.kiwisdrUrl.collectAsStateWithLifecycle()
@@ -28,6 +29,7 @@ fun SdrScreen(
     val initialUrl = remember { kiwisdrUrl }
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { 

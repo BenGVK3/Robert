@@ -38,6 +38,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SatellitesScreen(
+    paddingValues: PaddingValues,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val position by viewModel.satellitePosition.collectAsStateWithLifecycle()
@@ -57,6 +58,7 @@ fun SatellitesScreen(
     val categories = listOf("All", "Amateur", "ISS", "Weather", "Experimental")
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { 
@@ -104,8 +106,7 @@ fun SatellitesScreen(
 
             // --- SCROLLABLE CONTENT BELOW ---
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 32.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
                 // Categories Row
                 item {
