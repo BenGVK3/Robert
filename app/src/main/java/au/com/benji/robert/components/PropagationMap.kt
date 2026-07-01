@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import au.com.benji.robert.repository.propagation.PropagationSpot
+import au.com.benji.robert.utils.TerminatorUtils
 
 @Composable
 fun PropagationMap(
@@ -24,7 +25,7 @@ fun PropagationMap(
 
     // Using a Leaflet-based map to avoid crashes due to missing Google Maps API keys
     val html = remember(spots, showGreyLine, userLat, userLon) {
-        val spotsJson = spots.take(200).map { spot ->
+        val spotsJson = spots.map { spot ->
             val slat = if (spot.senderLat.isNaN()) 0.0 else spot.senderLat
             val slon = if (spot.senderLon.isNaN()) 0.0 else spot.senderLon
             val rlat = if (spot.receiverLat.isNaN()) 0.0 else spot.receiverLat
@@ -43,6 +44,11 @@ fun PropagationMap(
         val lat = if (userLat == null || userLat.isNaN()) 20.0 else userLat
         val lon = if (userLon == null || userLon.isNaN()) 0.0 else userLon
 
+        // Calculate terminator points
+        val terminatorPoints = if (showGreyLine) {
+            TerminatorUtils.calculateTerminator().joinToString(",") { "[${it.first}, ${it.second}]" }
+        } else ""
+
         """
         <!DOCTYPE html>
         <html>
@@ -50,7 +56,9 @@ fun PropagationMap(
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-            <script src="https://unpkg.com/leaflet-terminator"></script>
+            <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+            <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
             <style>
                 html, body { margin: 0; padding: 0; background: #000; height: 100%; width: 100%; }
                 #map { height: 100%; width: 100%; background: #000; }
@@ -90,44 +98,60 @@ fun PropagationMap(
                 }
 
                 if ($showGreyLine) {
-                    try {
-                        if (typeof L.terminator === 'function') {
-                            L.terminator({
-                                fillColor: '#000',
-                                fillOpacity: 0.5,
-                                color: '#fff',
-                                weight: 1
-                            }).addTo(map);
-                        }
-                    } catch(e) { console.error('Terminator error:', e); }
+                    var termPoints = [$terminatorPoints];
+                    if (termPoints.length > 0) {
+                        // Create a polygon for the night side. 
+                        // This is a simplification: we assume the "night" is one side of the terminator.
+                        // For a better implementation, we'd calculate which side is dark.
+                        var nightPolygon = L.polygon([
+                            [-90, -180],
+                            ...termPoints,
+                            [-90, 180]
+                        ], {
+                            fillColor: '#000',
+                            fillOpacity: 0.5,
+                            color: '#fff',
+                            weight: 1,
+                            interactive: false
+                        }).addTo(map);
+                    }
                 }
 
                 var spots = [$spotsJson];
+                var markers = L.markerClusterGroup({
+                    showCoverageOnHover: false,
+                    maxClusterRadius: 40
+                });
+
                 spots.forEach(function(s) {
                     var color = s.dist < 1000 ? '#4CAF50' : (s.dist < 5000 ? '#FFEB3B' : (s.dist < 10000 ? '#FF9800' : '#F44336'));
                     
                     // Draw path
                     L.polyline([[s.slat, s.slon], [s.rlat, s.rlon]], {
-                        color: color, weight: 1, opacity: 0.4
+                        color: color, weight: 1, opacity: 0.3
                     }).addTo(map);
                     
                     // Sender marker
-                    L.circleMarker([s.slat, s.slon], { 
-                        radius: 3, 
+                    var sMarker = L.circleMarker([s.slat, s.slon], { 
+                        radius: 4, 
                         color: color, 
                         fillColor: color,
-                        fillOpacity: 0.8 
-                    }).addTo(map).on('click', function() { Android.onSpotClick(s.id); });
+                        fillOpacity: 0.9 
+                    }).on('click', function() { Android.onSpotClick(s.id); });
+                    markers.addLayer(sMarker);
                     
                     // Receiver marker
-                    L.circleMarker([s.rlat, s.rlon], { 
-                        radius: 2, 
+                    var rMarker = L.circleMarker([s.rlat, s.rlon], { 
+                        radius: 3, 
                         color: '#fff', 
                         fillColor: color,
-                        fillOpacity: 0.5 
-                    }).addTo(map).on('click', function() { Android.onSpotClick(s.id); });
+                        fillOpacity: 0.6 
+                    }).on('click', function() { Android.onSpotClick(s.id); });
+                    markers.addLayer(rMarker);
                 });
                 
+                map.addLayer(markers);
+
                 setTimeout(function() {
                     map.invalidateSize();
                 }, 500);
