@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import au.com.benji.robert.screens.dashboard.DashboardScreen
 import au.com.benji.robert.screens.propagation.PropagationScreen
+import au.com.benji.robert.screens.moon.MoonScreen
 import au.com.benji.robert.screens.logbook.LogbookScreen
 import au.com.benji.robert.screens.settings.SettingsScreen
 import au.com.benji.robert.screens.tools.ToolsScreen
@@ -40,6 +41,10 @@ fun RobertNavHost(
 
         composable(Screen.Propagation.route) {
             PropagationScreen(paddingValues)
+        }
+
+        composable(Screen.Moon.route) {
+            MoonScreen(paddingValues)
         }
 
         composable(Screen.Logbook.route) {

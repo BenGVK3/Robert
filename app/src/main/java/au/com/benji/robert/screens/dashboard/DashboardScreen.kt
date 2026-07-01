@@ -31,6 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import au.com.benji.robert.components.*
 import au.com.benji.robert.theme.Spacing
+import au.com.benji.robert.models.MoonData
 import au.com.benji.robert.utils.MufCalculator
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -48,6 +49,7 @@ fun DashboardScreen(
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
     val propagationData by viewModel.propagationData.collectAsStateWithLifecycle()
+    val moonData by viewModel.moonData.collectAsStateWithLifecycle()
     val mufResult by viewModel.mufResult.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 

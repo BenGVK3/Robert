@@ -31,6 +31,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val solarRepository = SolarDataRepository()
     private val weatherRepository = WeatherRepository()
     private val propagationRepository = PropagationRepository()
+    private val moonRepository = MoonRepository()
     private val aprsRepository = AprsRepository()
     private val dxRepository = DxRepository()
     private val satelliteRepository = SatelliteRepository()
@@ -133,6 +134,16 @@ data class Quadruple<out A, out B, out C, out D>(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
+        )
+
+    val moonData = locationFlow
+        .flatMapLatest { loc ->
+            moonRepository.getMoonData(loc?.first, loc?.second)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MoonData()
         )
 
     val equipment = shackRepository.equipment()
@@ -297,13 +308,14 @@ data class Quadruple<out A, out B, out C, out D>(
         initialValue = "Scanning sky..."
     )
 
-    val cards = combine(solarData, weatherData, nextPassTimer, propagationData, equipment, mufResult) { args ->
+    val cards = combine(solarData, weatherData, nextPassTimer, propagationData, equipment, mufResult, moonData) { args ->
         val solar = args[0] as SolarData
         val weather = args[1] as? DetailedWeather
         val timer = args[2] as String
         val propagation = args[3] as? PropagationData
         val gear = args[4] as List<ShackEntity>
         val muf = args[5] as MufCalculator.MufResult
+        val moon = args[6] as MoonData
 
         val baseCards = mutableListOf(
             InfoCardModel(
@@ -311,6 +323,12 @@ data class Quadruple<out A, out B, out C, out D>(
                 icon = "📡",
                 title = "Live Recommendation",
                 value = getPersonalizedRecommendation(propagation, gear)
+            ),
+            InfoCardModel(
+                type = CardType.SOLAR,
+                icon = "🌕",
+                title = "Moon: ${moon.phaseName}",
+                value = if (moon.isVisible) "EME Possible Now" else "Moon Below Horizon"
             ),
             InfoCardModel(
                 type = CardType.SOLAR,

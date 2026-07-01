@@ -47,6 +47,7 @@ fun CommandCenterSheet(
                 CommandAction("KiwiSDR", Icons.Default.Radio, CommandActionType.Navigate(Screen.Sdr.route)),
                 CommandAction("APRS Map", Icons.Default.LocationOn, CommandActionType.Navigate(Screen.Aprs.route)),
                 CommandAction("Satellites", Icons.Default.Explore, CommandActionType.Navigate(Screen.Satellites.route)),
+                CommandAction("Moon (EME)", Icons.Default.Brightness2, CommandActionType.Navigate(Screen.Moon.route)),
                 CommandAction("Repeaters", Icons.Default.CellTower, CommandActionType.Navigate(Screen.RepeaterList.route))
             )
 
