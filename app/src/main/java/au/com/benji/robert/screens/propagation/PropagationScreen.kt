@@ -1,5 +1,6 @@
 package au.com.benji.robert.screens.propagation
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -57,6 +58,7 @@ fun PropagationScreen(
     dashboardViewModel: DashboardViewModel = viewModel(),
     propagationViewModel: PropagationViewModel = viewModel()
 ) {
+    val locationData by dashboardViewModel.locationFlow.collectAsStateWithLifecycle()
     val solarData by dashboardViewModel.solarData.collectAsStateWithLifecycle()
     val mufResult by dashboardViewModel.mufResult.collectAsStateWithLifecycle()
     val bandConditions by dashboardViewModel.propagationData.collectAsStateWithLifecycle()
@@ -68,6 +70,7 @@ fun PropagationScreen(
 
     val pullToRefreshState = rememberPullToRefreshState()
     
+    var isMapVisible by remember { mutableStateOf(false) }
     var showGreyLine by remember { mutableStateOf(true) }
     var selectedSpot by remember { mutableStateOf<PropagationSpot?>(null) }
 
@@ -110,49 +113,65 @@ fun PropagationScreen(
             // Map and Filters
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    Text(
-                        text = "LIVE PROPAGATION MAP",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    
-                    // Map Area
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(400.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            PropagationMap(
-                                spots = state.spots,
-                                showGreyLine = showGreyLine,
-                                modifier = Modifier.fillMaxSize(),
-                                onSpotSelected = { selectedSpot = it }
+                        Text(
+                            text = "LIVE PROPAGATION MAP",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        IconButton(onClick = { isMapVisible = !isMapVisible }) {
+                            Icon(
+                                imageVector = if (isMapVisible) Icons.Default.ExpandLess else Icons.Default.Map,
+                                contentDescription = if (isMapVisible) "Collapse" else "Expand"
                             )
-                            
-                            if (state.error != null) {
-                                Text(
-                                    text = "Map Error: ${state.error}",
-                                    modifier = Modifier.align(Alignment.Center).padding(16.dp),
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
+                        }
+                    }
+                    
+                    AnimatedVisibility(visible = isMapVisible) {
+                        // Map Area
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(400.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                PropagationMap(
+                                    spots = state.spots,
+                                    userLat = locationData?.first,
+                                    userLon = locationData?.second,
+                                    showGreyLine = showGreyLine,
+                                    modifier = Modifier.fillMaxSize(),
+                                    onSpotSelected = { selectedSpot = it }
+                                )
+                                
+                                if (state.error != null) {
+                                    Text(
+                                        text = "Map Error: ${state.error}",
+                                        modifier = Modifier.align(Alignment.Center).padding(16.dp),
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                
+                                // Grey Line Toggle
+                                FilterChip(
+                                    selected = showGreyLine,
+                                    onClick = { showGreyLine = !showGreyLine },
+                                    label = { Text("GREY LINE", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                        selectedLabelColor = Color.White
+                                    )
                                 )
                             }
-                            
-                            // Grey Line Toggle
-                            FilterChip(
-                                selected = showGreyLine,
-                                onClick = { showGreyLine = !showGreyLine },
-                                label = { Text("GREY LINE", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                    selectedLabelColor = Color.White
-                                )
-                            )
                         }
                     }
 

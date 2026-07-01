@@ -18,9 +18,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import au.com.benji.robert.navigation.BottomNavItems
+import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.theme.RobertColors
 
 @Composable
@@ -28,8 +32,8 @@ fun BottomNavigationBar(
     navController: NavHostController,
     onCommandCenterClick: () -> Unit
 ) {
-    val backStack = navController.currentBackStackEntryAsState()
-    val currentRoute = backStack.value?.destination?.route
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
 
     val firstHalf = BottomNavItems.take(2)
     val secondHalf = BottomNavItems.drop(2)
@@ -43,15 +47,20 @@ fun BottomNavigationBar(
     ) {
         // First two items
         firstHalf.forEach { item ->
+            val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true
             NavigationBarItem(
-                selected = currentRoute == item.route,
+                selected = isSelected,
                 onClick = {
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
+                    if (item.route == Screen.Dashboard.route) {
+                        navController.popBackStack(Screen.Dashboard.route, inclusive = false)
+                    } else {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 icon = {
@@ -93,15 +102,20 @@ fun BottomNavigationBar(
 
         // Last two items
         secondHalf.forEach { item ->
+            val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true
             NavigationBarItem(
-                selected = currentRoute == item.route,
+                selected = isSelected,
                 onClick = {
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
+                    if (item.route == Screen.Dashboard.route) {
+                        navController.popBackStack(Screen.Dashboard.route, inclusive = false)
+                    } else {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 icon = {

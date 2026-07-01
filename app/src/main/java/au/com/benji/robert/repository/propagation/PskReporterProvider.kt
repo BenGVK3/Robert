@@ -36,13 +36,17 @@ class PskReporterProvider : PropagationProvider {
                 
                 val senderCallsign = attrMap["senderCallsign"] ?: continue
                 val senderLocator = attrMap["senderLocator"] ?: ""
-                val senderLat = attrMap["senderDXCCLatitude"]?.toDoubleOrNull() ?: 0.0
-                val senderLon = attrMap["senderDXCCLongitude"]?.toDoubleOrNull() ?: 0.0
+                val senderLat = attrMap["senderDXCCLatitude"]?.toDoubleOrNull() 
+                    ?: attrMap["slat"]?.toDoubleOrNull() ?: 0.0
+                val senderLon = attrMap["senderDXCCLongitude"]?.toDoubleOrNull()
+                    ?: attrMap["slon"]?.toDoubleOrNull() ?: 0.0
                 
                 val receiverCallsign = attrMap["receiverCallsign"] ?: continue
                 val receiverLocator = attrMap["receiverLocator"] ?: ""
-                val receiverLat = attrMap["receiverDXCCLatitude"]?.toDoubleOrNull() ?: 0.0
-                val receiverLon = attrMap["receiverDXCCLongitude"]?.toDoubleOrNull() ?: 0.0
+                val receiverLat = attrMap["receiverDXCCLatitude"]?.toDoubleOrNull()
+                    ?: attrMap["rlat"]?.toDoubleOrNull() ?: 0.0
+                val receiverLon = attrMap["receiverDXCCLongitude"]?.toDoubleOrNull()
+                    ?: attrMap["rlon"]?.toDoubleOrNull() ?: 0.0
                 
                 val timestamp = attrMap["flowStartSeconds"]?.toLongOrNull()?.times(1000) ?: System.currentTimeMillis()
                 val distance = attrMap["distance"]?.toDoubleOrNull() ?: 0.0
