@@ -12,73 +12,46 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.Brightness4
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import au.com.benji.robert.components.RobertMap
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.utils.MufCalculator
 import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 
-import au.com.benji.robert.repository.propagation.PropagationState
-import androidx.compose.foundation.lazy.LazyRow
-import au.com.benji.robert.components.PropagationMap
 import java.text.SimpleDateFormat
 import java.util.*
-
-import au.com.benji.robert.repository.propagation.PropagationSpot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PropagationScreen(
     paddingValues: PaddingValues,
-    dashboardViewModel: DashboardViewModel = viewModel(),
-    propagationViewModel: PropagationViewModel = viewModel()
+    dashboardViewModel: DashboardViewModel = viewModel()
 ) {
-    val locationData by dashboardViewModel.locationFlow.collectAsStateWithLifecycle()
     val solarData by dashboardViewModel.solarData.collectAsStateWithLifecycle()
     val mufResult by dashboardViewModel.mufResult.collectAsStateWithLifecycle()
     val bandConditions by dashboardViewModel.propagationData.collectAsStateWithLifecycle()
-    
-    val state by propagationViewModel.state.collectAsStateWithLifecycle()
-    val selectedBand by propagationViewModel.selectedBand.collectAsStateWithLifecycle()
-    val selectedTimeWindow by propagationViewModel.selectedTimeWindow.collectAsStateWithLifecycle()
+    val isRefreshing by dashboardViewModel.isRefreshing.collectAsStateWithLifecycle()
 
     val pullToRefreshState = rememberPullToRefreshState()
     
-    var isMapVisible by remember { mutableStateOf(false) }
-    var isMapFullscreen by remember { mutableStateOf(false) }
-    var showGreyLine by remember { mutableStateOf(true) }
-    var selectedSpot by remember { mutableStateOf<PropagationSpot?>(null) }
-
     PullToRefreshBox(
-        isRefreshing = state.isLoading,
-        onRefresh = { propagationViewModel.manualRefresh() },
+        isRefreshing = isRefreshing,
+        onRefresh = { dashboardViewModel.refresh() },
         state = pullToRefreshState,
         modifier = Modifier.fillMaxSize().padding(paddingValues)
     ) {
@@ -107,127 +80,6 @@ fun PropagationScreen(
                 }
             }
 
-            // Status Card
-            item {
-                StatusCard(state)
-            }
-
-            // Map and Filters
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "LIVE PROPAGATION MAP",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = " (FT8)",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { showGreyLine = !showGreyLine }) {
-                                Icon(
-                                    imageVector = Icons.Default.Brightness4,
-                                    contentDescription = "Toggle Grey Line",
-                                    tint = if (showGreyLine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                )
-                            }
-                            IconButton(onClick = { isMapFullscreen = true }) {
-                                Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen")
-                            }
-                            IconButton(onClick = { isMapVisible = !isMapVisible }) {
-                                Icon(
-                                    imageVector = if (isMapVisible) Icons.Default.ExpandLess else Icons.Default.Map,
-                                    contentDescription = if (isMapVisible) "Collapse" else "Expand"
-                                )
-                            }
-                        }
-                    }
-                    
-                    AnimatedVisibility(visible = isMapVisible) {
-                        // Map Area
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(400.dp)
-                                .clip(RoundedCornerShape(12.dp)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                PropagationMap(
-                                    spots = state.spots,
-                                    userLat = locationData?.first,
-                                    userLon = locationData?.second,
-                                    showGreyLine = showGreyLine,
-                                    modifier = Modifier.fillMaxSize(),
-                                    onSpotSelected = { selectedSpot = it }
-                                )
-
-                                if (state.isLoading && state.spots.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                                    }
-                                } else if (!state.isLoading && state.spots.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            "No recent spots found for ${selectedBand}.",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                
-                                if (state.error != null) {
-                                    Text(
-                                        text = "Map Error: ${state.error}",
-                                        modifier = Modifier.align(Alignment.Center).padding(16.dp),
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    selectedSpot?.let { spot ->
-                        SpotDetailCard(spot) { selectedSpot = null }
-                    }
-
-                    // Filters
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-                    ) {
-                        BandDropdown(
-                            selectedBand = selectedBand,
-                            onSelect = { propagationViewModel.setBand(it) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        TimeDropdown(
-                            selectedMinutes = selectedTimeWindow,
-                            onSelect = { propagationViewModel.setTimeWindow(it) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
             item {
                 solarData?.let { data ->
                     SolarDataCard(data, mufResult)
@@ -243,8 +95,19 @@ fun PropagationScreen(
             }
 
             bandConditions?.let { data ->
-                items(data.bands) { band ->
-                    BandConditionRow(band)
+                val chunkedBands = data.bands.chunked(2)
+                items(chunkedBands) { rowBands ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+                    ) {
+                        rowBands.forEach { band ->
+                            BandConditionCard(band, modifier = Modifier.weight(1f))
+                        }
+                        if (rowBands.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             } ?: item { 
                 Box(modifier = Modifier.fillMaxWidth().padding(Spacing.Large), contentAlignment = Alignment.Center) {
@@ -265,7 +128,7 @@ fun PropagationScreen(
                         Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(Spacing.Small))
                         Text(
-                            text = "Data combines real-time NOAA solar indices and multi-provider live traffic density.",
+                            text = "Data combines real-time NOAA solar indices and traffic density.",
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -273,221 +136,6 @@ fun PropagationScreen(
             }
             
             item { Spacer(modifier = Modifier.height(Spacing.Large)) }
-        }
-    }
-
-    if (isMapFullscreen) {
-        Dialog(
-            onDismissRequest = { isMapFullscreen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Black
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (state.spots.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No recent FT8 spots found.", color = Color.Gray)
-                        }
-                    } else {
-                        PropagationMap(
-                            spots = state.spots,
-                            userLat = locationData?.first,
-                            userLon = locationData?.second,
-                            showGreyLine = showGreyLine,
-                            modifier = Modifier.fillMaxSize(),
-                            onSpotSelected = { 
-                                selectedSpot = it
-                                isMapFullscreen = false 
-                            }
-                        )
-                    }
-                    
-                    IconButton(
-                        onClick = { isMapFullscreen = false },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SpotDetailCard(spot: PropagationSpot, onClose: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-    ) {
-        Column(modifier = Modifier.padding(Spacing.Medium)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "${spot.senderCallsign} ➔ ${spot.receiverCallsign}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(Spacing.Small))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                DetailItem("Band", spot.band)
-                DetailItem("Mode", spot.mode)
-                DetailItem("Distance", "${spot.distance.toInt()} km")
-                DetailItem("SNR", spot.snr?.let { "$it dB" } ?: "---")
-            }
-            
-            Spacer(modifier = Modifier.height(Spacing.Small))
-            
-            val timeText = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(spot.timestamp))
-            Text(text = "Time: $timeText UTC", style = MaterialTheme.typography.labelSmall)
-            Text(text = "From: ${spot.senderLocator} | To: ${spot.receiverLocator}", style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
-@Composable
-fun DetailItem(label: String, value: String) {
-    Column {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun StatusCard(state: PropagationState) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-    ) {
-        Column(modifier = Modifier.padding(Spacing.Medium)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatusItem("STATIONS", state.spots.map { it.senderCallsign }.distinct().size.toString())
-                StatusItem("PATHS", state.spots.size.toString())
-                StatusItem("PROVIDERS", state.activeProviders.size.toString())
-                val lastUpdateText = if (state.lastUpdate > 0) {
-                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(state.lastUpdate))
-                } else "---"
-                StatusItem("UPDATED", lastUpdateText)
-            }
-            if (state.activeProviders.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(Spacing.Small))
-                Text(
-                    text = "Sources: ${state.activeProviders.joinToString(", ")}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun StatusItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-        Text(text = value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BandDropdown(selectedBand: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
-    val bands = listOf("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm")
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = "Band: $selectedBand",
-            onValueChange = {},
-            readOnly = true,
-            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-            label = { Text("Select Band", style = MaterialTheme.typography.labelSmall) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            ),
-            textStyle = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            bands.forEach { band ->
-                DropdownMenuItem(
-                    text = { Text(band, style = MaterialTheme.typography.bodyMedium) },
-                    onClick = {
-                        onSelect(band)
-                        expanded = false
-                    },
-                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TimeDropdown(selectedMinutes: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val timeWindows = listOf(
-        15 to "15m",
-        30 to "30m",
-        60 to "1h",
-        180 to "3h",
-        360 to "6h",
-        720 to "12h",
-        1440 to "24h"
-    )
-    var expanded by remember { mutableStateOf(false) }
-    val currentLabel = timeWindows.find { it.first == selectedMinutes }?.second ?: "${selectedMinutes}m"
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = "Window: $currentLabel",
-            onValueChange = {},
-            readOnly = true,
-            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-            label = { Text("Time Window", style = MaterialTheme.typography.labelSmall) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            ),
-            textStyle = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            timeWindows.forEach { (mins, label) ->
-                DropdownMenuItem(
-                    text = { Text(label, style = MaterialTheme.typography.bodyMedium) },
-                    onClick = {
-                        onSelect(mins)
-                        expanded = false
-                    },
-                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                )
-            }
         }
     }
 }
@@ -598,7 +246,7 @@ fun MetricItem(label: String, value: String) {
 }
 
 @Composable
-fun BandConditionRow(band: BandCondition) {
+fun BandConditionCard(band: BandCondition, modifier: Modifier = Modifier) {
     val color = when (band.rating) {
         "Excellent" -> Color(0xFF4CAF50)
         "Good" -> Color(0xFF8BC34A)
@@ -614,31 +262,26 @@ fun BandConditionRow(band: BandCondition) {
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = modifier.padding(vertical = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(Spacing.Medium),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(Spacing.Small),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text(text = band.band, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = trendIcon,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = trendColor
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = band.trend,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = trendColor
-                    )
-                }
+                Icon(
+                    imageVector = trendIcon,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = trendColor
+                )
             }
             
             Surface(
@@ -647,10 +290,11 @@ fun BandConditionRow(band: BandCondition) {
             ) {
                 Text(
                     text = band.rating.uppercase(),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Black,
-                    color = color
+                    color = color,
+                    fontSize = 10.sp
                 )
             }
         }

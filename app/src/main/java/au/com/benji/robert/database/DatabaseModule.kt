@@ -27,9 +27,4 @@ object DatabaseModule {
 
         return database(context).repeaterDao()
     }
-
-    fun propagationDao(context: Context): PropagationDao {
-
-        return database(context).propagationDao()
-    }
 }

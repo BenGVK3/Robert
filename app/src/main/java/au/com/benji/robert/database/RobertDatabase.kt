@@ -8,10 +8,9 @@ import androidx.room.TypeConverters
     entities = [
         ShackEntity::class,
         LogEntryEntity::class,
-        RepeaterEntity::class,
-        PropagationSpotEntity::class
+        RepeaterEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -20,5 +19,4 @@ abstract class RobertDatabase : RoomDatabase() {
     abstract fun shackDao(): ShackDao
     abstract fun logDao(): LogDao
     abstract fun repeaterDao(): RepeaterDao
-    abstract fun propagationDao(): PropagationDao
 }
