@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import kotlinx.coroutines.delay
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 import au.com.benji.robert.models.MoonData
@@ -85,6 +88,44 @@ fun MoonScreen(
 
 @Composable
 fun CurrentMoonCard(data: MoonData) {
+    val context = LocalContext.current
+    var currentImageIndex by remember { mutableIntStateOf(2) }
+    
+    val targetIndex = remember(data.age) {
+        val phaseNum = (data.age / 29.53).coerceIn(0.0, 1.0)
+        val index = when {
+            phaseNum < 0.02 || phaseNum > 0.98 -> 2 // New Moon (02)
+            phaseNum < 0.24 -> 3 + ((phaseNum - 0.02) / 0.22 * 4).toInt().coerceIn(0, 4) // Waxing Crescent (03-07)
+            phaseNum < 0.26 -> 8 // First Quarter (08)
+            phaseNum < 0.49 -> 9 + ((phaseNum - 0.26) / 0.23 * 6).toInt().coerceIn(0, 6) // Waxing Gibbous (09-15)
+            phaseNum < 0.51 -> 16 // Full Moon (16)
+            phaseNum < 0.74 -> 17 + ((phaseNum - 0.51) / 0.23 * 5).toInt().coerceIn(0, 5) // Waning Gibbous (17-22)
+            phaseNum < 0.76 -> 23 // Third Quarter (23)
+            else -> 24 + ((phaseNum - 0.76) / 0.24 * 6).toInt().coerceIn(0, 6) // Waning Crescent (24-30)
+        }
+        index
+    }
+
+    LaunchedEffect(targetIndex) {
+        // Animation: One full rotation + rotation to target
+        for (i in 2..30) {
+            currentImageIndex = i
+            delay(40)
+        }
+        for (i in 2..targetIndex) {
+            currentImageIndex = i
+            delay(40)
+        }
+    }
+
+    val moonResId = remember(currentImageIndex) {
+        context.resources.getIdentifier(
+            "moon${String.format("%02d", currentImageIndex)}",
+            "drawable",
+            context.packageName
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp)
@@ -97,15 +138,20 @@ fun CurrentMoonCard(data: MoonData) {
                 modifier = Modifier
                     .size(120.dp)
                     .clip(CircleShape)
-                    .background(Color.Black)
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
             ) {
-                // NASA/LRO Moon Image (simplified dynamic proxy)
-                AsyncImage(
-                    model = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/composite.jpg",
-                    contentDescription = "Current Moon Phase",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                if (moonResId != 0) {
+                    Image(
+                        painter = painterResource(id = moonResId),
+                        contentDescription = "Current Moon Phase",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // Fallback if images aren't correctly indexed in drawable/
+                    Text(text = data.phaseIcon, fontSize = 64.sp)
+                }
             }
             
             Spacer(modifier = Modifier.height(Spacing.Medium))
