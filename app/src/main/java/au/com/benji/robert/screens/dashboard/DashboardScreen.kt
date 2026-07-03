@@ -4,6 +4,7 @@ import android.Manifest
 import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +33,7 @@ import androidx.navigation.NavHostController
 import au.com.benji.robert.components.*
 import au.com.benji.robert.theme.Spacing
 import au.com.benji.robert.models.MoonData
+import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.utils.MufCalculator
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -280,6 +282,100 @@ fun DashboardScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = Spacing.Small)
                         )
+                    }
+
+                    // --- COMPACT MOON CENTER ---
+                    Column(
+                        modifier = Modifier.clickable { navController.navigate(Screen.Moon.route) },
+                        verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = moonData.phaseIcon, fontSize = 18.sp)
+                                }
+                                DashboardSectionTitle("Moon Center")
+                            }
+                            
+                            // EME Status Indicator
+                            Surface(
+                                color = if (moonData.isVisible) Color(0xFF4CAF50).copy(alpha = 0.1f) else Color.Red.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(if (moonData.isVisible) Color(0xFF4CAF50) else Color.Red)
+                                    )
+                                    Text(
+                                        text = if (moonData.isVisible) "EME Possible Now" else "Moon Below Horizon",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (moonData.isVisible) Color(0xFF4CAF50) else Color.Red
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            shape = RoundedCornerShape(24.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                                // Important Values Row
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    ImportantMetricSmall(
+                                        modifier = Modifier.weight(1f),
+                                        title = "Altitude",
+                                        value = String.format("%.1f°", moonData.altitude),
+                                        icon = Icons.Default.VerticalAlignTop
+                                    )
+                                    ImportantMetricSmall(
+                                        modifier = Modifier.weight(1f),
+                                        title = "Azimuth",
+                                        value = String.format("%.1f°", moonData.azimuth),
+                                        icon = Icons.Default.Explore
+                                    )
+                                    ImportantMetricSmall(
+                                        modifier = Modifier.weight(1f),
+                                        title = "Distance",
+                                        value = String.format("%,.0f", moonData.distanceKm / 1000),
+                                        unit = "k km",
+                                        icon = Icons.Default.Straighten
+                                    )
+                                }
+                                
+                                // Secondary Values Grid
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    CompactMetric(modifier = Modifier.weight(1f), label = "Phase", value = moonData.phaseName)
+                                    CompactMetric(modifier = Modifier.weight(1f), label = "Illum", value = "${moonData.illumination}%")
+                                    CompactMetric(modifier = Modifier.weight(1f), label = "Doppler", value = String.format("%+.0fHz", moonData.doppler432))
+                                }
+                            }
+                        }
                     }
                 }
                 
