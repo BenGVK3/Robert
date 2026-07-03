@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.rememberNavController
 import au.com.benji.robert.components.BottomNavigationBar
 import au.com.benji.robert.components.CommandCenterSheet
@@ -82,7 +84,28 @@ fun RobertApp() {
         
         if (showCommandCenter) {
             CommandCenterSheet(
-                onNavigate = { route -> navController.navigate(route) },
+                onNavigate = { route -> 
+                    // If we are already on this route, just close the sheet
+                    if (navController.currentDestination?.route == route) {
+                        showCommandCenter = false
+                        return@CommandCenterSheet
+                    }
+                    
+                    // Try to pop back to the route if it already exists in the stack
+                    // This preserves the existing instance and its state (like WebView audio)
+                    val popped = navController.popBackStack(route, inclusive = false)
+                    
+                    if (!popped) {
+                        // If not in stack, navigate normally with state restoration support
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                },
                 onAction = { action ->
                     when (action) {
                         is CommandActionType.Dialog -> {

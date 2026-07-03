@@ -51,9 +51,9 @@ fun BottomNavigationBar(
             NavigationBarItem(
                 selected = isSelected,
                 onClick = {
-                    if (item.route == Screen.Dashboard.route) {
-                        navController.popBackStack(Screen.Dashboard.route, inclusive = false)
-                    } else {
+                    if (navController.currentDestination?.route == item.route) return@NavigationBarItem
+                    
+                    if (!navController.popBackStack(item.route, inclusive = false)) {
                         navController.navigate(item.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
@@ -106,9 +106,9 @@ fun BottomNavigationBar(
             NavigationBarItem(
                 selected = isSelected,
                 onClick = {
-                    if (item.route == Screen.Dashboard.route) {
-                        navController.popBackStack(Screen.Dashboard.route, inclusive = false)
-                    } else {
+                    if (navController.currentDestination?.route == item.route) return@NavigationBarItem
+                    
+                    if (!navController.popBackStack(item.route, inclusive = false)) {
                         navController.navigate(item.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true

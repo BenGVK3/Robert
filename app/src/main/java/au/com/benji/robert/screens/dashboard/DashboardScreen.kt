@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import au.com.benji.robert.components.*
 import au.com.benji.robert.theme.Spacing
@@ -286,7 +287,17 @@ fun DashboardScreen(
 
                     // --- COMPACT MOON CENTER ---
                     Column(
-                        modifier = Modifier.clickable { navController.navigate(Screen.Moon.route) },
+                        modifier = Modifier.clickable { 
+                            if (!navController.popBackStack(Screen.Moon.route, inclusive = false)) {
+                                navController.navigate(Screen.Moon.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        this.saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
                         verticalArrangement = Arrangement.spacedBy(Spacing.Small)
                     ) {
                         Row(

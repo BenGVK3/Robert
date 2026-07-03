@@ -12,6 +12,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -23,10 +26,31 @@ fun SdrScreen(
 ) {
     val kiwisdrUrl by viewModel.kiwisdrUrl.collectAsStateWithLifecycle()
     var webView by remember { mutableStateOf<WebView?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     
     // Capture the saved URL once when the screen starts.
-    // This prevents the WebView from reloading every time the ViewModel updates the saved URL.
     val initialUrl = remember { kiwisdrUrl }
+
+    // Lifecycle observer to stop/start audio when tabbing out of the app
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    webView?.onPause()
+                    webView?.pauseTimers()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    webView?.onResume()
+                    webView?.resumeTimers()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Scaffold(
         modifier = Modifier.padding(paddingValues),
@@ -89,6 +113,15 @@ fun SdrScreen(
                         loadUrl(initialUrl)
                         webView = this
                     }
+                },
+                update = {
+                    // Update logic if needed
+                },
+                onRelease = {
+                    it.onPause()
+                    it.stopLoading()
+                    it.loadUrl("about:blank")
+                    it.destroy()
                 },
                 modifier = Modifier.fillMaxSize()
             )
