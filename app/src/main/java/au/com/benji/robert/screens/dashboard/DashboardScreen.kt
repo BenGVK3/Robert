@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +39,7 @@ import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.utils.MufCalculator
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +57,44 @@ fun DashboardScreen(
     val moonData by viewModel.moonData.collectAsStateWithLifecycle()
     val mufResult by viewModel.mufResult.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val isMoonDataLoaded = remember(moonData.phaseName) { moonData.phaseName != "---" }
+    var currentMoonImageIndex by remember { mutableIntStateOf(2) }
+    val targetMoonIndex = remember(moonData.age) {
+        val phaseNum = (moonData.age / 29.53).coerceIn(0.0, 1.0)
+        when {
+            phaseNum < 0.02 || phaseNum > 0.98 -> 2 // New Moon (02)
+            phaseNum < 0.24 -> 3 + ((phaseNum - 0.02) / 0.22 * 4).toInt().coerceIn(0, 4) // Waxing Crescent (03-07)
+            phaseNum < 0.26 -> 8 // First Quarter (08)
+            phaseNum < 0.49 -> 9 + ((phaseNum - 0.26) / 0.23 * 6).toInt().coerceIn(0, 6) // Waxing Gibbous (09-15)
+            phaseNum < 0.51 -> 16 // Full Moon (16)
+            phaseNum < 0.74 -> 17 + ((phaseNum - 0.51) / 0.23 * 5).toInt().coerceIn(0, 5) // Waning Gibbous (17-22)
+            phaseNum < 0.76 -> 23 // Third Quarter (23)
+            else -> 24 + ((phaseNum - 0.76) / 0.24 * 6).toInt().coerceIn(0, 6) // Waning Crescent (24-30)
+        }
+    }
+
+    LaunchedEffect(isMoonDataLoaded) {
+        if (isMoonDataLoaded) {
+            for (i in 2..30) {
+                currentMoonImageIndex = i
+                delay(40)
+            }
+            for (i in 2..targetMoonIndex) {
+                currentMoonImageIndex = i
+                delay(40)
+            }
+        }
+    }
+
+    val moonResId = remember(currentMoonImageIndex) {
+        context.resources.getIdentifier(
+            "moon${String.format("%02d", currentMoonImageIndex)}",
+            "drawable",
+            context.packageName
+        )
+    }
 
     var showForecast by remember { mutableStateOf(false) }
 
@@ -328,7 +368,14 @@ fun DashboardScreen(
                                         .background(MaterialTheme.colorScheme.surfaceVariant),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(text = moonData.phaseIcon, fontSize = 14.sp)
+                                    if (isMoonDataLoaded && moonResId != 0) {
+                                        Image(
+                                            painter = painterResource(id = moonResId),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
                                 }
                                 DashboardSectionTitle("Moon")
                             }

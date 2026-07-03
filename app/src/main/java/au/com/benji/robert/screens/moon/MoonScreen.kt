@@ -106,15 +106,19 @@ fun CurrentMoonCard(data: MoonData) {
         index
     }
 
-    LaunchedEffect(targetIndex) {
-        // Animation: One full rotation + rotation to target
-        for (i in 2..30) {
-            currentImageIndex = i
-            delay(40)
-        }
-        for (i in 2..targetIndex) {
-            currentImageIndex = i
-            delay(40)
+    val isDataLoaded = remember(data.phaseName) { data.phaseName != "---" }
+
+    LaunchedEffect(isDataLoaded) {
+        if (isDataLoaded) {
+            // Animation: One full rotation + rotation to target
+            for (i in 2..30) {
+                currentImageIndex = i
+                delay(40)
+            }
+            for (i in 2..targetIndex) {
+                currentImageIndex = i
+                delay(40)
+            }
         }
     }
 
@@ -141,17 +145,15 @@ fun CurrentMoonCard(data: MoonData) {
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                if (moonResId != 0) {
+                if (isDataLoaded && moonResId != 0) {
                     Image(
                         painter = painterResource(id = moonResId),
                         contentDescription = "Current Moon Phase",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-                } else {
-                    // Fallback if images aren't correctly indexed in drawable/
-                    Text(text = data.phaseIcon, fontSize = 64.sp)
                 }
+                // Placeholder stays black while loading or if images are missing
             }
             
             Spacer(modifier = Modifier.height(Spacing.Medium))
