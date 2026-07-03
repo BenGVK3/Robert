@@ -56,6 +56,8 @@ fun DashboardScreen(
     val mufResult by viewModel.mufResult.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
+    var showForecast by remember { mutableStateOf(false) }
+
     val pullToRefreshState = rememberPullToRefreshState()
 
     val locationPermissionState = rememberMultiplePermissionsState(
@@ -89,13 +91,13 @@ fun DashboardScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.Large)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // --- MODERN HERO HEADER ---
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .height(120.dp)
                 ) {
                     Image(
                         painter = painterResource(id = au.com.benji.robert.R.drawable.robertheader),
@@ -123,7 +125,7 @@ fun DashboardScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.Center)
-                            .padding(top = Spacing.Medium),
+                            .padding(top = Spacing.Small),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
@@ -145,7 +147,7 @@ fun DashboardScreen(
 
                 Column(
                     modifier = Modifier.padding(horizontal = Spacing.Medium),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.Large)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Status Badges below Header
                     Row(
@@ -158,50 +160,63 @@ fun DashboardScreen(
                     }
 
                     // --- COMPACT LOCAL WEATHER ---
-                    weatherData?.let { weather ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                            )
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = weatherData != null) { showForecast = true },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = Spacing.Medium, vertical = Spacing.Small)
+                                .height(IntrinsicSize.Min),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Cloud,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(24.dp),
-                                    tint = MaterialTheme.colorScheme.primary
+                            Icon(
+                                imageVector = Icons.Default.Cloud,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = if (weatherData == null) 0.5f else 1f)
+                            )
+                            
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = weatherData?.locationName ?: "Loading weather...",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
                                 )
-                                Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = weather.locationName,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.outline
+                                        text = weatherData?.let { "${it.temperature}${it.unit}" } ?: "--°",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "${weather.temperature}${weather.unit}",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Spacer(modifier = Modifier.width(Spacing.Small))
-                                        Text(
-                                            text = "• ${weather.condition}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.secondary
-                                        )
-                                    }
+                                    Spacer(modifier = Modifier.width(Spacing.Small))
+                                    Text(
+                                        text = weatherData?.let { "• ${it.condition}" } ?: "• Scanning sky",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
                                 }
+                            }
+                            
+                            if (weatherData != null) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                                    WeatherCompactDetail(Icons.Default.WaterDrop, "${weather.humidity}%")
-                                    WeatherCompactDetail(Icons.Default.Air, "${weather.windSpeed}")
+                                    WeatherCompactDetail(Icons.Default.WaterDrop, "${weatherData!!.humidity}%")
+                                    WeatherCompactDetail(Icons.Default.Air, "${weatherData!!.windSpeed}")
                                 }
+                            } else {
+                                // Shimmer-like placeholders
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp, 16.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                )
                             }
                         }
                     }
@@ -218,11 +233,11 @@ fun DashboardScreen(
                                     painter = painterResource(id = au.com.benji.robert.R.drawable.sun),
                                     contentDescription = "The Sun",
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(24.dp)
                                         .clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
-                                DashboardSectionTitle("Space Weather")
+                                DashboardSectionTitle("Solar Conditions")
                             }
                         }
                         
@@ -231,7 +246,7 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(24.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         ) {
-                            Column(modifier = Modifier.padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 // Important Values Row
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
@@ -308,14 +323,14 @@ fun DashboardScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                                 Box(
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(24.dp)
                                         .clip(CircleShape)
                                         .background(MaterialTheme.colorScheme.surfaceVariant),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(text = moonData.phaseIcon, fontSize = 18.sp)
+                                    Text(text = moonData.phaseIcon, fontSize = 14.sp)
                                 }
-                                DashboardSectionTitle("Moon Center")
+                                DashboardSectionTitle("Moon")
                             }
                             
                             // EME Status Indicator
@@ -349,7 +364,7 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(24.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         ) {
-                            Column(modifier = Modifier.padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 // Important Values Row
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
@@ -390,8 +405,15 @@ fun DashboardScreen(
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(Spacing.ExtraLarge))
+                Spacer(modifier = Modifier.height(Spacing.Medium))
             }
         }
+    }
+
+    if (showForecast && weatherData != null) {
+        WeatherForecastDialog(
+            weather = weatherData!!,
+            onDismiss = { showForecast = false }
+        )
     }
 }

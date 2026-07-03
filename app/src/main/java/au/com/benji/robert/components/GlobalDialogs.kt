@@ -3,11 +3,14 @@ package au.com.benji.robert.components
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -21,19 +24,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import au.com.benji.robert.database.LogEntryEntity
 import au.com.benji.robert.database.ShackEntity
-import au.com.benji.robert.models.DxSpot
-import au.com.benji.robert.models.EquipmentCategory
-import au.com.benji.robert.models.SpotSource
+import au.com.benji.robert.models.*
 import au.com.benji.robert.screens.dashboard.*
 import au.com.benji.robert.theme.Spacing
 import coil.compose.AsyncImage
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +56,10 @@ fun GlobalDialogs(
     val dxSpots by viewModel.dxSpots.collectAsStateWithLifecycle()
     val isRefreshingDx by viewModel.isRefreshingDx.collectAsStateWithLifecycle()
     val dxPullToRefreshState = rememberPullToRefreshState()
+
+    val activeBand by viewModel.dxBandFilter.collectAsStateWithLifecycle()
+    val activeMode by viewModel.dxModeFilter.collectAsStateWithLifecycle()
+    val activeContinent by viewModel.dxContinentFilter.collectAsStateWithLifecycle()
     
     val equipment by viewModel.equipment.collectAsStateWithLifecycle()
     
@@ -55,6 +68,14 @@ fun GlobalDialogs(
     var showAddEquipmentDialog by remember { mutableStateOf(false) }
     var itemToDelete by remember { mutableStateOf<ShackEntity?>(null) }
     var selectedImage by remember { mutableStateOf<String?>(null) }
+    
+    var showBandMenu by remember { mutableStateOf(false) }
+    var showModeMenu by remember { mutableStateOf(false) }
+    var showContinentMenu by remember { mutableStateOf(false) }
+    
+    val bands = listOf("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm")
+    val modes = listOf("CW", "SSB", "FT8", "FT4", "FM", "RTTY")
+    val continents = listOf("OC", "AS", "EU", "NA", "SA", "AF")
 
     if (showDxSpots) {
         Dialog(
@@ -66,21 +87,139 @@ fun GlobalDialogs(
                 color = MaterialTheme.colorScheme.background
             ) {
                 Column(modifier = Modifier.padding(Spacing.Medium)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Live DX Spots", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        IconButton(onClick = onDismissDxSpots) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+                            ) {
+                                Image(
+                                    painter = painterResource(id = au.com.benji.robert.R.drawable.dxspots1),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(62.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Text(
+                                    text = "Live DX Spots",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = "POTA, SOTA and Global Clusters",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        IconButton(
+                            onClick = onDismissDxSpots,
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) {
                             Icon(Icons.Default.Close, contentDescription = "Close")
                         }
                     }
                     
-                    Text("POTA, SOTA and Global Clusters", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                    
                     Spacer(modifier = Modifier.height(Spacing.Medium))
-                    
+
+                    // Quick Filters
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = activeBand == null && activeMode == null && activeContinent == null,
+                            onClick = { 
+                                viewModel.setDxBandFilter(null)
+                                viewModel.setDxModeFilter(null)
+                                viewModel.setDxContinentFilter(null)
+                            },
+                            label = { Text("All") },
+                            leadingIcon = if (activeBand == null && activeMode == null && activeContinent == null) {
+                                { Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                            } else null
+                        )
+                        
+                        // Band Filter Button
+                        Box {
+                            FilterChip(
+                                selected = activeBand != null,
+                                onClick = { showBandMenu = true },
+                                label = { Text(activeBand ?: "Band") },
+                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                            )
+                            DropdownMenu(expanded = showBandMenu, onDismissRequest = { showBandMenu = false }) {
+                                DropdownMenuItem(text = { Text("All Bands") }, onClick = { viewModel.setDxBandFilter(null); showBandMenu = false })
+                                bands.forEach { band ->
+                                    DropdownMenuItem(text = { Text(band) }, onClick = { viewModel.setDxBandFilter(band); showBandMenu = false })
+                                }
+                            }
+                        }
+                        
+                        Box {
+                            FilterChip(
+                                selected = activeMode != null,
+                                onClick = { showModeMenu = true },
+                                label = { Text(activeMode ?: "Mode") },
+                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                            )
+                            DropdownMenu(expanded = showModeMenu, onDismissRequest = { showModeMenu = false }) {
+                                DropdownMenuItem(text = { Text("All Modes") }, onClick = { viewModel.setDxModeFilter(null); showModeMenu = false })
+                                modes.forEach { mode ->
+                                    DropdownMenuItem(text = { Text(mode) }, onClick = { viewModel.setDxModeFilter(mode); showModeMenu = false })
+                                }
+                            }
+                        }
+
+                        Box {
+                            FilterChip(
+                                selected = activeContinent != null,
+                                onClick = { showContinentMenu = true },
+                                label = { Text(activeContinent ?: "Continent") },
+                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                            )
+                            DropdownMenu(expanded = showContinentMenu, onDismissRequest = { showContinentMenu = false }) {
+                                DropdownMenuItem(text = { Text("All Continents") }, onClick = { viewModel.setDxContinentFilter(null); showContinentMenu = false })
+                                continents.forEach { cont ->
+                                    DropdownMenuItem(text = { Text(cont) }, onClick = { viewModel.setDxContinentFilter(cont); showContinentMenu = false })
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${dxSpots.size} active spots",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        if (activeBand != null || activeMode != null || activeContinent != null) {
+                            Text(
+                                text = "Clear Filters",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.clickable {
+                                    viewModel.setDxBandFilter(null)
+                                    viewModel.setDxModeFilter(null)
+                                    viewModel.setDxContinentFilter(null)
+                                }
+                            )
+                        }
+                    }
+
                     if (dxSpots.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
@@ -117,13 +256,38 @@ fun GlobalDialogs(
                 color = MaterialTheme.colorScheme.background
             ) {
                 Column(modifier = Modifier.padding(Spacing.Medium)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("The Shack", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        IconButton(onClick = onDismissShack) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+                            ) {
+                                Image(
+                                    painter = painterResource(id = au.com.benji.robert.R.drawable.theshack1),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Text(
+                                    text = "The Shack",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = "Your Inventory & Equipment",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        IconButton(
+                            onClick = onDismissShack,
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) {
                             Icon(Icons.Default.Close, contentDescription = "Close")
                         }
                     }
@@ -370,6 +534,142 @@ fun DxSpotDetailDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("CLOSE") } }
     )
+}
+
+@Composable
+fun WeatherForecastDialog(
+    weather: DetailedWeather,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(modifier = Modifier.padding(Spacing.Medium)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cloud,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "7-Day Forecast",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = weather.locationName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(Spacing.Medium))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+                ) {
+                    weather.forecast.forEach { day ->
+                        ForecastDayItem(day, weather.unit)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ForecastDayItem(day: ForecastDay, unit: String) {
+    val dateText = remember(day.date) {
+        try {
+            val date = LocalDate.parse(day.date)
+            val dayName = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            val monthName = date.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            "$dayName, ${date.dayOfMonth} $monthName"
+        } catch (e: Exception) {
+            day.date
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(Spacing.Medium)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = dateText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = day.condition,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+
+            val icon = remember(day.weatherCode) {
+                when {
+                    day.weatherCode == 0 -> Icons.Default.WbSunny
+                    day.weatherCode in 1..3 -> Icons.Default.CloudQueue
+                    day.weatherCode in 45..48 -> Icons.Default.Cloud // Foggy often not in default
+                    day.weatherCode in 51..65 -> Icons.Default.WaterDrop
+                    day.weatherCode in 80..82 -> Icons.Default.Thunderstorm
+                    else -> Icons.Default.Cloud
+                }
+            }
+
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "${day.maxTemp.toInt()}$unit",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = "${day.minTemp.toInt()}$unit",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+    }
 }
 
 @Composable

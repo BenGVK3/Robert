@@ -64,11 +64,10 @@ fun PropagationScreen(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                     Image(
-                        painter = painterResource(id = au.com.benji.robert.R.drawable.propagation),
+                        painter = painterResource(id = au.com.benji.robert.R.drawable.propagation1),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(62.dp)
-                            .offset(x = 5.dp),
+                            .size(62.dp),
                         colorFilter = null,
                         contentScale = ContentScale.Fit
                     )

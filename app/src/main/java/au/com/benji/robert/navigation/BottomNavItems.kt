@@ -2,7 +2,6 @@ package au.com.benji.robert.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -18,21 +17,21 @@ val BottomNavItems = listOf(
     BottomNavItem(
         title = "Home",
         route = Screen.Dashboard.route,
-        icon = Icons.Default.Home
+        iconRes = au.com.benji.robert.R.drawable.home1
     ),
     BottomNavItem(
         title = "Logbook",
         route = Screen.Logbook.route,
-        icon = Icons.Default.EditNote
+        iconRes = au.com.benji.robert.R.drawable.logbook1
     ),
     BottomNavItem(
         title = "Tools",
         route = Screen.Tools.route,
-        icon = Icons.Default.Build
+        iconRes = au.com.benji.robert.R.drawable.tools1
     ),
     BottomNavItem(
         title = "Settings",
         route = Screen.Settings.route,
-        icon = Icons.Default.Settings
+        iconRes = au.com.benji.robert.R.drawable.settings1
     )
 )

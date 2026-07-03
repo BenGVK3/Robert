@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import au.com.benji.robert.utils.BandUtils
 import au.com.benji.robert.components.RobertTextField
 import au.com.benji.robert.database.LogEntryEntity
 import au.com.benji.robert.theme.Spacing
@@ -66,7 +67,11 @@ fun LogDialog(
             Column(modifier = Modifier.fillMaxSize()) {
                 // Header
                 TopAppBar(
-                    title = { Text(if (existingEntry == null) "Log New QSO" else "Edit Log Entry") },
+                    title = { 
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Text(if (existingEntry == null) "Log New QSO" else "Edit Log Entry") 
+                        }
+                    },
                     actions = {
                         if (existingEntry != null) {
                             IconButton(onClick = { uriHandler.openUri("https://www.qrz.com/db/${existingEntry.callsign}") }) {
@@ -135,7 +140,21 @@ fun LogDialog(
 
                     // Radio Details
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                        Box(modifier = Modifier.weight(1f)) { RobertTextField(value = frequency, onValueChange = { frequency = it }, label = "Freq (kHz)") }
+                        Box(modifier = Modifier.weight(1f)) { 
+                            RobertTextField(
+                                value = frequency, 
+                                onValueChange = { 
+                                    frequency = it
+                                    it.toDoubleOrNull()?.let { freq ->
+                                        val detectedBand = BandUtils.getBandFromFrequency(freq)
+                                        if (detectedBand.isNotEmpty()) {
+                                            band = detectedBand
+                                        }
+                                    }
+                                }, 
+                                label = "Freq (kHz)"
+                            ) 
+                        }
                         Box(modifier = Modifier.weight(1f)) { RobertTextField(value = band, onValueChange = { band = it }, label = "Band") }
                     }
 

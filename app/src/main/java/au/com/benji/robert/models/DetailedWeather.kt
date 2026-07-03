@@ -12,5 +12,15 @@ data class DetailedWeather(
     val windSpeed: Double = 0.0,
     val apparentTemperature: Double = 0.0,
     val sunrise: String = "--:--",
-    val sunset: String = "--:--"
+    val sunset: String = "--:--",
+    val forecast: List<ForecastDay> = emptyList()
+)
+
+@Serializable
+data class ForecastDay(
+    val date: String,
+    val maxTemp: Double,
+    val minTemp: Double,
+    val condition: String,
+    val weatherCode: Int
 )

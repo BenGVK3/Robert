@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import au.com.benji.robert.utils.BandUtils
 import au.com.benji.robert.database.LogEntryEntity
 import au.com.benji.robert.theme.Spacing
 
@@ -36,7 +37,19 @@ fun LogDialog(
                 verticalArrangement = Arrangement.spacedBy(Spacing.Small)
             ) {
                 RobertTextField(value = callsign, onValueChange = { callsign = it }, label = "Callsign")
-                RobertTextField(value = frequency, onValueChange = { frequency = it }, label = "Frequency (kHz)")
+                RobertTextField(
+                    value = frequency,
+                    onValueChange = { 
+                        frequency = it
+                        it.toDoubleOrNull()?.let { freq ->
+                            val detectedBand = BandUtils.getBandFromFrequency(freq)
+                            if (detectedBand.isNotEmpty()) {
+                                band = detectedBand
+                            }
+                        }
+                    },
+                    label = "Frequency (kHz)"
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                     RobertTextField(value = band, onValueChange = { band = it }, label = "Band", modifier = Modifier.weight(1f))
                     RobertTextField(value = mode, onValueChange = { mode = it }, label = "Mode", modifier = Modifier.weight(1f))

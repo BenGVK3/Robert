@@ -3,6 +3,7 @@ package au.com.benji.robert.components
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -134,13 +135,23 @@ fun PremiumActionCard(
                             )
                         }
                         is Int -> {
-                            if (icon == au.com.benji.robert.R.drawable.propagation) {
+                            if (icon == au.com.benji.robert.R.drawable.propagation1 || 
+                                icon == au.com.benji.robert.R.drawable.logbook1 ||
+                                icon == au.com.benji.robert.R.drawable.dxspots1 ||
+                                icon == au.com.benji.robert.R.drawable.theshack1 ||
+                                icon == au.com.benji.robert.R.drawable.aprs1 ||
+                                icon == au.com.benji.robert.R.drawable.satellites1 ||
+                                icon == au.com.benji.robert.R.drawable.moon1 ||
+                                icon == au.com.benji.robert.R.drawable.repeaters1 ||
+                                icon == au.com.benji.robert.R.drawable.kiwisdr1) {
                                 Image(
                                     painter = painterResource(id = icon),
                                     contentDescription = null,
-                                    modifier = Modifier
-                                        .size(58.dp)
-                                        .offset(x = 5.dp),
+                                    modifier = Modifier.size(
+                                        if (icon == au.com.benji.robert.R.drawable.aprs1) 80.dp
+                                        else if (icon == au.com.benji.robert.R.drawable.kiwisdr1 ||
+                                            icon == au.com.benji.robert.R.drawable.theshack1) 63.dp else 42.dp
+                                    ),
                                     colorFilter = null,
                                     contentScale = ContentScale.Fit
                                 )
@@ -191,13 +202,22 @@ fun ImportantMetricSmall(
                     )
                 }
                 is Int -> {
-                    if (icon == au.com.benji.robert.R.drawable.propagation) {
+                    if (icon == au.com.benji.robert.R.drawable.logbook1 ||
+                        icon == au.com.benji.robert.R.drawable.kiwisdr1) {
                         Image(
                             painter = painterResource(id = icon),
                             contentDescription = null,
-                            modifier = Modifier
-                                .size(32.dp)
-                                .offset(x = 4.dp),
+                            modifier = Modifier.size(21.dp),
+                            colorFilter = null,
+                            contentScale = ContentScale.Fit
+                        )
+                    } else if (icon == au.com.benji.robert.R.drawable.propagation1 ||
+                        icon == au.com.benji.robert.R.drawable.dxspots1 ||
+                        icon == au.com.benji.robert.R.drawable.theshack1) {
+                        Image(
+                            painter = painterResource(id = icon),
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
                             colorFilter = null,
                             contentScale = ContentScale.Fit
                         )
@@ -275,27 +295,100 @@ fun CompactMetric(
 @Composable
 fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
-            modifier = Modifier.padding(Spacing.Medium),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(60.dp)) {
+            // Time and Continent column
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(55.dp)
+            ) {
+                Text(
+                    text = spot.timeZulu,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = spot.continent,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+
+            // Main Info
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = spot.callsign,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    
+                    // Band Badge
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = spot.band,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "${spot.frequency} MHz",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(text = "•", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    Text(text = spot.mode, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+
+                if (spot.comment.isNotEmpty()) {
+                    Text(
+                        text = spot.comment,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+            
+            // Source and Spotter
+            Column(horizontalAlignment = Alignment.End) {
                 Surface(
                     color = when(spot.source) {
                         SpotSource.POTA -> Color(0xFF4CAF50)
                         SpotSource.SOTA -> Color(0xFFFF9800)
                         else -> MaterialTheme.colorScheme.primary
-                    }.copy(alpha = 0.1f),
-                    shape = CircleShape
+                    }.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
-                        text = spot.source.name.take(1),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        text = spot.source.name,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = when(spot.source) {
@@ -305,26 +398,13 @@ fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
                         }
                     )
                 }
-                Text(text = spot.timeZulu, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text(text = "(${spot.timeLocal})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = spot.callsign, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(text = "${spot.frequency} MHz", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                }
-                if (spot.location.isNotEmpty()) {
-                    Text(text = spot.location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                }
-                if (spot.comment.isNotEmpty()) {
-                    Text(text = spot.comment, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            
-            Column(horizontalAlignment = Alignment.End) {
-                Text(text = spot.mode, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black)
-                Text(text = "de ${spot.spotter}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "by ${spot.spotter}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 10.sp
+                )
             }
         }
     }

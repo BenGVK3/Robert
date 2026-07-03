@@ -1,5 +1,6 @@
 package au.com.benji.robert.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -65,7 +66,20 @@ fun BottomNavigationBar(
                 },
                 icon = {
                     item.icon?.let { Icon(imageVector = it, contentDescription = item.title) }
-                        ?: item.iconRes?.let { Icon(painter = painterResource(id = it), contentDescription = item.title) }
+                        ?: item.iconRes?.let {
+                            if (it == au.com.benji.robert.R.drawable.logbook1 || 
+                                it == au.com.benji.robert.R.drawable.home1 ||
+                                it == au.com.benji.robert.R.drawable.tools1 ||
+                                it == au.com.benji.robert.R.drawable.settings1) {
+                                Image(
+                                    painter = painterResource(id = it),
+                                    contentDescription = item.title,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            } else {
+                                Icon(painter = painterResource(id = it), contentDescription = item.title)
+                            }
+                        }
                 },
                 label = { Text(text = item.title, fontSize = 11.sp) }
             )
@@ -120,7 +134,20 @@ fun BottomNavigationBar(
                 },
                 icon = {
                     item.icon?.let { Icon(imageVector = it, contentDescription = item.title) }
-                        ?: item.iconRes?.let { Icon(painter = painterResource(id = it), contentDescription = item.title) }
+                        ?: item.iconRes?.let {
+                            if (it == au.com.benji.robert.R.drawable.logbook1 || 
+                                it == au.com.benji.robert.R.drawable.home1 ||
+                                it == au.com.benji.robert.R.drawable.tools1 ||
+                                it == au.com.benji.robert.R.drawable.settings1) {
+                                Image(
+                                    painter = painterResource(id = it),
+                                    contentDescription = item.title,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            } else {
+                                Icon(painter = painterResource(id = it), contentDescription = item.title)
+                            }
+                        }
                 },
                 label = { Text(text = item.title, fontSize = 11.sp) }
             )

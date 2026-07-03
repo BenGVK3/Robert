@@ -1,6 +1,7 @@
 package au.com.benji.robert.repository
 
 import au.com.benji.robert.models.DetailedWeather
+import au.com.benji.robert.models.ForecastDay
 import au.com.benji.robert.network.ApiService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -13,7 +14,7 @@ class WeatherRepository {
     fun getCurrentWeather(lat: Double, lon: Double, locationName: String): Flow<DetailedWeather?> = flow {
         while (true) {
             try {
-                val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=sunrise,sunset&timezone=auto"
+                val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto"
                 val response = ApiService.fetchData(url)
                 
                 val weather = response?.let {
@@ -35,6 +36,26 @@ class WeatherRepository {
                     val sunrise = if (sunriseFull.length >= 16) sunriseFull.substring(11, 16) else "--:--"
                     val sunset = if (sunsetFull.length >= 16) sunsetFull.substring(11, 16) else "--:--"
 
+                    val forecast = mutableListOf<ForecastDay>()
+                    daily?.let { d ->
+                        val times = d["time"]?.jsonArray ?: emptyList<JsonElement>()
+                        val codes = d["weather_code"]?.jsonArray ?: emptyList<JsonElement>()
+                        val maxTemps = d["temperature_2m_max"]?.jsonArray ?: emptyList<JsonElement>()
+                        val minTemps = d["temperature_2m_min"]?.jsonArray ?: emptyList<JsonElement>()
+
+                        for (i in 0 until times.size) {
+                            forecast.add(
+                                ForecastDay(
+                                    date = times[i].jsonPrimitive.content,
+                                    maxTemp = maxTemps[i].jsonPrimitive.doubleOrNull ?: 0.0,
+                                    minTemp = minTemps[i].jsonPrimitive.doubleOrNull ?: 0.0,
+                                    condition = getWeatherCondition(codes[i].jsonPrimitive.intOrNull ?: 0),
+                                    weatherCode = codes[i].jsonPrimitive.intOrNull ?: 0
+                                )
+                            )
+                        }
+                    }
+
                     DetailedWeather(
                         locationName = locationName,
                         temperature = temp,
@@ -44,7 +65,8 @@ class WeatherRepository {
                         windSpeed = windSpeed,
                         apparentTemperature = apparentTemp,
                         sunrise = sunrise,
-                        sunset = sunset
+                        sunset = sunset,
+                        forecast = forecast
                     )
                 }
                 
@@ -56,7 +78,7 @@ class WeatherRepository {
         }
     }
 
-    private fun getWeatherCondition(code: Int): String {
+    fun getWeatherCondition(code: Int): String {
         return when (code) {
             0 -> "Clear sky"
             1, 2, 3 -> "Mainly clear"

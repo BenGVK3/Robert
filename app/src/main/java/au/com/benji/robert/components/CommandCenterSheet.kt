@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -41,14 +39,14 @@ fun CommandCenterSheet(
             )
 
             val actions = listOf(
-                CommandAction("Propagation", au.com.benji.robert.R.drawable.propagation, CommandActionType.Navigate(Screen.Propagation.route)),
-                CommandAction("DX Spots", Icons.Default.Radar, CommandActionType.Dialog(DialogType.DX_SPOTS)),
-                CommandAction("The Shack", Icons.Default.HomeWork, CommandActionType.Dialog(DialogType.SHACK)),
-                CommandAction("KiwiSDR", Icons.Default.Radio, CommandActionType.Navigate(Screen.Sdr.route)),
-                CommandAction("APRS Map", Icons.Default.LocationOn, CommandActionType.Navigate(Screen.Aprs.route)),
-                CommandAction("Satellites", Icons.Default.Explore, CommandActionType.Navigate(Screen.Satellites.route)),
-                CommandAction("Moon (EME)", Icons.Default.Brightness2, CommandActionType.Navigate(Screen.Moon.route)),
-                CommandAction("Repeaters", Icons.Default.CellTower, CommandActionType.Navigate(Screen.RepeaterList.route))
+                CommandAction("Propagation", au.com.benji.robert.R.drawable.propagation1, CommandActionType.Navigate(Screen.Propagation.route)),
+                CommandAction("DX Spots", au.com.benji.robert.R.drawable.dxspots1, CommandActionType.Dialog(DialogType.DX_SPOTS)),
+                CommandAction("The Shack", au.com.benji.robert.R.drawable.theshack1, CommandActionType.Dialog(DialogType.SHACK)),
+                CommandAction("KiwiSDR", au.com.benji.robert.R.drawable.kiwisdr1, CommandActionType.Navigate(Screen.Sdr.route)),
+                CommandAction("APRS Map", au.com.benji.robert.R.drawable.aprs1, CommandActionType.Navigate(Screen.Aprs.route)),
+                CommandAction("Satellites", au.com.benji.robert.R.drawable.satellites1, CommandActionType.Navigate(Screen.Satellites.route)),
+                CommandAction("Moon (EME)", au.com.benji.robert.R.drawable.moon1, CommandActionType.Navigate(Screen.Moon.route)),
+                CommandAction("Repeaters", au.com.benji.robert.R.drawable.repeaters1, CommandActionType.Navigate(Screen.RepeaterList.route))
             )
 
             LazyVerticalGrid(
