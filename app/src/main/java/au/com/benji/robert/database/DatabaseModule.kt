@@ -29,7 +29,14 @@ object DatabaseModule {
     }
 
     fun moonDao(context: Context): MoonDao {
-
         return database(context).moonDao()
+    }
+
+    fun weatherDao(context: Context): WeatherDao {
+        return database(context).weatherDao()
+    }
+
+    fun propagationDao(context: Context): PropagationDao {
+        return database(context).propagationDao()
     }
 }

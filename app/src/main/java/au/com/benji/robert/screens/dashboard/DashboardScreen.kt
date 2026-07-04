@@ -44,6 +44,7 @@ import au.com.benji.robert.theme.Spacing
 import au.com.benji.robert.models.*
 import au.com.benji.robert.database.LogEntryEntity
 import au.com.benji.robert.repository.propagation.PropagationData
+import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.network.SatellitePass
 import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.utils.MufCalculator
@@ -518,10 +519,18 @@ fun BandConditionsCard(modifier: Modifier = Modifier, propagationData: Propagati
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val bands = listOf("160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "6m")
-                bands.forEach { bandName ->
-                    val rating = propagationData?.bands?.find { it.band == bandName }?.rating ?: "Fair"
-                    BandMiniGraph(modifier = Modifier.weight(1f), band = bandName, rating = rating)
+                val bandsToShow = propagationData?.bands ?: emptyList()
+                if (bandsToShow.isEmpty()) {
+                    Text(
+                        "Calculating conditions...",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(Spacing.Small)
+                    )
+                } else {
+                    bandsToShow.take(9).forEach { band ->
+                        BandMiniGraph(modifier = Modifier.weight(1f), band = band)
+                    }
                 }
             }
         }
@@ -529,31 +538,41 @@ fun BandConditionsCard(modifier: Modifier = Modifier, propagationData: Propagati
 }
 
 @Composable
-fun BandMiniGraph(modifier: Modifier, band: String, rating: String) {
-    val color = when (rating) {
-        "Excellent" -> Color(0xFF4CAF50)
-        "Good" -> Color(0xFF8BC34A)
-        "Fair" -> Color(0xFFFFC107)
-        else -> Color(0xFFF44336)
+fun BandMiniGraph(modifier: Modifier, band: BandCondition) {
+    val color = try {
+        Color(android.graphics.Color.parseColor(band.color))
+    } catch (e: Exception) {
+        Color.Gray
     }
     
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(band, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 7.sp)
+        Text(band.band, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 7.sp)
         
         Canvas(modifier = Modifier.height(24.dp).fillMaxWidth()) {
-            val path = Path()
-            path.moveTo(0f, size.height)
-            path.lineTo(size.width * 0.2f, size.height * 0.7f)
-            path.lineTo(size.width * 0.5f, size.height * 0.8f)
-            path.lineTo(size.width * 0.8f, size.height * 0.3f)
-            path.lineTo(size.width, size.height * 0.5f)
-            
-            drawPath(path, color, style = Stroke(width = 1.dp.toPx()))
-            path.lineTo(size.width, size.height)
-            path.close()
-            drawPath(path, color.copy(alpha = 0.1f))
+            if (band.history.size < 2) {
+                drawLine(
+                    color = color.copy(alpha = 0.3f),
+                    start = Offset(0f, size.height / 2),
+                    end = Offset(size.width, size.height / 2),
+                    strokeWidth = 1.dp.toPx()
+                )
+            } else {
+                val stepX = size.width / (band.history.size - 1)
+                val path = Path().apply {
+                    band.history.forEachIndexed { index, score ->
+                        val x = index * stepX
+                        val y = size.height - (score.toFloat() / 100f * size.height)
+                        if (index == 0) moveTo(x, y) else lineTo(x, y)
+                    }
+                }
+                drawPath(
+                    path = path,
+                    color = color,
+                    style = Stroke(width = 1.5.dp.toPx())
+                )
+            }
         }
-        Text(rating.take(1), style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, fontWeight = FontWeight.Black, color = color)
+        Text(band.rating.take(1), style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, fontWeight = FontWeight.Black, color = color)
     }
 }
 

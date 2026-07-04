@@ -1,34 +1,105 @@
 package au.com.benji.robert.repository.propagation
 
 import android.util.Log
-import au.com.benji.robert.network.ApiService
+import au.com.benji.robert.database.PropagationDao
+import au.com.benji.robert.database.PropagationHistoryEntity
 import au.com.benji.robert.models.SolarData
+import au.com.benji.robert.network.ApiService
+import au.com.benji.robert.utils.PropagationCalculator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.serialization.json.*
 
-class PropagationRepository {
+class PropagationRepository(private val propagationDao: PropagationDao) {
     private val TAG = "PropagationRepository"
-    private val json = Json { ignoreUnknownKeys = true }
+    private var lastCalculatedTimestamp: Long = 0
 
-    fun getPropagationData(lat: Double?, lon: Double?, solar: SolarData?): Flow<PropagationData> = flow {
+    fun getPropagationData(
+        lat: Double?,
+        lon: Double?,
+        solar: SolarData?,
+        muf: Double,
+        sunrise: String?,
+        sunset: String?
+    ): Flow<PropagationData> = flow {
         while (true) {
             try {
-                Log.d(TAG, "Calculating propagation from HamQSL data...")
-                
-                val sfi = solar?.solarFlux ?: 120
-                val kIdx = solar?.kIndex?.toDouble() ?: 2.0
-                
-                val xRayLevel = solar?.xRay?.take(1) ?: "A" // A, B, C, M, X
-                val bands = calculateBandConditions(sfi, kIdx, xRayLevel)
-                val ducting = fetchLiveDuctingData(lat, lon)
-                
-                emit(PropagationData(bands, ducting))
+                if (solar != null) {
+                    Log.d(TAG, "Calculating real HF propagation scores...")
+                    
+                    val calculatedBands = PropagationCalculator.calculateAllBands(
+                        solarData = solar,
+                        muf = muf,
+                        lat = lat,
+                        lon = lon,
+                        sunrise = sunrise,
+                        sunset = sunset
+                    )
+
+                    val now = System.currentTimeMillis()
+                    
+                    // Only save to history if data is fresh (every 10 mins or so)
+                    if (now - lastCalculatedTimestamp > 9 * 60 * 1000) {
+                        calculatedBands.forEach { bandScore ->
+                            propagationDao.insert(
+                                PropagationHistoryEntity(
+                                    timestamp = now,
+                                    band = bandScore.band,
+                                    score = bandScore.score
+                                )
+                            )
+                        }
+                        lastCalculatedTimestamp = now
+                        // Clean up old history (keep 24 hours)
+                        propagationDao.deleteOldHistory(now - 24 * 60 * 60 * 1000)
+                    }
+
+                    val bandsWithHistory = calculatedBands.map { bandScore ->
+                        val history = propagationDao.getHistoryForBand(bandScore.band, now - 24 * 60 * 60 * 1000)
+                        
+                        // Simple trend logic
+                        val trend = if (history.size >= 2) {
+                            val last = history.last().score
+                            val prev = history[history.size - 2].score
+                            when {
+                                last > prev -> "Improving"
+                                last < prev -> "Declining"
+                                else -> "Stable"
+                            }
+                        } else "Stable"
+
+                        BandCondition(
+                            band = bandScore.band,
+                            rating = bandScore.rating,
+                            trend = trend,
+                            score = bandScore.score,
+                            color = bandScore.colorHex,
+                            history = history.map { it.score }
+                        )
+                    }
+
+                    val psk6m = fetchPskActivity("6m")
+                    val psk10m = fetchPskActivity("10m")
+
+                    val ducting = fetchLiveDuctingData(lat, lon)
+                    val aurora = PropagationCalculator.calculateAurora(solar)
+                    val eSkip = PropagationCalculator.calculateESkip(solar, muf, psk6m, psk10m)
+
+                    emit(PropagationData(bandsWithHistory, ducting, aurora, eSkip))
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error in propagation check: ${e.message}")
+                Log.e(TAG, "Error in propagation engine: ${e.message}")
             }
-            delay(15 * 60 * 1000)
+            delay(10 * 60 * 1000) // Recalculate every 10 minutes
+        }
+    }
+
+    private suspend fun fetchPskActivity(band: String): Int {
+        return try {
+            val response = ApiService.fetchData("https://retrieve.pskreporter.info/query?band=$band&flowStartSeconds=-3600&rronly=1")
+            response?.split("<receptionReport")?.size?.minus(1)?.coerceAtLeast(0) ?: 0
+        } catch (e: Exception) {
+            0
         }
     }
 
@@ -67,47 +138,5 @@ class PropagationRepository {
         }
 
         return DuctingAlert(false, "No tropospheric ducting detected in your local region.", "Local Area", "None")
-    }
-
-    private fun calculateBandConditions(sfi: Int, k: Double, xRay: String): List<BandCondition> {
-        val allBands = listOf(
-            "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"
-        )
-        return allBands.map { bandName ->
-            val meter = bandName.replace("m", "").replace("cm", "").toIntOrNull() ?: 20
-            val rating = rateBand(meter, sfi, k, xRay, bandName.contains("cm"))
-            
-            // Dynamic trend logic based on current indices
-            val trend = when {
-                k >= 4 || xRay == "M" || xRay == "X" -> "Declining"
-                meter <= 20 && sfi > 160 && k < 3 -> "Improving"
-                meter >= 40 && k < 1.5 -> "Improving"
-                else -> "Stable"
-            }
-            
-            BandCondition(bandName, rating, trend)
-        }
-    }
-
-    private fun rateBand(meter: Int, sfi: Int, k: Double, xRay: String, isCm: Boolean): String {
-        if ((xRay == "M" || xRay == "X") && !isCm && meter >= 6) return "Poor"
-        if (k >= 5) return "Poor"
-        if (k >= 4) return "Fair"
-
-        return if (isCm || meter <= 6) {
-            if (k < 2) "Good" else "Fair"
-        } else {
-            when {
-                meter >= 40 -> if (sfi < 150 && k < 3) "Excellent" else "Good"
-                meter in 17..30 -> if (sfi > 120 && k < 3) "Excellent" else "Good"
-                meter in 10..15 -> when {
-                    sfi > 180 && k < 2 -> "Excellent"
-                    sfi > 140 && k < 3 -> "Good"
-                    sfi > 100 -> "Fair"
-                    else -> "Poor"
-                }
-                else -> "Fair"
-            }
-        }
     }
 }

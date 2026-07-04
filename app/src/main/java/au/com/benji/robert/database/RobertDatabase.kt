@@ -10,9 +10,10 @@ import androidx.room.TypeConverters
         LogEntryEntity::class,
         RepeaterEntity::class,
         MoonDataEntity::class,
-        WeatherEntity::class
+        WeatherEntity::class,
+        PropagationHistoryEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -23,4 +24,5 @@ abstract class RobertDatabase : RoomDatabase() {
     abstract fun repeaterDao(): RepeaterDao
     abstract fun moonDao(): MoonDao
     abstract fun weatherDao(): WeatherDao
+    abstract fun propagationDao(): PropagationDao
 }

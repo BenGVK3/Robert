@@ -19,6 +19,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -27,9 +28,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.utils.MufCalculator
 import au.com.benji.robert.repository.propagation.BandCondition
+import au.com.benji.robert.repository.propagation.AuroraReport
+import au.com.benji.robert.repository.propagation.ESkipReport
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 
@@ -81,7 +87,7 @@ fun PropagationScreen(
 
             item {
                 solarData?.let { data ->
-                    SolarDataCard(data, mufResult)
+                    SolarDataCard(data, mufResult, bandConditions?.aurora, bandConditions?.eSkip)
                 }
             }
 
@@ -140,7 +146,7 @@ fun PropagationScreen(
 }
 
 @Composable
-fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult) {
+fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult, aurora: AuroraReport? = null, eSkip: ESkipReport? = null) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -221,8 +227,34 @@ fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult) {
             Spacer(modifier = Modifier.height(Spacing.Medium))
             Text("VHF CONDITIONS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("VHF Aurora: ${data.vhfAurora}", style = MaterialTheme.typography.bodySmall)
-                Text("E-Skip: ${data.eSkip}", style = MaterialTheme.typography.bodySmall)
+                val statusColor = remember(aurora?.color) {
+                    try {
+                        if (aurora?.color != null) Color(android.graphics.Color.parseColor(aurora.color)) else null
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                
+                val skipColor = remember(eSkip?.color) {
+                    try {
+                        if (eSkip?.color != null) Color(android.graphics.Color.parseColor(eSkip.color)) else null
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                
+                Text(
+                    text = "VHF Aurora: ${aurora?.status ?: data.vhfAurora}", 
+                    style = MaterialTheme.typography.bodySmall,
+                    color = statusColor ?: MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (aurora != null) FontWeight.Bold else FontWeight.Normal
+                )
+                Text(
+                    text = "E-Skip: ${eSkip?.status ?: data.eSkip}", 
+                    style = MaterialTheme.typography.bodySmall,
+                    color = skipColor ?: MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (eSkip != null) FontWeight.Bold else FontWeight.Normal
+                )
             }
         }
     }
@@ -246,12 +278,17 @@ fun MetricItem(label: String, value: String) {
 
 @Composable
 fun BandConditionCard(band: BandCondition, modifier: Modifier = Modifier) {
-    val color = when (band.rating) {
-        "Excellent" -> Color(0xFF4CAF50)
-        "Good" -> Color(0xFF8BC34A)
-        "Fair" -> Color(0xFFFFC107)
-        "Poor" -> Color(0xFFF44336)
-        else -> MaterialTheme.colorScheme.primary
+    val color = try {
+        Color(android.graphics.Color.parseColor(band.color))
+    } catch (e: Exception) {
+        when (band.rating) {
+            "Excellent" -> Color(0xFF4CAF50)
+            "Very Good" -> Color(0xFF4CAF50)
+            "Good" -> Color(0xFF8BC34A)
+            "Fair" -> Color(0xFFFFC107)
+            "Poor" -> Color(0xFFF44336)
+            else -> MaterialTheme.colorScheme.primary
+        }
     }
 
     val (trendIcon, trendColor) = when (band.trend) {
@@ -268,27 +305,40 @@ fun BandConditionCard(band: BandCondition, modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier.padding(Spacing.Small),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(text = band.band, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Icon(
                     imageVector = trendIcon,
                     contentDescription = null,
-                    modifier = Modifier.size(12.dp),
+                    modifier = Modifier.size(14.dp),
                     tint = trendColor
                 )
             }
             
+            Box(modifier = Modifier.fillMaxWidth().height(30.dp), contentAlignment = Alignment.Center) {
+                if (band.history.isNotEmpty()) {
+                    SparklineGraph(
+                        history = band.history,
+                        color = color,
+                        modifier = Modifier.fillMaxSize().padding(vertical = 4.dp)
+                    )
+                } else {
+                    Text("---", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
+            }
+
             Surface(
                 color = color.copy(alpha = 0.15f),
                 shape = CircleShape
             ) {
                 Text(
-                    text = band.rating.uppercase(),
+                    text = "${band.score} - ${band.rating.uppercase()}",
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Black,
@@ -297,5 +347,30 @@ fun BandConditionCard(band: BandCondition, modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+@Composable
+fun SparklineGraph(history: List<Int>, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        if (history.size < 2) return@Canvas
+        
+        val width = size.width
+        val height = size.height
+        val maxScore = 100f
+        val stepX = width / (history.size - 1)
+        
+        val path = Path().apply {
+            history.forEachIndexed { index, score ->
+                val x = index * stepX
+                val y = height - (score.toFloat() / maxScore * height)
+                if (index == 0) moveTo(x, y) else lineTo(x, y)
+            }
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = 2.dp.toPx())
+        )
     }
 }

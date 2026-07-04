@@ -31,7 +31,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = DashboardRepository()
     private val solarRepository = SolarDataRepository()
     private val weatherRepository = WeatherRepository()
-    private val propagationRepository = PropagationRepository()
+    private val propagationRepository = PropagationRepository(DatabaseModule.propagationDao(application))
     private val moonRepository = MoonRepository(DatabaseModule.moonDao(application))
     private val aprsRepository = AprsRepository()
     private val dxRepository = DxRepository()
@@ -112,18 +112,6 @@ data class Quadruple<out A, out B, out C, out D>(
         initialValue = MufCalculator.MufResult(0.0, true, MufCalculator.Confidence.Low)
     )
 
-    val propagationData = combine(locationFlow, solarData) { loc, solar ->
-        Pair(loc, solar)
-    }
-    .flatMapLatest { (loc, solar) ->
-        propagationRepository.getPropagationData(loc?.first, loc?.second, solar)
-    }
-    .stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
-
     val weatherData = locationFlow
         .flatMapLatest { loc ->
             if (loc != null) {
@@ -137,6 +125,37 @@ data class Quadruple<out A, out B, out C, out D>(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+    val propagationData = combine(
+        locationFlow,
+        solarData,
+        mufResult,
+        weatherData
+    ) { loc, solar, muf, weather ->
+        pkg(loc, solar, muf, weather)
+    }
+    .flatMapLatest { pkg ->
+        propagationRepository.getPropagationData(
+            lat = pkg.loc?.first,
+            lon = pkg.loc?.second,
+            solar = pkg.solar,
+            muf = pkg.muf.value,
+            sunrise = pkg.weather?.sunrise,
+            sunset = pkg.weather?.sunset
+        )
+    }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    private data class pkg(
+        val loc: Quadruple<Double, Double, String, String>?,
+        val solar: SolarData,
+        val muf: MufCalculator.MufResult,
+        val weather: DetailedWeather?
+    )
 
     val moonData = locationFlow
         .flatMapLatest { loc ->
