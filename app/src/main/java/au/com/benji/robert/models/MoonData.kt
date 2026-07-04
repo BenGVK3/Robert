@@ -31,5 +31,6 @@ data class MoonData(
     val nextNewMoon: String = "---",
     val nextFirstQuarter: String = "---",
     val nextLastQuarter: String = "---",
-    val emeRating: String = "Poor"
+    val emeRating: String = "Poor",
+    val lastUpdated: Long = 0L
 )

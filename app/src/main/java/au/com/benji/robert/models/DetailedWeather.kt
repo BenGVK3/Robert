@@ -13,6 +13,7 @@ data class DetailedWeather(
     val apparentTemperature: Double = 0.0,
     val sunrise: String = "--:--",
     val sunset: String = "--:--",
+    val lastUpdated: Long = 0,
     val forecast: List<ForecastDay> = emptyList()
 )
 

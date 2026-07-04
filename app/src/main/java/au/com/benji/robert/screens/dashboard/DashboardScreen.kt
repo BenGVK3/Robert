@@ -379,6 +379,14 @@ fun DashboardScreen(
                                 }
                                 DashboardSectionTitle("Moon")
                             }
+
+                            if (moonData.lastUpdated > 0) {
+                                Text(
+                                    text = "Updated: ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(moonData.lastUpdated))}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                                )
+                            }
                             
                             // EME Status Indicator
                             Surface(

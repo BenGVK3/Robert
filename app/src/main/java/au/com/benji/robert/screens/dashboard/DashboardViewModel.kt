@@ -31,7 +31,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val solarRepository = SolarDataRepository()
     private val weatherRepository = WeatherRepository()
     private val propagationRepository = PropagationRepository()
-    private val moonRepository = MoonRepository()
+    private val moonRepository = MoonRepository(DatabaseModule.moonDao(application))
     private val aprsRepository = AprsRepository()
     private val dxRepository = DxRepository()
     private val satelliteRepository = SatelliteRepository()

@@ -66,6 +66,7 @@ class WeatherRepository {
                         apparentTemperature = apparentTemp,
                         sunrise = sunrise,
                         sunset = sunset,
+                        lastUpdated = System.currentTimeMillis(),
                         forecast = forecast
                     )
                 }

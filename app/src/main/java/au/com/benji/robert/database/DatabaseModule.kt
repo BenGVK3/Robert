@@ -27,4 +27,9 @@ object DatabaseModule {
 
         return database(context).repeaterDao()
     }
+
+    fun moonDao(context: Context): MoonDao {
+
+        return database(context).moonDao()
+    }
 }

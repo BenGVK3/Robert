@@ -1,0 +1,103 @@
+package au.com.benji.robert.database
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import au.com.benji.robert.models.MoonData
+
+@Entity(tableName = "moon_data")
+data class MoonDataEntity(
+    @PrimaryKey val id: Int = 0, // Single row for current moon data
+    val phaseName: String,
+    val phaseIcon: String,
+    val illumination: Int,
+    val age: Double,
+    val distanceKm: Double,
+    val angularSize: Double,
+    val constellation: String,
+    val altitude: Double,
+    val azimuth: Double,
+    val riseTime: String,
+    val setTime: String,
+    val transitTime: String,
+    val isVisible: Boolean,
+    val declination: Double,
+    val radialVelocity: Double,
+    val doppler144: Double,
+    val doppler432: Double,
+    val doppler1296: Double,
+    val pathLoss: Double,
+    val oneWayDelay: Double,
+    val roundTripDelay: Double,
+    val skyTemp: Double,
+    val polarization: Double,
+    val nextFullMoon: String,
+    val nextNewMoon: String,
+    val nextFirstQuarter: String,
+    val nextLastQuarter: String,
+    val emeRating: String,
+    val lastUpdated: Long
+)
+
+fun MoonData.toEntity(lastUpdated: Long) = MoonDataEntity(
+    phaseName = phaseName,
+    phaseIcon = phaseIcon,
+    illumination = illumination,
+    age = age,
+    distanceKm = distanceKm,
+    angularSize = angularSize,
+    constellation = constellation,
+    altitude = altitude,
+    azimuth = azimuth,
+    riseTime = riseTime,
+    setTime = setTime,
+    transitTime = transitTime,
+    isVisible = isVisible,
+    declination = declination,
+    radialVelocity = radialVelocity,
+    doppler144 = doppler144,
+    doppler432 = doppler432,
+    doppler1296 = doppler1296,
+    pathLoss = pathLoss,
+    oneWayDelay = oneWayDelay,
+    roundTripDelay = roundTripDelay,
+    skyTemp = skyTemp,
+    polarization = polarization,
+    nextFullMoon = nextFullMoon,
+    nextNewMoon = nextNewMoon,
+    nextFirstQuarter = nextFirstQuarter,
+    nextLastQuarter = nextLastQuarter,
+    emeRating = emeRating,
+    lastUpdated = lastUpdated
+)
+
+fun MoonDataEntity.toDomain() = MoonData(
+    phaseName = phaseName,
+    phaseIcon = phaseIcon,
+    illumination = illumination,
+    age = age,
+    distanceKm = distanceKm,
+    angularSize = angularSize,
+    constellation = constellation,
+    altitude = altitude,
+    azimuth = azimuth,
+    riseTime = riseTime,
+    setTime = setTime,
+    transitTime = transitTime,
+    isVisible = isVisible,
+    declination = declination,
+    radialVelocity = radialVelocity,
+    doppler144 = doppler144,
+    doppler432 = doppler432,
+    doppler1296 = doppler1296,
+    pathLoss = pathLoss,
+    oneWayDelay = oneWayDelay,
+    roundTripDelay = roundTripDelay,
+    skyTemp = skyTemp,
+    polarization = polarization,
+    nextFullMoon = nextFullMoon,
+    nextNewMoon = nextNewMoon,
+    nextFirstQuarter = nextFirstQuarter,
+    nextLastQuarter = nextLastQuarter,
+    emeRating = emeRating,
+    lastUpdated = lastUpdated
+)

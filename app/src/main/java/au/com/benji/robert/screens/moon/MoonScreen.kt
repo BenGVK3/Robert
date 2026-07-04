@@ -170,6 +170,15 @@ fun CurrentMoonCard(data: MoonData) {
                 color = MaterialTheme.colorScheme.secondary
             )
 
+            if (data.lastUpdated > 0) {
+                Text(
+                    text = "Last updated: ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(data.lastUpdated))}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(Spacing.Medium))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
