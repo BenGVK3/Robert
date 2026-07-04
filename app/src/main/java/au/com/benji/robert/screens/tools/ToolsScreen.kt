@@ -87,9 +87,16 @@ fun ToolsScreen(
                 ) {
                     item {
                         ToolGridCard(
-                            title = "Locator",
+                            title = "Maidenhead Locator",
                             icon = Icons.Default.MyLocation,
                             onClick = { activeTool = "Maidenhead Locator" }
+                        )
+                    }
+                    item {
+                        ToolGridCard(
+                            title = "Antenna Calculator",
+                            icon = Icons.Default.PrecisionManufacturing,
+                            onClick = { activeTool = "Antenna Calculator" }
                         )
                     }
                     item {
@@ -125,6 +132,7 @@ fun ToolsScreen(
                 Box(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
                     when (activeTool) {
                         "Maidenhead Locator" -> MaidenheadTool(viewModel)
+                        "Antenna Calculator" -> AntennaCalculatorScreen()
                         "Prefix Map" -> PrefixMapTool()
                         "Callsign Lookup" -> CallsignLookupTool()
                         "Band Plan" -> BandPlanScreen()
