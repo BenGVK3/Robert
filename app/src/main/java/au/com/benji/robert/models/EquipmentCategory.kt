@@ -10,7 +10,6 @@ enum class EquipmentCategory(
     AMPLIFIER("Amplifier"),
     MICROPHONE("Microphone"),
     KEY("CW Key"),
-    COAX("Coax"),
     FILTER("Filter"),
     ANALYSER("Analyser"),
     SDR("SDR"),

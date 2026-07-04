@@ -27,7 +27,8 @@ fun LogbookScreen(
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     
     var showAddLogDialog by remember { mutableStateOf(false) }
-    var selectedLogEntry by remember { mutableStateOf<LogEntryEntity?>(null) }
+    var viewingLogEntry by remember { mutableStateOf<LogEntryEntity?>(null) }
+    var editingLogEntry by remember { mutableStateOf<LogEntryEntity?>(null) }
     var logToDelete by remember { mutableStateOf<LogEntryEntity?>(null) }
 
     Scaffold(
@@ -85,7 +86,7 @@ fun LogbookScreen(
                     for (entry in logs) {
                         LogEntryItem(
                             entry = entry,
-                            onClick = { selectedLogEntry = entry },
+                            onClick = { viewingLogEntry = entry },
                             onDelete = { logToDelete = entry }
                         )
                     }
@@ -123,13 +124,24 @@ fun LogbookScreen(
         )
     }
 
-    selectedLogEntry?.let { entry ->
+    viewingLogEntry?.let { entry ->
+        LogDetailDialog(
+            entry = entry,
+            onDismiss = { viewingLogEntry = null },
+            onEdit = { 
+                editingLogEntry = entry
+                viewingLogEntry = null
+            }
+        )
+    }
+
+    editingLogEntry?.let { entry ->
         LogDialog(
             existingEntry = entry,
-            onDismiss = { selectedLogEntry = null },
+            onDismiss = { editingLogEntry = null },
             onConfirm = { updatedEntry ->
                 viewModel.updateLog(updatedEntry)
-                selectedLogEntry = null
+                editingLogEntry = null
             }
         )
     }

@@ -13,10 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Hardware
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -460,7 +457,19 @@ fun ShackItemCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (item.category == "Radio") Icons.Default.Radio else Icons.Default.Hardware,
+                        imageVector = when (item.category) {
+                            "Radio" -> Icons.Default.Radio
+                            "Antenna" -> Icons.Default.SettingsInputAntenna
+                            "Power Supply" -> Icons.Default.ElectricBolt
+                            "Antenna Tuner" -> Icons.Default.SettingsInputComponent
+                            "Amplifier" -> Icons.Default.SurroundSound
+                            "Microphone" -> Icons.Default.Mic
+                            "CW Key" -> Icons.Default.Keyboard
+                            "Analyser" -> Icons.Default.Analytics
+                            "SDR" -> Icons.Default.Router
+                            "Computer" -> Icons.Default.Computer
+                            else -> Icons.Default.Hardware
+                        },
                         contentDescription = null,
                         modifier = Modifier.size(28.dp),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)

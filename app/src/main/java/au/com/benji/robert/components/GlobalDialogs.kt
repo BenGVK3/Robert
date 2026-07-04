@@ -431,7 +431,25 @@ fun AddEquipmentDialog(
                 }
                 RobertTextField(value = manufacturer, onValueChange = { manufacturer = it }, label = "Manufacturer")
                 RobertTextField(value = model, onValueChange = { model = it }, label = "Model")
-                RobertTextField(value = nickname, onValueChange = { nickname = it }, label = "Nickname / Role")
+                
+                // Smart Fields based on Category
+                when (category) {
+                    EquipmentCategory.RADIO, EquipmentCategory.AMPLIFIER, EquipmentCategory.SDR, EquipmentCategory.ANALYSER, EquipmentCategory.COMPUTER -> {
+                        RobertTextField(value = serialNumber, onValueChange = { serialNumber = it }, label = "Serial Number")
+                        RobertTextField(value = nickname, onValueChange = { nickname = it }, label = "Nickname (e.g. Primary Rig)")
+                    }
+                    EquipmentCategory.ANTENNA -> {
+                        RobertTextField(value = nickname, onValueChange = { nickname = it }, label = "Location (e.g. Roof, Backyard)")
+                    }
+                    EquipmentCategory.POWER_SUPPLY -> {
+                        RobertTextField(value = serialNumber, onValueChange = { serialNumber = it }, label = "Serial Number (Optional)")
+                        RobertTextField(value = nickname, onValueChange = { nickname = it }, label = "Nickname / Role")
+                    }
+                    else -> {
+                        RobertTextField(value = nickname, onValueChange = { nickname = it }, label = "Nickname / Role")
+                    }
+                }
+                
                 RobertTextField(value = notes, onValueChange = { notes = it }, label = "Notes")
                 
                 Button(
@@ -484,9 +502,16 @@ fun ShackDetailDialog(
                     )
                 }
                 if (item.nickname.isNotEmpty()) {
-                    DetailInfoItem(label = "NICKNAME", value = item.nickname)
+                    val nicknameLabel = when(item.category) {
+                        "Antenna" -> "LOCATION"
+                        else -> "NICKNAME"
+                    }
+                    DetailInfoItem(label = nicknameLabel, value = item.nickname)
                 }
                 DetailInfoItem(label = "CATEGORY", value = item.category)
+                if (item.serialNumber.isNotEmpty()) {
+                    DetailInfoItem(label = "SERIAL NUMBER", value = item.serialNumber)
+                }
                 if (item.notes.isNotEmpty()) {
                     DetailInfoItem(label = "NOTES", value = item.notes)
                 }
