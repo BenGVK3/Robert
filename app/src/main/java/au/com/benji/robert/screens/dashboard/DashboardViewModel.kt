@@ -47,6 +47,19 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
+    private val _mapIsCollapsed = MutableStateFlow(true)
+    val mapIsCollapsed = _mapIsCollapsed.asStateFlow()
+
+    private val _mapBand = MutableStateFlow("20m")
+    val mapBand = _mapBand.asStateFlow()
+
+    private val _mapMode = MutableStateFlow("All")
+    val mapMode = _mapMode.asStateFlow()
+
+    fun toggleMapCollapse() { _mapIsCollapsed.value = !_mapIsCollapsed.value }
+    fun setMapBand(band: String) { _mapBand.value = band }
+    fun setMapMode(mode: String) { _mapMode.value = mode }
+
     val callsign = settingsRepository.callsign.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -67,7 +80,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { 
             val loc = locationService.getCurrentLocation()
             if (loc != null) {
-                // Round to 3 decimal places to avoid constant updates for tiny movements (~100m)
                 val lat = Math.round(loc.latitude * 1000.0) / 1000.0
                 val lon = Math.round(loc.longitude * 1000.0) / 1000.0
                 val name = locationService.getLocationName(lat, lon)
@@ -83,6 +95,26 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+    val mapSpots = combine(locationFlow, _mapBand) { loc, band ->
+        Pair(loc, band)
+    }.flatMapLatest { (loc, band) ->
+        flow {
+            while(true) {
+                val spots = propagationRepository.getLiveSpots(
+                    if (band == "All") "20m" else band,
+                    loc?.first,
+                    loc?.second
+                )
+                emit(spots)
+                delay(5 * 60 * 1000)
+            }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
 data class Quadruple<out A, out B, out C, out D>(
     val first: A,

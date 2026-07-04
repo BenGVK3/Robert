@@ -1,14 +1,23 @@
 package au.com.benji.robert.repository.propagation
 
 import android.util.Log
+import android.util.Xml
 import au.com.benji.robert.database.PropagationDao
 import au.com.benji.robert.database.PropagationHistoryEntity
 import au.com.benji.robert.models.SolarData
+import au.com.benji.robert.models.PskSpot
 import au.com.benji.robert.network.ApiService
 import au.com.benji.robert.utils.PropagationCalculator
+import au.com.benji.robert.utils.maidenheadToLatLng
+import au.com.benji.robert.utils.calculateDistance
+import au.com.benji.robert.utils.calculateBearing
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
+import org.xmlpull.v1.XmlPullParser
+import java.io.StringReader
 
 class PropagationRepository(private val propagationDao: PropagationDao) {
     private val TAG = "PropagationRepository"
@@ -38,7 +47,6 @@ class PropagationRepository(private val propagationDao: PropagationDao) {
 
                     val now = System.currentTimeMillis()
                     
-                    // Only save to history if data is fresh (every 10 mins or so)
                     if (now - lastCalculatedTimestamp > 9 * 60 * 1000) {
                         calculatedBands.forEach { bandScore ->
                             propagationDao.insert(
@@ -50,14 +58,12 @@ class PropagationRepository(private val propagationDao: PropagationDao) {
                             )
                         }
                         lastCalculatedTimestamp = now
-                        // Clean up old history (keep 24 hours)
                         propagationDao.deleteOldHistory(now - 24 * 60 * 60 * 1000)
                     }
 
                     val bandsWithHistory = calculatedBands.map { bandScore ->
                         val history = propagationDao.getHistoryForBand(bandScore.band, now - 24 * 60 * 60 * 1000)
                         
-                        // Simple trend logic
                         val trend = if (history.size >= 2) {
                             val last = history.last().score
                             val prev = history[history.size - 2].score
@@ -90,8 +96,57 @@ class PropagationRepository(private val propagationDao: PropagationDao) {
             } catch (e: Exception) {
                 Log.e(TAG, "Error in propagation engine: ${e.message}")
             }
-            delay(10 * 60 * 1000) // Recalculate every 10 minutes
+            delay(10 * 60 * 1000)
         }
+    }
+
+    suspend fun getLiveSpots(band: String, lat: Double?, lon: Double?): List<PskSpot> = withContext(Dispatchers.IO) {
+        val url = "https://retrieve.pskreporter.info/query?band=$band&flowStartSeconds=-3600&rronly=1"
+        val xml = ApiService.fetchData(url) ?: return@withContext emptyList()
+        
+        val spots = mutableListOf<PskSpot>()
+        try {
+            val parser = Xml.newPullParser()
+            parser.setInput(StringReader(xml))
+            var eventType = parser.eventType
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                if (eventType == XmlPullParser.START_TAG && parser.name == "receptionReport") {
+                    val call = parser.getAttributeValue(null, "senderCallsign")
+                    val loc = parser.getAttributeValue(null, "senderLocator")
+                    val freq = parser.getAttributeValue(null, "frequency")?.toDoubleOrNull() ?: 0.0
+                    val mode = parser.getAttributeValue(null, "mode") ?: "FT8"
+                    val time = parser.getAttributeValue(null, "flowStartSeconds")?.toLongOrNull() ?: 0L
+                    
+                    if (call != null && loc != null) {
+                        val latLon = maidenheadToLatLng(loc)
+                        if (latLon != null) {
+                            var dist = 0.0
+                            var bear = 0.0
+                            if (lat != null && lon != null) {
+                                dist = calculateDistance(lat, lon, latLon.first, latLon.second)
+                                bear = calculateBearing(lat, lon, latLon.first, latLon.second)
+                            }
+                            
+                            spots.add(PskSpot(
+                                callsign = call,
+                                grid = loc,
+                                lat = latLon.first,
+                                lon = latLon.second,
+                                frequency = freq / 1000000.0,
+                                mode = mode,
+                                reportTime = time * 1000,
+                                distance = dist,
+                                bearing = bear
+                            ))
+                        }
+                    }
+                }
+                eventType = parser.next()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing PSK spots: ${e.message}")
+        }
+        spots
     }
 
     private suspend fun fetchPskActivity(band: String): Int {

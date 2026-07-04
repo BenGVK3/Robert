@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.serialization)
     implementation(libs.maps.compose)
+    implementation("com.google.maps.android:maps-compose-utils:6.5.0")
     implementation(libs.play.services.maps)
 
     implementation(libs.okhttp)
