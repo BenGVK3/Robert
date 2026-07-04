@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.database.DatabaseModule
@@ -58,12 +59,15 @@ fun SettingsScreen(
                 title = { Text("Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 actions = {
-                    TextButton(
+                    Button(
                         onClick = { 
                             viewModel.saveSettings(callsign, name, gridSquare, country, licenceClass)
-                        }
+                        },
+                        modifier = Modifier.padding(end = 8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                        shape = MaterialTheme.shapes.small
                     ) {
-                        Text("SAVE")
+                        Text("SAVE", fontSize = 12.sp)
                     }
                 }
             )
@@ -75,35 +79,39 @@ fun SettingsScreen(
                 .padding(innerPadding)
                 .padding(horizontal = Spacing.Medium)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(text = "Station Information", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(text = "Station", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
 
-            OutlinedTextField(
-                value = callsign,
-                onValueChange = { callsign = it },
-                label = { Text("Home Callsign") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Operator Name") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = callsign,
+                    onValueChange = { callsign = it },
+                    label = { Text("Callsign", fontSize = 12.sp) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name", fontSize = 12.sp) },
+                    modifier = Modifier.weight(1.5f),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium
+                )
+            }
 
             OutlinedTextField(
                 value = gridSquare,
                 onValueChange = { gridSquare = it },
-                label = { Text("Home Grid Square") },
+                label = { Text("Home Grid Square", fontSize = 12.sp) },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium
             )
 
-            Text(text = "Licensing & Region", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(text = "Region & Licence", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
 
             ExposedDropdownMenuBox(
                 expanded = countryExpanded,
@@ -114,9 +122,10 @@ fun SettingsScreen(
                     value = country,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Country / Region") },
+                    label = { Text("Country", fontSize = 12.sp) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryExpanded) },
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyMedium
                 )
                 ExposedDropdownMenu(
                     expanded = countryExpanded,
@@ -128,7 +137,6 @@ fun SettingsScreen(
                             onClick = {
                                 country = selectionOption
                                 countryExpanded = false
-                                // Reset licence class to first available for new country
                                 val newClasses = viewModel.getLicenceClasses(selectionOption)
                                 if (newClasses.isNotEmpty()) {
                                     licenceClass = newClasses.first().id
@@ -149,9 +157,10 @@ fun SettingsScreen(
                     value = currentLicenceName,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Licence Class") },
+                    label = { Text("Licence Class", fontSize = 12.sp) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = licenceExpanded) },
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth()
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, true).fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyMedium
                 )
                 ExposedDropdownMenu(
                     expanded = licenceExpanded,
@@ -169,7 +178,7 @@ fun SettingsScreen(
                 }
             }
 
-            Text(text = "Appearance", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(text = "Theme", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -179,64 +188,50 @@ fun SettingsScreen(
                     FilterChip(
                         selected = savedThemeMode == mode,
                         onClick = { viewModel.saveThemeMode(mode) },
-                        label = { Text(mode) },
-                        modifier = Modifier.weight(1f)
+                        label = { Text(mode, fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f).height(32.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(Spacing.ExtraLarge))
-
-            // App Information Footer
+            // Minimal Footer
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = Spacing.Large),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = "Created by Ben (VK3ESE)",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "Created by VK3ESE",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
                 
-                SelectionContainer {
-                    Text(
-                        text = "VK3ESE@Gmail.com",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                    )
-                }
-
                 Text(
-                    text = "This app is entirely free, open source, and ad-free.",
+                    text = "Free, Open Source, Ad-Free",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    textAlign = TextAlign.Center
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+                    fontSize = 10.sp
                 )
 
                 TextButton(
                     onClick = { /* Future donation page link */ },
-                    contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.height(32.dp)
+                    modifier = Modifier.height(24.dp),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Text(
-                        text = "Support development: Buy me a coffee",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        text = "Support: Buy me a coffee",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
 
                 Text(
-                    text = "Version 1.0.0 (Beta)",
+                    text = "v1.0.0 (Beta)",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = Spacing.Small)
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    fontSize = 9.sp
                 )
             }
-
-            Spacer(modifier = Modifier.height(Spacing.Medium))
         }
     }
 }

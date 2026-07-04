@@ -5,8 +5,10 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,40 +78,48 @@ fun ToolsScreen(
             modifier = Modifier.padding(padding).fillMaxSize()
         ) {
             if (activeTool == null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(Spacing.Medium)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ToolCard(
-                        title = "Maidenhead Locator",
-                        description = "Accurate GPS Grid Square with precision checks",
-                        icon = Icons.Default.MyLocation,
-                        onClick = { activeTool = "Maidenhead Locator" }
-                    )
-
-                    ToolCard(
-                        title = "Prefix Map",
-                        description = "Regional prefix maps with search and zoom",
-                        icon = Icons.Default.Map,
-                        onClick = { activeTool = "Prefix Map" }
-                    )
-
-                    ToolCard(
-                        title = "Callsign Lookup",
-                        description = "Quick search link to QRZ.com profiles",
-                        icon = Icons.Default.Search,
-                        onClick = { activeTool = "Callsign Lookup" }
-                    )
-
-                    ToolCard(
-                        title = "Band Plan",
-                        description = "Regional frequency allocations and privileges",
-                        icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-                        onClick = { activeTool = "Band Plan" }
-                    )
+                    item {
+                        ToolGridCard(
+                            title = "Locator",
+                            icon = Icons.Default.MyLocation,
+                            onClick = { activeTool = "Maidenhead Locator" }
+                        )
+                    }
+                    item {
+                        ToolGridCard(
+                            title = "Prefix Map",
+                            icon = Icons.Default.Map,
+                            onClick = { activeTool = "Prefix Map" }
+                        )
+                    }
+                    item {
+                        ToolGridCard(
+                            title = "Lookup",
+                            icon = Icons.Default.Search,
+                            onClick = { activeTool = "Callsign Lookup" }
+                        )
+                    }
+                    item {
+                        ToolGridCard(
+                            title = "Band Plan",
+                            icon = Icons.AutoMirrored.Filled.FormatListBulleted,
+                            onClick = { activeTool = "Band Plan" }
+                        )
+                    }
+                    item {
+                        ToolGridCard(
+                            title = "Glossary",
+                            icon = Icons.Default.Book,
+                            onClick = { activeTool = "Glossary" }
+                        )
+                    }
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
@@ -118,6 +128,7 @@ fun ToolsScreen(
                         "Prefix Map" -> PrefixMapTool()
                         "Callsign Lookup" -> CallsignLookupTool()
                         "Band Plan" -> BandPlanScreen()
+                        "Glossary" -> GlossaryScreen()
                     }
                 }
             }
@@ -126,28 +137,41 @@ fun ToolsScreen(
 }
 
 @Composable
-fun ToolCard(title: String, description: String, icon: ImageVector, onClick: () -> Unit) {
+fun ToolGridCard(title: String, icon: ImageVector, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth().aspectRatio(0.9f),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(modifier = Modifier.padding(Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.size(48.dp)
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                shape = CircleShape,
+                modifier = Modifier.size(36.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                    Icon(
+                        imageVector = icon, 
+                        contentDescription = null, 
+                        tint = MaterialTheme.colorScheme.primary, 
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
-            Spacer(modifier = Modifier.width(Spacing.Large))
-            Column {
-                Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(text = description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = title, 
+                style = MaterialTheme.typography.labelSmall, 
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                lineHeight = 12.sp,
+                maxLines = 2
+            )
         }
     }
 }
