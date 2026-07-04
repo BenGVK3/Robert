@@ -18,6 +18,7 @@ import au.com.benji.robert.repository.propagation.PropagationData
 import au.com.benji.robert.repository.shack.RadioCapabilities
 import au.com.benji.robert.repository.shack.toRadioCapabilities
 import au.com.benji.robert.utils.calculateMaidenhead
+import au.com.benji.robert.utils.calculateDistance
 import au.com.benji.robert.utils.MufCalculator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -39,6 +40,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val settingsRepository = SettingsRepository(application)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
     private val logRepository = LogRepository(DatabaseModule.logDao(application))
+    private val repeaterRepository = RepeaterRepository(application)
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
     
@@ -153,11 +155,26 @@ data class Quadruple<out A, out B, out C, out D>(
             initialValue = emptyList()
         )
 
+    val shackSummary = equipment.map { gear ->
+        gear.groupBy { it.category }.mapValues { it.value.size }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyMap()
+    )
+
     val logs = logRepository.getAllLogs()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+    
+    val latestLog = logs.map { it.firstOrNull() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
 
     val aprsPackets = locationFlow
@@ -221,6 +238,20 @@ data class Quadruple<out A, out B, out C, out D>(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    val favoriteRepeater = combine(locationFlow, repeaterRepository.getFavorites()) { loc, favorites ->
+        if (loc != null && favorites.isNotEmpty()) {
+            val fav = favorites.first()
+            val dist = calculateDistance(loc.first, loc.second, fav.lat, fav.lng)
+            fav.copy(distance = dist)
+        } else {
+            null
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
     )
 
     private val _satelliteSearchQuery = MutableStateFlow("")

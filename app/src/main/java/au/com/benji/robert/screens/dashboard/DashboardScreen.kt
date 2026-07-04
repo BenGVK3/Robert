@@ -2,6 +2,7 @@ package au.com.benji.robert.screens.dashboard
 
 import android.Manifest
 import androidx.compose.animation.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -19,13 +21,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,12 +41,17 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import au.com.benji.robert.components.*
 import au.com.benji.robert.theme.Spacing
-import au.com.benji.robert.models.MoonData
+import au.com.benji.robert.models.*
+import au.com.benji.robert.database.LogEntryEntity
+import au.com.benji.robert.repository.propagation.PropagationData
+import au.com.benji.robert.network.SatellitePass
 import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.utils.MufCalculator
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -57,21 +69,31 @@ fun DashboardScreen(
     val moonData by viewModel.moonData.collectAsStateWithLifecycle()
     val mufResult by viewModel.mufResult.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    
+    val dxSpots by viewModel.dxSpots.collectAsStateWithLifecycle()
+    val favoriteRepeater by viewModel.favoriteRepeater.collectAsStateWithLifecycle()
+    val upcomingPasses by viewModel.upcomingPasses.collectAsStateWithLifecycle()
+    val shackSummary by viewModel.shackSummary.collectAsStateWithLifecycle()
+    val latestLog by viewModel.latestLog.collectAsStateWithLifecycle()
+    val aprsPackets by viewModel.aprsPackets.collectAsStateWithLifecycle()
+    val nextPassTimer by viewModel.nextPassTimer.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+    
+    // Moon Image logic
     val isMoonDataLoaded = remember(moonData.phaseName) { moonData.phaseName != "---" }
     var currentMoonImageIndex by remember { mutableIntStateOf(2) }
     val targetMoonIndex = remember(moonData.age) {
         val phaseNum = (moonData.age / 29.53).coerceIn(0.0, 1.0)
         when {
-            phaseNum < 0.02 || phaseNum > 0.98 -> 2 // New Moon (02)
-            phaseNum < 0.24 -> 3 + ((phaseNum - 0.02) / 0.22 * 4).toInt().coerceIn(0, 4) // Waxing Crescent (03-07)
-            phaseNum < 0.26 -> 8 // First Quarter (08)
-            phaseNum < 0.49 -> 9 + ((phaseNum - 0.26) / 0.23 * 6).toInt().coerceIn(0, 6) // Waxing Gibbous (09-15)
-            phaseNum < 0.51 -> 16 // Full Moon (16)
-            phaseNum < 0.74 -> 17 + ((phaseNum - 0.51) / 0.23 * 5).toInt().coerceIn(0, 5) // Waning Gibbous (17-22)
-            phaseNum < 0.76 -> 23 // Third Quarter (23)
-            else -> 24 + ((phaseNum - 0.76) / 0.24 * 6).toInt().coerceIn(0, 6) // Waning Crescent (24-30)
+            phaseNum < 0.02 || phaseNum > 0.98 -> 2
+            phaseNum < 0.24 -> 3 + ((phaseNum - 0.02) / 0.22 * 4).toInt().coerceIn(0, 4)
+            phaseNum < 0.26 -> 8
+            phaseNum < 0.49 -> 9 + ((phaseNum - 0.26) / 0.23 * 6).toInt().coerceIn(0, 6)
+            phaseNum < 0.51 -> 16
+            phaseNum < 0.74 -> 17 + ((phaseNum - 0.51) / 0.23 * 5).toInt().coerceIn(0, 5)
+            phaseNum < 0.76 -> 23
+            else -> 24 + ((phaseNum - 0.76) / 0.24 * 6).toInt().coerceIn(0, 6)
         }
     }
 
@@ -96,10 +118,6 @@ fun DashboardScreen(
         )
     }
 
-    var showForecast by remember { mutableStateOf(false) }
-
-    val pullToRefreshState = rememberPullToRefreshState()
-
     val locationPermissionState = rememberMultiplePermissionsState(
         listOf(
             Manifest.permission.ACCESS_COARSE_LOCATION,
@@ -115,10 +133,12 @@ fun DashboardScreen(
         }
     }
 
+    val pullToRefreshState = rememberPullToRefreshState()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color(0xFF0A0E14))
     ) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -130,14 +150,15 @@ fun DashboardScreen(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // --- MODERN HERO HEADER ---
+                // --- HEADER SECTION WITH IMAGE ---
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp)
+                        .height(80.dp)
+                        .clip(RoundedCornerShape(12.dp))
                 ) {
                     Image(
                         painter = painterResource(id = au.com.benji.robert.R.drawable.robertheader),
@@ -146,329 +167,565 @@ fun DashboardScreen(
                         contentScale = ContentScale.Crop
                     )
                     
-                    // Dark overlay for readability
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Black.copy(alpha = 0.15f),
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                        MaterialTheme.colorScheme.background
+                                        Color.Black.copy(alpha = 0.3f),
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.6f)
                                     )
                                 )
                             )
                     )
                     
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.Center)
-                            .padding(top = Spacing.Small),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "R.O.B.E.R.T",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 6.sp,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        
-                        Text(
-                            text = "Radio Operator's Band Exploration & Resource Tool",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                    HeaderSection(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
+                        callsign = callsign,
+                        gridSquare = locationData?.fourth ?: "---"
+                    )
                 }
 
-                Column(
-                    modifier = Modifier.padding(horizontal = Spacing.Medium),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Status Badges below Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        HeaderBadge(text = callsign, icon = Icons.Default.Person)
-                        HeaderBadge(text = locationData?.fourth ?: "---", icon = Icons.Default.LocationOn)
-                    }
+                // --- GREETING & WEATHER ---
+                GreetingSection(weatherData)
 
-                    // --- COMPACT LOCAL WEATHER ---
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = weatherData != null) { showForecast = true },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = Spacing.Medium, vertical = Spacing.Small)
-                                .height(IntrinsicSize.Min),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Cloud,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = if (weatherData == null) 0.5f else 1f)
-                            )
-                            
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = weatherData?.locationName ?: "Loading weather...",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = weatherData?.let { "${it.temperature}${it.unit}" } ?: "--°",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(Spacing.Small))
-                                    Text(
-                                        text = weatherData?.let { "• ${it.condition}" } ?: "• Scanning sky",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.secondary
-                                    )
-                                }
-                            }
-                            
-                            if (weatherData != null) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                                    WeatherCompactDetail(Icons.Default.WaterDrop, "${weatherData!!.humidity}%")
-                                    WeatherCompactDetail(Icons.Default.Air, "${weatherData!!.windSpeed}")
-                                }
-                            } else {
-                                // Shimmer-like placeholders
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp, 16.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                                )
-                            }
-                        }
-                    }
-
-                    // --- COMPACT SPACE WEATHER ---
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                                Image(
-                                    painter = painterResource(id = au.com.benji.robert.R.drawable.sun),
-                                    contentDescription = "The Sun",
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                                DashboardSectionTitle("Solar Conditions")
-                            }
-                        }
-                        
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                            shape = RoundedCornerShape(24.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                // Important Values Row
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    ImportantMetricSmall(
-                                        modifier = Modifier.weight(1f),
-                                        title = "SFI",
-                                        value = solarData.solarFlux.toString(),
-                                        icon = Icons.Default.WbSunny
-                                    )
-                                    ImportantMetricSmall(
-                                        modifier = Modifier.weight(0.8f),
-                                        title = "K-Idx",
-                                        value = solarData.kIndex.toString(),
-                                        icon = Icons.Default.Public
-                                    )
-                                    ImportantMetricSmall(
-                                        modifier = Modifier.weight(1.2f),
-                                        title = if (mufResult.isEstimated) "Est. MUF" else "MUF",
-                                        value = String.format("%.1f", mufResult.value),
-                                        unit = "MHz",
-                                        icon = Icons.Default.WifiTethering
-                                    )
-                                }
-                                
-                                // Secondary Values Grid
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    CompactMetric(modifier = Modifier.weight(1f), label = "Spots", value = solarData.sunspots.toString())
-                                    CompactMetric(modifier = Modifier.weight(1f), label = "A-Idx", value = solarData.aIndex.toString())
-                                    CompactMetric(modifier = Modifier.weight(1f), label = "X-Ray", value = solarData.xRay)
-                                }
-                            }
-                        }
-                        
-                        // Propagation Summary
-                        val summary = remember(propagationData) {
-                            val goodBands = propagationData?.bands?.filter { it.rating == "Excellent" || it.rating == "Good" } ?: emptyList()
-                            if (goodBands.isEmpty()) "Conditions stable across most bands"
-                            else "${goodBands.take(2).joinToString(" and ") { it.band }} active"
-                        }
-                        Text(
-                            text = summary,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = Spacing.Small)
-                        )
-                    }
-
-                    // --- COMPACT MOON CENTER ---
-                    Column(
-                        modifier = Modifier.clickable { 
-                            if (!navController.popBackStack(Screen.Moon.route, inclusive = false)) {
-                                navController.navigate(Screen.Moon.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        this.saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        verticalArrangement = Arrangement.spacedBy(Spacing.Small)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isMoonDataLoaded && moonResId != 0) {
-                                        Image(
-                                            painter = painterResource(id = moonResId),
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                }
-                                DashboardSectionTitle("Moon")
-                            }
-
-                            if (moonData.lastUpdated > 0) {
-                                Text(
-                                    text = "Updated: ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(moonData.lastUpdated))}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
-                                )
-                            }
-                            
-                            // EME Status Indicator
-                            Surface(
-                                color = if (moonData.isVisible) Color(0xFF4CAF50).copy(alpha = 0.1f) else Color.Red.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(if (moonData.isVisible) Color(0xFF4CAF50) else Color.Red)
-                                    )
-                                    Text(
-                                        text = if (moonData.isVisible) "EME Possible Now" else "Moon Below Horizon",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (moonData.isVisible) Color(0xFF4CAF50) else Color.Red
-                                    )
-                                }
-                            }
-                        }
-                        
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                            shape = RoundedCornerShape(24.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                // Important Values Row
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    ImportantMetricSmall(
-                                        modifier = Modifier.weight(1f),
-                                        title = "Altitude",
-                                        value = String.format("%.1f°", moonData.altitude),
-                                        icon = Icons.Default.VerticalAlignTop
-                                    )
-                                    ImportantMetricSmall(
-                                        modifier = Modifier.weight(1f),
-                                        title = "Azimuth",
-                                        value = String.format("%.1f°", moonData.azimuth),
-                                        icon = Icons.Default.Explore
-                                    )
-                                    ImportantMetricSmall(
-                                        modifier = Modifier.weight(1f),
-                                        title = "Distance",
-                                        value = String.format("%,.0f", moonData.distanceKm / 1000),
-                                        unit = "k km",
-                                        icon = Icons.Default.Straighten
-                                    )
-                                }
-                                
-                                // Secondary Values Grid
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    CompactMetric(modifier = Modifier.weight(1f), label = "Phase", value = moonData.phaseName)
-                                    CompactMetric(modifier = Modifier.weight(1f), label = "Illum", value = "${moonData.illumination}%")
-                                    CompactMetric(modifier = Modifier.weight(1f), label = "Doppler", value = String.format("%+.0fHz", moonData.doppler432))
-                                }
-                            }
-                        }
-                    }
+                // --- MAIN GRID ---
+                Row(modifier = Modifier.weight(1.3f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OperatingConditionsCard(
+                        modifier = Modifier.weight(1.1f),
+                        solarData = solarData,
+                        muf = mufResult.value
+                    )
+                    MoonStatusCard(
+                        modifier = Modifier.weight(0.9f),
+                        moonData = moonData,
+                        moonResId = moonResId,
+                        navController = navController
+                    )
                 }
-                
-                Spacer(modifier = Modifier.height(Spacing.Medium))
+
+                Row(modifier = Modifier.weight(0.9f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SatellitePassCard(
+                        modifier = Modifier.weight(1f),
+                        nextPassTimer = nextPassTimer,
+                        upcomingPasses = upcomingPasses,
+                        navController = navController
+                    )
+                    FavoriteRepeaterCard(
+                        modifier = Modifier.weight(1f),
+                        repeater = favoriteRepeater,
+                        navController = navController
+                    )
+                }
+
+                BandConditionsCard(
+                    modifier = Modifier.weight(0.9f),
+                    propagationData = propagationData, 
+                    navController = navController
+                )
+
+                Row(modifier = Modifier.weight(1.1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RecentDxSpotsCard(
+                        modifier = Modifier.weight(1f),
+                        spots = dxSpots.take(5),
+                        navController = navController
+                    )
+                    LatestLogCard(
+                        modifier = Modifier.weight(1f),
+                        log = latestLog,
+                        navController = navController
+                    )
+                }
+
+                // --- BOTTOM DASHBOARD CARDS ---
+                DashboardBottomRow(
+                    modifier = Modifier.weight(1.1f),
+                    shackSummary = shackSummary,
+                    navController = navController
+                )
             }
         }
     }
+}
 
-    if (showForecast && weatherData != null) {
-        WeatherForecastDialog(
-            weather = weatherData!!,
-            onDismiss = { showForecast = false }
+@Composable
+fun HeaderSection(modifier: Modifier = Modifier, callsign: String, gridSquare: String) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = "R.O.B.E.R.T.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = "Radio Operator's Band Exploration\n& Resource Tool",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 8.sp,
+                lineHeight = 9.sp
+            )
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.Person, null, modifier = Modifier.size(12.dp), tint = Color(0xFF00B2FF))
+                        Text(callsign, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(12.dp), tint = Color(0xFF00B2FF))
+                        Text(gridSquare, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.8f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GreetingSection(weather: DetailedWeather?) {
+    val calendar = Calendar.getInstance()
+    val hour = calendar.get(Calendar.HOUR_OF_DAY)
+    val greeting = when (hour) {
+        in 0..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        else -> "Good evening"
+    }
+    
+    val dateFormat = SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault())
+    val dateStr = dateFormat.format(calendar.time)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = "$greeting, Benji", 
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = dateStr,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray
+            )
+        }
+
+        if (weather != null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.Cloud, null, modifier = Modifier.size(24.dp), tint = Color.White)
+                    Column {
+                        Text("${weather.temperature}°C", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(weather.condition, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Icon(Icons.Default.WaterDrop, null, modifier = Modifier.size(12.dp), tint = Color(0xFF00B2FF))
+                    Text("${weather.humidity}%", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Icon(Icons.Default.Air, null, modifier = Modifier.size(12.dp), tint = Color(0xFF00B2FF))
+                    Text("${weather.windSpeed.toInt()}", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OperatingConditionsCard(modifier: Modifier, solarData: SolarData, muf: Double) {
+    DashboardCard(
+        modifier = modifier,
+        title = "OPERATING CONDITIONS",
+        icon = Icons.Default.WbSunny
+    ) {
+        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                ConditionMetric("SFI", solarData.solarFlux.toString(), "Good")
+                ConditionMetric("K-IDX", solarData.kIndex.toString(), "Good")
+                ConditionMetric("A-IDX", solarData.aIndex.toString(), "Good")
+                ConditionMetric("MUF", String.format("%.1f", muf), "MHz")
+            }
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                SmallMetric("Spots", solarData.sunspots.toString())
+                SmallMetric("X-Ray", solarData.xRay)
+                SmallMetric("Wind", solarData.solarWind.take(4))
+                SmallMetric("Bz", solarData.magneticField.split("/").lastOrNull() ?: "---")
+            }
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusBadge("OVERALL: GOOD", Color(0xFF4CAF50))
+                Text(
+                    text = "3m ago",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    fontSize = 8.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MoonStatusCard(modifier: Modifier, moonData: MoonData, moonResId: Int, navController: NavHostController) {
+    DashboardCard(
+        modifier = modifier.clickable { navController.navigate(Screen.Moon.route) },
+        title = "MOON STATUS",
+        icon = Icons.Default.Brightness2
+    ) {
+        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (moonResId != 0) {
+                    Image(
+                        painter = painterResource(id = moonResId),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                    )
+                }
+                
+                Column {
+                    Text(moonData.phaseName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("${moonData.illumination}% Illum", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00FFCC), fontSize = 8.sp)
+                }
+            }
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("Age", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    Text(String.format("%.1fd", moonData.age), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Dist", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    Text(String.format("%.0fk", moonData.distanceKm/1000), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+            }
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box(modifier = Modifier.size(4.dp).background(Color(0xFF4CAF50), CircleShape))
+                    Text("EME: GOOD", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold, fontSize = 8.sp)
+                }
+                StatusBadge(if (moonData.isVisible) "UP" else "DOWN", if (moonData.isVisible) Color(0xFF4CAF50) else Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
+fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, upcomingPasses: List<SatellitePass>, navController: NavHostController) {
+    val nextPass = upcomingPasses.firstOrNull { it.startTime > System.currentTimeMillis() / 1000 }
+    
+    DashboardCard(
+        modifier = modifier.clickable { navController.navigate(Screen.Satellites.route) },
+        title = "NEXT SATELLITE",
+        icon = Icons.Default.SatelliteAlt
+    ) {
+        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(Color(0xFF1E2632), RoundedCornerShape(4.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Satellite, null, tint = Color(0xFF00B2FF), modifier = Modifier.size(20.dp))
+                }
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(nextPass?.name ?: "ISS (Zarya)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("AOS: ${nextPass?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it.startTime * 1000)) } ?: "17:42"}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                }
+                
+                Column(horizontalAlignment = Alignment.End) {
+                    val timerText = if (nextPassTimer.contains("In ")) nextPassTimer.substringAfter("In ").substringBefore("s") else "--m"
+                    Text(timerText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFFA680FF))
+                    Text("TO AOS", style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, color = Color.Gray)
+                }
+            }
+            
+            Text(
+                text = "Max El: ${nextPass?.maxElevation?.toInt() ?: 53}° • Duration: ${nextPass?.duration?.let { "${it/60}m" } ?: "9m"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray,
+                fontSize = 8.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun FavoriteRepeaterCard(modifier: Modifier, repeater: Repeater?, navController: NavHostController) {
+    DashboardCard(
+        modifier = modifier.clickable { navController.navigate(Screen.RepeaterList.route) },
+        title = "FAV REPEATER",
+        icon = Icons.Default.Podcasts
+    ) {
+        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text(repeater?.callsign ?: "VK3RLV", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("${repeater?.frequency ?: "146.80"} MHz ${repeater?.mode ?: "FM"}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                }
+                StatusBadge("ONLINE", Color(0xFF4CAF50))
+            }
+            Text(
+                text = "${repeater?.town ?: "Mt Tassie"} • ${String.format("%.1fkm", repeater?.distance ?: 52.6)} SW",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray,
+                fontSize = 8.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun BandConditionsCard(modifier: Modifier = Modifier, propagationData: PropagationData?, navController: NavHostController) {
+    DashboardCard(
+        modifier = modifier.fillMaxWidth().clickable { navController.navigate(Screen.Propagation.route) },
+        title = "HF BAND CONDITIONS",
+        icon = Icons.Default.BarChart
+    ) {
+        Column(verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxHeight()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val bands = listOf("160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "6m")
+                bands.forEach { bandName ->
+                    val rating = propagationData?.bands?.find { it.band == bandName }?.rating ?: "Fair"
+                    BandMiniGraph(modifier = Modifier.weight(1f), band = bandName, rating = rating)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BandMiniGraph(modifier: Modifier, band: String, rating: String) {
+    val color = when (rating) {
+        "Excellent" -> Color(0xFF4CAF50)
+        "Good" -> Color(0xFF8BC34A)
+        "Fair" -> Color(0xFFFFC107)
+        else -> Color(0xFFF44336)
+    }
+    
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(band, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 7.sp)
+        
+        Canvas(modifier = Modifier.height(24.dp).fillMaxWidth()) {
+            val path = Path()
+            path.moveTo(0f, size.height)
+            path.lineTo(size.width * 0.2f, size.height * 0.7f)
+            path.lineTo(size.width * 0.5f, size.height * 0.8f)
+            path.lineTo(size.width * 0.8f, size.height * 0.3f)
+            path.lineTo(size.width, size.height * 0.5f)
+            
+            drawPath(path, color, style = Stroke(width = 1.dp.toPx()))
+            path.lineTo(size.width, size.height)
+            path.close()
+            drawPath(path, color.copy(alpha = 0.1f))
+        }
+        Text(rating.take(1), style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, fontWeight = FontWeight.Black, color = color)
+    }
+}
+
+@Composable
+fun RecentDxSpotsCard(modifier: Modifier, spots: List<DxSpot>, navController: NavHostController) {
+    DashboardCard(
+        modifier = modifier.clickable { navController.navigate(Screen.Propagation.route) },
+        title = "DX SPOTS",
+        icon = Icons.Default.Language
+    ) {
+        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+            spots.forEach { spot ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(spot.callsign, modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 8.sp, maxLines = 1)
+                    Text(spot.band, modifier = Modifier.weight(0.7f), style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
+                    Text(spot.normalizedMode, modifier = Modifier.weight(0.7f), style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
+                    Text(spot.timeZulu.take(5), modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LatestLogCard(modifier: Modifier, log: LogEntryEntity?, navController: NavHostController) {
+    DashboardCard(
+        modifier = modifier.clickable { navController.navigate(Screen.Logbook.route) },
+        title = "LATEST LOG",
+        icon = Icons.Default.Book
+    ) {
+        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(log?.callsign ?: "VK3WRE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(log?.band ?: "40m", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+            }
+            Text("${log?.mode ?: "SSB"} • ${log?.frequency ?: "7100"}k • ${log?.power ?: "10"}W", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+            Text(if (log != null && log.name.isNotEmpty()) log.name else "Ralph, VIC", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00B2FF), fontSize = 8.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+fun DashboardBottomRow(
+    modifier: Modifier = Modifier,
+    shackSummary: Map<String, Int>,
+    navController: NavHostController
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        val bottomCards = listOf(
+            Triple("SHACK", Icons.Default.Home, listOf("Rad" to (shackSummary["Radio"] ?: 0), "Ant" to (shackSummary["Antenna"] ?: 0))),
+            Triple("APRS", Icons.Default.LocationOn, listOf("Pkt" to 128, "Near" to "2.1k")),
+            Triple("KIWI", Icons.Default.Wifi, listOf("Lsn" to 12, "Lat" to "42ms")),
+            Triple("FAV", Icons.Default.Star, listOf("Sat" to 3, "Rpt" to 2)),
+            Triple("ALRT", Icons.Default.Notifications, listOf("ISS" to "14m", "Kp" to "Up"))
+        )
+
+        bottomCards.forEach { (title, icon, items) ->
+            val route = when(title) {
+                "APRS" -> Screen.Aprs.route
+                "KIWI" -> Screen.Sdr.route
+                else -> Screen.Tools.route // Fallback
+            }
+            BottomDashboardCard(
+                modifier = Modifier.weight(1f),
+                title = title,
+                icon = icon,
+                items = items,
+                onClick = { navController.navigate(route) }
+            )
+        }
+    }
+}
+
+@Composable
+fun BottomDashboardCard(
+    modifier: Modifier,
+    title: String,
+    icon: ImageVector,
+    items: List<Pair<String, Any?>>,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxHeight().clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF161C24)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(4.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Icon(icon, null, modifier = Modifier.size(10.dp), tint = Color(0xFF00B2FF))
+                Text(title, style = MaterialTheme.typography.labelSmall, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                items.forEach { (label, value) ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, color = Color.Gray)
+                        Text(value.toString(), style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+            
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF2D3540)))
+            Text(
+                text = "OPEN",
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 7.sp,
+                color = Color(0xFF00B2FF),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+fun DashboardCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF11171F)),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1C242F))
+    ) {
+        Column(modifier = Modifier.padding(8.dp).fillMaxSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(icon, null, modifier = Modifier.size(12.dp), tint = Color(0xFF00B2FF))
+                Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF00B2FF), letterSpacing = 0.5.sp, fontSize = 8.sp)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+fun ConditionMetric(label: String, value: String, status: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
+        Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = Color.White)
+        Text(status, style = MaterialTheme.typography.labelSmall, color = if (status == "Good") Color(0xFF4CAF50) else Color.Gray, fontSize = 7.sp)
+    }
+}
+
+@Composable
+fun SmallMetric(label: String, value: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
+        Text(value, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 8.sp)
+    }
+}
+
+@Composable
+fun StatusBadge(text: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f))
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = color,
+            fontSize = 7.sp
         )
     }
 }
