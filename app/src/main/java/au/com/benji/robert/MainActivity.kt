@@ -23,6 +23,7 @@ import au.com.benji.robert.components.CommandCenterSheet
 import au.com.benji.robert.components.CommandActionType
 import au.com.benji.robert.components.DialogType
 import au.com.benji.robert.components.GlobalDialogs
+import au.com.benji.robert.database.DatabaseModule
 import au.com.benji.robert.navigation.RobertNavHost
 import au.com.benji.robert.repository.SettingsRepository
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
@@ -33,7 +34,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val settingsRepository = SettingsRepository(this)
+        val settingsRepository = SettingsRepository(DatabaseModule.cacheDao(application))
 
         enableEdgeToEdge()
 

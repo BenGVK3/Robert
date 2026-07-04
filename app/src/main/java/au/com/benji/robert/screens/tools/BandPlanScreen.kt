@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.database.DatabaseModule
 import au.com.benji.robert.models.*
 import au.com.benji.robert.repository.BandPlanRepository
 import au.com.benji.robert.repository.SettingsRepository
@@ -31,7 +32,7 @@ fun BandPlanScreen(
     paddingValues: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
-    val settingsRepository = remember { SettingsRepository(context) }
+    val settingsRepository = remember { SettingsRepository(DatabaseModule.cacheDao(context)) }
     val bandPlanRepository = remember { BandPlanRepository(context) }
     val viewModel: BandPlanViewModel = viewModel(
         factory = RobertViewModelFactory { BandPlanViewModel(bandPlanRepository, settingsRepository) }

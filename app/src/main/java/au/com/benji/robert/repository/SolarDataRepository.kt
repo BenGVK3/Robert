@@ -2,42 +2,46 @@ package au.com.benji.robert.repository
 
 import android.util.Log
 import android.util.Xml
+import au.com.benji.robert.database.CacheDao
+import au.com.benji.robert.database.SolarDataEntity
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.network.ApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import java.io.StringReader
 
-class SolarDataRepository {
+class SolarDataRepository(private val cacheDao: CacheDao) {
     private val TAG = "SolarDataRepository"
-    private var cachedData: SolarData? = null
 
-    fun getSolarData(lat: Double? = null, lon: Double? = null): Flow<SolarData> = flow {
-        while (true) {
-            try {
-                Log.d(TAG, "Fetching solar data from HamQSL...")
-                val xmlContent = ApiService.fetchData("https://www.hamqsl.com/solarxml.php")
-                
-                if (xmlContent != null) {
-                    val parsedData = parseSolarXml(xmlContent)
-                    cachedData = parsedData
-                    emit(parsedData)
-                    delay(15 * 60 * 1000) // 15 minutes
-                } else {
-                    Log.w(TAG, "Fetch failed, using cached data if available")
-                    cachedData?.let { emit(it) }
-                    delay(30 * 1000) // Retry in 30 seconds
+    fun getSolarData(lat: Double? = null, lon: Double? = null): Flow<SolarData> {
+        val refreshFlow = flow<Unit?> {
+            while (true) {
+                try {
+                    Log.d(TAG, "Fetching fresh solar data from HamQSL...")
+                    val xmlContent = ApiService.fetchData("https://www.hamqsl.com/solarxml.php")
+                    
+                    if (xmlContent != null) {
+                        val parsedData = parseSolarXml(xmlContent)
+                        cacheDao.insertSolar(parsedData.toEntity())
+                        delay(5 * 60 * 1000)
+                    } else {
+                        delay(60 * 1000)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in SolarDataRepository refresh: ${e.message}")
+                    delay(60 * 1000)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in SolarDataRepository: ${e.message}")
-                cachedData?.let { emit(it) }
-                delay(30 * 1000) // Retry in 30 seconds
+                emit(null)
             }
         }
+
+        return merge(
+            cacheDao.getSolarFlow().filterNotNull().map { it.toModel() },
+            refreshFlow.filter { false }.map { SolarData() } // Trick to keep refreshFlow running without emitting dummy data
+        ).distinctUntilChanged()
     }
 
     private suspend fun parseSolarXml(xml: String): SolarData = withContext(Dispatchers.Default) {
@@ -96,4 +100,44 @@ class SolarDataRepository {
             lastUpdated = System.currentTimeMillis()
         )
     }
+
+    private fun SolarData.toEntity() = SolarDataEntity(
+        solarFlux = solarFlux,
+        kIndex = kIndex,
+        aIndex = aIndex,
+        sunspots = sunspots,
+        muf = muf,
+        xRay = xRay,
+        solarWind = solarWind,
+        protonFlux = protonFlux,
+        electronFlux = electronFlux,
+        aurora = aurora,
+        magneticField = magneticField,
+        foF2 = foF2,
+        hfConditionsDay = hfConditionsDay,
+        hfConditionsNight = hfConditionsNight,
+        vhfAurora = vhfAurora,
+        eSkip = eSkip,
+        lastUpdated = lastUpdated
+    )
+
+    private fun SolarDataEntity.toModel() = SolarData(
+        solarFlux = solarFlux,
+        kIndex = kIndex,
+        aIndex = aIndex,
+        sunspots = sunspots,
+        muf = muf,
+        xRay = xRay,
+        solarWind = solarWind,
+        protonFlux = protonFlux,
+        electronFlux = electronFlux,
+        aurora = aurora,
+        magneticField = magneticField,
+        foF2 = foF2,
+        hfConditionsDay = hfConditionsDay,
+        hfConditionsNight = hfConditionsNight,
+        vhfAurora = vhfAurora,
+        eSkip = eSkip,
+        lastUpdated = lastUpdated
+    )
 }

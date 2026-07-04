@@ -3,6 +3,7 @@ package au.com.benji.robert.screens.sdr
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import au.com.benji.robert.database.DatabaseModule
 import au.com.benji.robert.repository.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +12,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SdrViewModel(application: Application) : AndroidViewModel(application) {
-    private val settingsRepository = SettingsRepository(application)
+    private val settingsRepository = SettingsRepository(DatabaseModule.cacheDao(application))
 
     val kiwisdrUrl: StateFlow<String> = settingsRepository.kiwisdrUrl
         .map { url ->

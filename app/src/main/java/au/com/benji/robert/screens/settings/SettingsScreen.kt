@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.database.DatabaseModule
 import au.com.benji.robert.repository.BandPlanRepository
 import au.com.benji.robert.repository.SettingsRepository
 import au.com.benji.robert.theme.Spacing
@@ -25,7 +26,7 @@ fun SettingsScreen(
     paddingValues: PaddingValues
 ) {
     val context = LocalContext.current
-    val repository = remember { SettingsRepository(context) }
+    val repository = remember { SettingsRepository(DatabaseModule.cacheDao(context)) }
     val bandPlanRepository = remember { BandPlanRepository(context) }
     val viewModel: SettingsViewModel = viewModel(
         factory = RobertViewModelFactory { SettingsViewModel(repository, bandPlanRepository) }

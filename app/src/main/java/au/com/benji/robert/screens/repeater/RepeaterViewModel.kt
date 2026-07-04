@@ -3,21 +3,20 @@ package au.com.benji.robert.screens.repeater
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import au.com.benji.robert.database.DatabaseProvider
+import au.com.benji.robert.database.DatabaseModule
 import au.com.benji.robert.database.ShackEntity
 import au.com.benji.robert.location.LocationService
 import au.com.benji.robert.models.Repeater
 import au.com.benji.robert.repository.RepeaterRepository
 import au.com.benji.robert.repository.ShackRepository
-import au.com.benji.robert.utils.calculateMaidenhead
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 
 class RepeaterViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = RepeaterRepository(application)
-    private val shackRepository = ShackRepository(DatabaseProvider.getDatabase(application).shackDao())
+    private val repository = RepeaterRepository(DatabaseModule.repeaterDao(application))
+    private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
     private val locationService = LocationService(application)
 
     private val _repeaters = MutableStateFlow<List<Repeater>>(emptyList())
@@ -47,8 +46,7 @@ class RepeaterViewModel(application: Application) : AndroidViewModel(application
                 repeater.frequency.contains(query)
             
             val matchesBand = filter.band == "All" || 
-                repeater.band?.contains(filter.band, ignoreCase = true) == true ||
-                repeater.frequency.toBand() == filter.band
+                repeater.band?.contains(filter.band, ignoreCase = true) == true
                 
             val matchesMode = filter.mode == "All" || 
                 repeater.mode?.contains(filter.mode, ignoreCase = true) == true
@@ -169,18 +167,6 @@ class RepeaterViewModel(application: Application) : AndroidViewModel(application
             val matchesMode = repeater.mode?.let { m -> radio.notes.contains(m, ignoreCase = true) } ?: true
             matchesBand || matchesMode
         } ?: equipment.firstOrNull()
-    }
-    
-    private fun String.toBand(): String {
-        val freq = this.toDoubleOrNull() ?: return ""
-        return when {
-            freq in 28.0..29.7 -> "10m"
-            freq in 50.0..54.0 -> "6m"
-            freq in 144.0..148.0 -> "2m"
-            freq in 420.0..450.0 -> "70cm"
-            freq in 1240.0..1300.0 -> "23cm"
-            else -> ""
-        }
     }
 }
 

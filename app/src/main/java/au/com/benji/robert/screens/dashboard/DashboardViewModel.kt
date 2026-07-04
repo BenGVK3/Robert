@@ -28,19 +28,21 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val cacheDao = DatabaseModule.cacheDao(application)
+    
     private val repository = DashboardRepository()
-    private val solarRepository = SolarDataRepository()
-    private val weatherRepository = WeatherRepository()
+    private val solarRepository = SolarDataRepository(cacheDao)
+    private val weatherRepository = WeatherRepository(DatabaseModule.weatherDao(application))
     private val propagationRepository = PropagationRepository(DatabaseModule.propagationDao(application))
     private val moonRepository = MoonRepository(DatabaseModule.moonDao(application))
-    private val aprsRepository = AprsRepository()
-    private val dxRepository = DxRepository()
-    private val satelliteRepository = SatelliteRepository()
+    private val aprsRepository = AprsRepository(cacheDao)
+    private val dxRepository = DxRepository(cacheDao)
+    private val satelliteRepository = SatelliteRepository(cacheDao)
     private val locationService = LocationService(application)
-    private val settingsRepository = SettingsRepository(application)
+    private val settingsRepository = SettingsRepository(cacheDao)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
     private val logRepository = LogRepository(DatabaseModule.logDao(application))
-    private val repeaterRepository = RepeaterRepository(application)
+    private val repeaterRepository = RepeaterRepository(DatabaseModule.repeaterDao(application))
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
     
@@ -116,14 +118,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         initialValue = emptyList()
     )
 
-data class Quadruple<out A, out B, out C, out D>(
-    val first: A,
-    val second: B,
-    val third: C,
-    val fourth: D
-) : java.io.Serializable {
-    override fun toString(): String = "($first, $second, $third, $fourth)"
-}
+    data class Quadruple<out A, out B, out C, out D>(
+        val first: A,
+        val second: B,
+        val third: C,
+        val fourth: D
+    ) : java.io.Serializable {
+        override fun toString(): String = "($first, $second, $third, $fourth)"
+    }
 
     val solarData = locationFlow
         .onStart { emit(null) }
@@ -267,29 +269,18 @@ data class Quadruple<out A, out B, out C, out D>(
     fun setDxModeFilter(mode: String?) { _dxModeFilter.value = mode }
     fun setDxContinentFilter(continent: String?) { _dxContinentFilter.value = continent }
 
-    private val rawDxSpots = merge(
-        refreshTrigger.map { Unit },
-        flow { while(true) { emit(Unit); delay(60000) } }
-    ).flatMapLatest {
-        flow { emit(dxRepository.fetchAllSpots()) }
-    }
-
-    val dxSpots = combine(
-        rawDxSpots,
-        _dxBandFilter,
-        _dxModeFilter,
-        _dxContinentFilter
-    ) { spots, band, mode, continent ->
-        spots.filter { spot ->
-            (band == null || spot.band == band) &&
-            (mode == null || spot.normalizedMode == mode) &&
-            (continent == null || spot.continent == continent)
+    val dxSpots = dxRepository.getDxSpotsFlow()
+        .combine(_dxBandFilter) { spots, band ->
+            if (band == null) spots else spots.filter { it.band == band }
         }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+        .combine(_dxModeFilter) { spots, mode ->
+            if (mode == null) spots else spots.filter { it.mode == mode }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     val favoriteRepeater = combine(locationFlow, repeaterRepository.getFavorites()) { loc, favorites ->
         if (loc != null && favorites.isNotEmpty()) {
@@ -311,8 +302,8 @@ data class Quadruple<out A, out B, out C, out D>(
     private val _selectedSatelliteId = MutableStateFlow("25544")
     val selectedSatelliteId = _selectedSatelliteId.asStateFlow()
 
-    private val _favoriteSatelliteIds = MutableStateFlow(setOf("25544", "25338", "43013"))
-    val favoriteSatelliteIds = _favoriteSatelliteIds.asStateFlow()
+    val favoriteSatelliteIds = satelliteRepository.getFavoriteSatelliteIds()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     val availableSatellites = satelliteRepository.availableSatellites
 
@@ -321,9 +312,9 @@ data class Quadruple<out A, out B, out C, out D>(
     }
 
     fun toggleFavoriteSatellite(id: String) {
-        val current = _favoriteSatelliteIds.value.toMutableSet()
-        if (current.contains(id)) current.remove(id) else current.add(id)
-        _favoriteSatelliteIds.value = current
+        viewModelScope.launch {
+            satelliteRepository.toggleFavorite(id)
+        }
     }
 
     fun updateSatelliteSearchQuery(query: String) {

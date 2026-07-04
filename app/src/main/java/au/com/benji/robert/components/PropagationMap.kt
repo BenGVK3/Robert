@@ -1,5 +1,6 @@
 package au.com.benji.robert.components
 
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,16 +14,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import au.com.benji.robert.models.PskSpot
 import au.com.benji.robert.repository.propagation.PropagationData
 import au.com.benji.robert.theme.Spacing
 import au.com.benji.robert.utils.TerminatorUtils
-import com.google.android.gms.maps.model.*
-import com.google.maps.android.compose.*
-import com.google.maps.android.compose.clustering.Clustering
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.infowindow.MarkerInfoWindow
 import java.util.*
 
 @Composable
@@ -38,7 +47,14 @@ fun PropagationMap(
     selectedMode: String,
     onModeSelected: (String) -> Unit
 ) {
+    val context = LocalContext.current
     var selectedSpot by remember { mutableStateOf<PskSpot?>(null) }
+
+    // Configure osmdroid
+    SideEffect {
+        Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+        Configuration.getInstance().userAgentValue = "Robert-Ham-App/1.0"
+    }
 
     Card(
         modifier = Modifier
@@ -48,7 +64,6 @@ fun PropagationMap(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
-            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -58,31 +73,17 @@ fun PropagationMap(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Map,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(Spacing.Small))
-                    Text(
-                        text = "LIVE PROPAGATION MAP",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "LIVE PROPAGATION MAP", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
-                Icon(
-                    if (isCollapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                    contentDescription = null
-                )
+                Icon(if (isCollapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess, contentDescription = null)
             }
 
             AnimatedVisibility(visible = !isCollapsed) {
                 Column {
-                    // Filters
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
                         horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
                     ) {
                         BandFilterDropdown(selectedBand, onBandSelected, modifier = Modifier.weight(1f))
@@ -95,100 +96,83 @@ fun PropagationMap(
                             .height(400.dp)
                             .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
                     ) {
-                        val cameraPositionState = rememberCameraPositionState {
-                            position = CameraPosition.fromLatLngZoom(
-                                LatLng(userLat ?: 0.0, userLon ?: 0.0),
-                                2f
-                            )
-                        }
+                        AndroidView(
+                            factory = { ctx ->
+                                MapView(ctx).apply {
+                                    setTileSource(TileSourceFactory.MAPNIK)
+                                    zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                                    setMultiTouchControls(true)
+                                    controller.setZoom(3.0)
+                                    controller.setCenter(GeoPoint(userLat ?: 0.0, userLon ?: 0.0))
+                                }
+                            },
+                            update = { mapView ->
+                                mapView.overlays.clear()
 
-                        GoogleMap(
-                            modifier = Modifier.fillMaxSize(),
-                            cameraPositionState = cameraPositionState,
-                            uiSettings = MapUiSettings(
-                                zoomControlsEnabled = false,
-                                myLocationButtonEnabled = true
-                            ),
-                            properties = MapProperties(
-                                mapType = MapType.NORMAL,
-                                isMyLocationEnabled = userLat != null
-                            )
-                        ) {
-                            // User Location Marker
-                            if (userLat != null && userLon != null) {
-                                Marker(
-                                    state = rememberMarkerState(position = LatLng(userLat, userLon)),
-                                    title = "Your Station",
-                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
-                                )
+                                // User Location
+                                if (userLat != null && userLon != null) {
+                                    val userPoint = GeoPoint(userLat, userLon)
+                                    val userMarker = Marker(mapView).apply {
+                                        position = userPoint
+                                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                        title = "Your Station"
+                                    }
+                                    mapView.overlays.add(userMarker)
+
+                                    // Coverage
+                                    propagationData?.let { data ->
+                                        val bandData = if (selectedBand == "All") data.bands.maxByOrNull { it.score } else data.bands.find { it.band == selectedBand }
+                                        bandData?.let { band ->
+                                            val colorInt = try { android.graphics.Color.parseColor(band.color) } catch (e: Exception) { android.graphics.Color.GREEN }
+                                            val radiusKm = (band.score / 100f) * 15000.0 // Simplified coverage
+                                            val circlePoints = Polygon.pointsAsCircle(userPoint, radiusKm * 1000.0)
+                                            val polygon = Polygon(mapView).apply {
+                                                points = circlePoints
+                                                fillPaint.color = Color(colorInt).copy(alpha = 0.15f).toArgb()
+                                                outlinePaint.color = Color(colorInt).copy(alpha = 0.4f).toArgb()
+                                                outlinePaint.strokeWidth = 2f
+                                            }
+                                            mapView.overlays.add(polygon)
+                                        }
+                                    }
+                                }
+
+                                // Grey Line
+                                val terminatorPoints = TerminatorUtils.calculateTerminator()
+                                if (terminatorPoints.isNotEmpty()) {
+                                    val polyline = Polyline(mapView).apply {
+                                        val pts = terminatorPoints.map { GeoPoint(it.first, it.second) }
+                                        setPoints(pts)
+                                        outlinePaint.color = android.graphics.Color.BLACK
+                                        outlinePaint.alpha = 100
+                                        outlinePaint.strokeWidth = 5f
+                                    }
+                                    mapView.overlays.add(polyline)
+                                }
+
+                                // Spots (Simplified without cluster library for now to ensure stability)
+                                spots.take(100).forEach { spot ->
+                                    val spotMarker = Marker(mapView).apply {
+                                        position = GeoPoint(spot.lat, spot.lon)
+                                        title = spot.callsign
+                                        snippet = "${spot.mode} | ${spot.frequency} MHz"
+                                        setOnMarkerClickListener { m, _ ->
+                                            selectedSpot = spot
+                                            m.showInfoWindow()
+                                            true
+                                        }
+                                    }
+                                    mapView.overlays.add(spotMarker)
+                                }
                                 
-                                // Propagation Coverage Regions
-                                propagationData?.let { data ->
-                                    val currentBandData = if (selectedBand == "All") {
-                                        data.bands.maxByOrNull { it.score }
-                                    } else {
-                                        data.bands.find { it.band == selectedBand }
-                                    }
-                                    
-                                    currentBandData?.let { band ->
-                                        val color = try {
-                                            Color(android.graphics.Color.parseColor(band.color))
-                                        } catch (e: Exception) {
-                                            Color.Green
-                                        }
-                                        
-                                        // Draw coverage circles
-                                        val radius = (band.score / 100f) * 20000000.0 // meters
-                                        Circle(
-                                            center = LatLng(userLat, userLon),
-                                            radius = radius,
-                                            fillColor = color.copy(alpha = 0.1f),
-                                            strokeColor = color.copy(alpha = 0.3f),
-                                            strokeWidth = 2f
-                                        )
-                                        
-                                        if (band.score > 40) {
-                                            Circle(
-                                                center = LatLng(userLat, userLon),
-                                                radius = radius * 0.6,
-                                                fillColor = color.copy(alpha = 0.15f),
-                                                strokeWidth = 0f
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                                mapView.invalidate()
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
 
-                            // Grey Line Overlay
-                            val terminatorPoints = remember { TerminatorUtils.calculateTerminator() }
-                            if (terminatorPoints.isNotEmpty()) {
-                                val latLngs = terminatorPoints.map { LatLng(it.first, it.second) }
-                                Polyline(
-                                    points = latLngs,
-                                    color = Color.Black.copy(alpha = 0.4f),
-                                    width = 10f,
-                                    geodesic = true
-                                )
-                            }
-
-                            // PSK Spots with Clustering
-                            val clusterItems = remember(spots) {
-                                spots.map { PskClusterItem(it) }
-                            }
-                            Clustering(
-                                items = clusterItems,
-                                onClusterItemClick = { item ->
-                                    selectedSpot = item.spot
-                                    true
-                                }
-                            )
-                        }
-                        
                         // Legend
                         Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(Spacing.Small)
+                            modifier = Modifier.align(Alignment.BottomStart).padding(Spacing.Small)
                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
                                 .padding(Spacing.ExtraSmall)
                         ) {
@@ -208,11 +192,7 @@ fun PropagationMap(
     selectedSpot?.let { spot ->
         AlertDialog(
             onDismissRequest = { selectedSpot = null },
-            confirmButton = {
-                TextButton(onClick = { selectedSpot = null }) {
-                    Text("Close")
-                }
-            },
+            confirmButton = { TextButton(onClick = { selectedSpot = null }) { Text("Close") } },
             title = { Text(spot.callsign, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.ExtraSmall)) {
@@ -229,19 +209,11 @@ fun PropagationMap(
     }
 }
 
-@Composable
-fun DetailLine(label: String, value: String) {
-    Row {
-        Text("$label: ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-    }
-}
-
-class PskClusterItem(val spot: PskSpot) : com.google.maps.android.clustering.ClusterItem {
-    override fun getPosition(): LatLng = LatLng(spot.lat, spot.lon)
-    override fun getTitle(): String = spot.callsign
-    override fun getSnippet(): String = "${spot.mode} | ${spot.frequency} MHz"
-    override fun getZIndex(): Float? = null
+fun Color.toArgb(): Int {
+    return (this.alpha * 255.0f + 0.5f).toInt() shl 24 or
+           (this.red * 255.0f + 0.5f).toInt() shl 16 or
+           (this.green * 255.0f + 0.5f).toInt() shl 8 or
+           (this.blue * 255.0f + 0.5f).toInt()
 }
 
 @Composable
@@ -258,35 +230,15 @@ fun LegendItem(label: String, color: Color) {
 fun BandFilterDropdown(selected: String, onSelected: (String) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val bands = listOf("All", "160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m")
-    
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier
-    ) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier = modifier) {
         OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Band", fontSize = 10.sp) },
+            value = selected, onValueChange = {}, readOnly = true, label = { Text("Band", fontSize = 10.sp) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             textStyle = MaterialTheme.typography.bodySmall
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            bands.forEach { band ->
-                DropdownMenuItem(
-                    text = { Text(band) },
-                    onClick = {
-                        onSelected(band)
-                        expanded = false
-                    }
-                )
-            }
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            bands.forEach { band -> DropdownMenuItem(text = { Text(band) }, onClick = { onSelected(band); expanded = false }) }
         }
     }
 }
@@ -296,35 +248,23 @@ fun BandFilterDropdown(selected: String, onSelected: (String) -> Unit, modifier:
 fun ModeFilterDropdown(selected: String, onSelected: (String) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val modes = listOf("All", "FT8", "FT4", "CW", "SSB", "WSPR")
-    
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier
-    ) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier = modifier) {
         OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Mode", fontSize = 10.sp) },
+            value = selected, onValueChange = {}, readOnly = true, label = { Text("Mode", fontSize = 10.sp) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             textStyle = MaterialTheme.typography.bodySmall
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            modes.forEach { mode ->
-                DropdownMenuItem(
-                    text = { Text(mode) },
-                    onClick = {
-                        onSelected(mode)
-                        expanded = false
-                    }
-                )
-            }
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            modes.forEach { mode -> DropdownMenuItem(text = { Text(mode) }, onClick = { onSelected(mode); expanded = false }) }
         }
+    }
+}
+
+@Composable
+fun DetailLine(label: String, value: String) {
+    Row {
+        Text("$label: ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
     }
 }

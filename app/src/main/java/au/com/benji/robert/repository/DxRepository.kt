@@ -1,31 +1,45 @@
 package au.com.benji.robert.repository
 
 import android.util.Log
+import au.com.benji.robert.database.CacheDao
+import au.com.benji.robert.database.DxSpotEntity
 import au.com.benji.robert.models.DxSpot
 import au.com.benji.robert.models.SpotSource
 import au.com.benji.robert.network.ApiService
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.util.Locale
 
-class DxRepository {
+class DxRepository(private val cacheDao: CacheDao) {
     private val TAG = "DxRepository"
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun getDxSpots(): Flow<List<DxSpot>> = flow {
-        while (true) {
-            try {
-                val allSpots = fetchAllSpots()
-                emit(allSpots)
-            } catch (e: Exception) {
-                Log.e(TAG, "Critical error in DxRepository: ${e.message}")
-                emit(emptyList())
+    fun getDxSpotsFlow(): Flow<List<DxSpot>> {
+        val refreshFlow = flow<Unit?> {
+            while (true) {
+                try {
+                    val allSpots = fetchAllSpots()
+                    if (allSpots.isNotEmpty()) {
+                        cacheDao.insertDxSpots(allSpots.map { it.toEntity() })
+                        cacheDao.cleanOldDxSpots(System.currentTimeMillis() - 24 * 60 * 60 * 1000)
+                    }
+                    delay(60000)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in DxRepository refresh: ${e.message}")
+                    delay(60000)
+                }
+                emit(null)
             }
-            kotlinx.coroutines.delay(60000) // Refresh every minute
         }
+
+        return merge(
+            cacheDao.getDxSpots().map { list -> list.map { it.toModel() } },
+            refreshFlow.filter { false }.map { emptyList<DxSpot>() }
+        ).distinctUntilChanged()
     }
 
     suspend fun fetchAllSpots(): List<DxSpot> {
@@ -51,7 +65,7 @@ class DxRepository {
                     ))
                 }
             }
-        } catch (e: Exception) { Log.e(TAG, "POTA Error: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "DxRepository POTA Error: ${e.message}") }
 
         // 2. Fetch SOTA Spots
         try {
@@ -73,7 +87,7 @@ class DxRepository {
                     ))
                 }
             }
-        } catch (e: Exception) { Log.e(TAG, "SOTA Error: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "DxRepository SOTA Error: ${e.message}") }
 
         // 3. Fetch General DX Spots (DX Summit)
         try {
@@ -84,11 +98,11 @@ class DxRepository {
                     val obj = element.jsonObject
                     val freqKhz = obj["frequency"]?.jsonPrimitive?.doubleOrNull ?: 0.0
                     val freqMhz = freqKhz / 1000.0
-                    val timeStr = obj["time"]?.jsonPrimitive?.content ?: "" // DX Summit usually "HH:mm DD-MMM" or similar, but let's check
+                    val timeStr = obj["time"]?.jsonPrimitive?.content ?: ""
                     
                     allSpots.add(DxSpot(
                         callsign = obj["dx_call"]?.jsonPrimitive?.content ?: "",
-                        frequency = String.format(java.util.Locale.US, "%.3f", freqMhz),
+                        frequency = String.format(Locale.US, "%.3f", freqMhz),
                         mode = obj["mode"]?.jsonPrimitive?.content ?: "---",
                         spotter = obj["de_call"]?.jsonPrimitive?.content ?: "",
                         timestamp = parseIsoToTimestamp(timeStr), 
@@ -97,7 +111,7 @@ class DxRepository {
                     ))
                 }
             }
-        } catch (e: Exception) { Log.e(TAG, "DX Summit Error: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "DxRepository DX Summit Error: ${e.message}") }
 
         return allSpots.sortedByDescending { it.timestamp }
     }
@@ -105,19 +119,37 @@ class DxRepository {
     private fun parseIsoToTimestamp(isoString: String): Long {
         if (isoString.isEmpty()) return System.currentTimeMillis()
         return try {
-            // Support multiple common ISO-like formats
             val cleaned = if (isoString.contains(" ") && !isoString.contains("T")) {
                 isoString.replace(" ", "T")
             } else isoString
-            
             val finalString = if (!cleaned.contains("+") && !cleaned.endsWith("Z")) {
-                cleaned + "Z" // Assume UTC if not specified
+                cleaned + "Z"
             } else cleaned
-
             ZonedDateTime.parse(finalString).toInstant().toEpochMilli()
         } catch (e: DateTimeParseException) {
-            // Log.w(TAG, "Failed to parse time: $isoString")
             System.currentTimeMillis()
         }
     }
+
+    private fun DxSpot.toEntity() = DxSpotEntity(
+        frequency = frequency,
+        callsign = callsign,
+        date = "", // Not strictly used for display if we have timestamp
+        de = spotter,
+        band = "", // Calculated if needed
+        mode = mode,
+        comment = comment,
+        timestamp = timestamp
+    )
+
+    private fun DxSpotEntity.toModel() = DxSpot(
+        callsign = callsign,
+        frequency = frequency,
+        mode = mode,
+        spotter = de,
+        timestamp = timestamp,
+        comment = comment,
+        source = SpotSource.DX_CLUSTER, // Fallback source
+        location = ""
+    )
 }

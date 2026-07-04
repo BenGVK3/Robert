@@ -39,4 +39,8 @@ object DatabaseModule {
     fun propagationDao(context: Context): PropagationDao {
         return database(context).propagationDao()
     }
+
+    fun cacheDao(context: Context): CacheDao {
+        return database(context).cacheDao()
+    }
 }

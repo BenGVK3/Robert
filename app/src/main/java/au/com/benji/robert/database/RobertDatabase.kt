@@ -11,9 +11,17 @@ import androidx.room.TypeConverters
         RepeaterEntity::class,
         MoonDataEntity::class,
         WeatherEntity::class,
-        PropagationHistoryEntity::class
+        PropagationHistoryEntity::class,
+        SolarDataEntity::class,
+        SatelliteEntity::class,
+        DxSpotEntity::class,
+        AprsPacketEntity::class,
+        FavoriteFrequencyEntity::class,
+        FavoriteSdrEntity::class,
+        UserSettingsEntity::class,
+        CallsignCacheEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -25,4 +33,5 @@ abstract class RobertDatabase : RoomDatabase() {
     abstract fun moonDao(): MoonDao
     abstract fun weatherDao(): WeatherDao
     abstract fun propagationDao(): PropagationDao
+    abstract fun cacheDao(): CacheDao
 }

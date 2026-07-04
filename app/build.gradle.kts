@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.maps.compose)
     implementation("com.google.maps.android:maps-compose-utils:6.5.0")
     implementation(libs.play.services.maps)
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)

@@ -1,8 +1,6 @@
 package au.com.benji.robert.repository
 
-import android.content.Context
 import android.util.Log
-import au.com.benji.robert.database.DatabaseProvider
 import au.com.benji.robert.database.RepeaterDao
 import au.com.benji.robert.database.RepeaterEntity
 import au.com.benji.robert.models.Repeater
@@ -16,12 +14,10 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-class RepeaterRepository(private val context: Context) {
+class RepeaterRepository(private val repeaterDao: RepeaterDao) {
     private val TAG = "RepeaterRepository"
-    private val repeaterDao: RepeaterDao = DatabaseProvider.getDatabase(context).repeaterDao()
     private val client = OkHttpClient.Builder().build()
     
-    // Official WIA Repeater Directory CSV URL
     private val WIA_CSV_URL = "https://www.wia.org.au/members/repeaters/data/documents/Repeater%20Directory%20250925.csv"
 
     fun getFavorites(): Flow<List<Repeater>> = repeaterDao.getFavorites().map { entities ->
@@ -41,19 +37,15 @@ class RepeaterRepository(private val context: Context) {
             Log.d(TAG, "Refreshing repeater database from $WIA_CSV_URL")
             val request = Request.Builder()
                 .url(WIA_CSV_URL)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                .header("User-Agent", "Mozilla/5.0")
                 .build()
                 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw Exception("Failed to download CSV: ${response.code}")
-                
                 val inputStream = response.body?.byteStream() ?: throw Exception("Empty response body")
                 val entities = WiaCsvParser.parse(inputStream)
-                
                 if (entities.isNotEmpty()) {
                     updateLocalDatabase(entities)
-                } else {
-                    throw Exception("No repeaters found in CSV")
                 }
             }
         } catch (e: Exception) {
@@ -63,7 +55,6 @@ class RepeaterRepository(private val context: Context) {
     }
 
     private suspend fun updateLocalDatabase(newEntities: List<RepeaterEntity>) {
-        // Preserve favorites and recent status
         val currentFavorites = repeaterDao.getFavorites().first().associateBy { it.callsign + it.frequency }
         val currentRecent = repeaterDao.getRecent().first().associateBy { it.callsign + it.frequency }
         
@@ -78,7 +69,6 @@ class RepeaterRepository(private val context: Context) {
         
         repeaterDao.deleteAll()
         repeaterDao.insertAll(updatedEntities)
-        Log.d(TAG, "Imported ${updatedEntities.size} repeaters from WIA CSV")
     }
 
     suspend fun getNearbyRepeaters(

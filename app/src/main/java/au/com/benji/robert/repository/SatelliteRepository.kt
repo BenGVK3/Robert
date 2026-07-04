@@ -1,14 +1,15 @@
 package au.com.benji.robert.repository
 
 import android.util.Log
+import au.com.benji.robert.database.CacheDao
+import au.com.benji.robert.database.SatelliteEntity
 import au.com.benji.robert.network.ApiService
 import au.com.benji.robert.network.SatelliteCommInfo
 import au.com.benji.robert.network.SatellitePosition
 import au.com.benji.robert.network.SatellitePass
 import au.com.benji.robert.utils.calculateMaidenhead
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -18,15 +19,13 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.*
 
-class SatelliteRepository {
+class SatelliteRepository(private val cacheDao: CacheDao) {
     private val TAG = "SatelliteRepository"
     private val json = Json { ignoreUnknownKeys = true }
 
-    // For range rate calculation
     private var lastDistance: Double? = null
     private var lastTimestamp: Long = 0
 
-    // Hardcoded satellite metadata for hams - Extended with more info for dynamic UI
     val availableSatellites = listOf(
         SatelliteMetadata("25544", "ISS (Zarya)", "FM Repeater / APRS / SSTV", "Amateur", 
             SatelliteCommInfo("145.800", "145.990", "FM/APRS", "Circular", "67.0 Hz")),
@@ -50,8 +49,20 @@ class SatelliteRepository {
         SatelliteMetadata("48274", "CSS (Tianhe)", "Chinese Space Station", "ISS")
     )
 
+    fun getFavoriteSatelliteIds(): Flow<Set<String>> = 
+        cacheDao.getFavoriteSatellites().map { list -> list.map { it.id }.toSet() }
+
+    suspend fun toggleFavorite(id: String) {
+        val metadata = availableSatellites.find { it.id == id } ?: return
+        val current = cacheDao.getFavoriteSatellites().first().find { it.id == id }
+        if (current != null) {
+            cacheDao.updateSatellite(current.copy(isFavorite = !current.isFavorite))
+        } else {
+            cacheDao.insertSatellites(listOf(SatelliteEntity(id, metadata.name, isFavorite = true)))
+        }
+    }
+
     fun getPosition(id: String, userLat: Double, userLon: Double): Flow<SatellitePosition?> = flow {
-        // Reset last data when switching satellites
         lastDistance = null
         lastTimestamp = 0
 
@@ -61,10 +72,10 @@ class SatelliteRepository {
                 response?.let {
                     val raw = json.parseToJsonElement(it).jsonObject
                     
-                    val lat = raw["latitude"]?.jsonPrimitive?.content?.toDoubleOrNull()?.takeIf { !it.isNaN() } ?: 0.0
-                    val lon = raw["longitude"]?.jsonPrimitive?.content?.toDoubleOrNull()?.takeIf { !it.isNaN() } ?: 0.0
-                    val alt = raw["altitude"]?.jsonPrimitive?.content?.toDoubleOrNull()?.takeIf { !it.isNaN() } ?: 0.0
-                    val vel = raw["velocity"]?.jsonPrimitive?.content?.toDoubleOrNull()?.takeIf { !it.isNaN() } ?: 0.0
+                    val lat = raw["latitude"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
+                    val lon = raw["longitude"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
+                    val alt = raw["altitude"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
+                    val vel = raw["velocity"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
                     val vis = raw["visibility"]?.jsonPrimitive?.content ?: "unknown"
                     val metadata = availableSatellites.find { s -> s.id == id }
                     val name = metadata?.name ?: "Unknown"
@@ -72,13 +83,12 @@ class SatelliteRepository {
                     val (az, el) = calculateAzEl(userLat, userLon, 0.0, lat, lon, alt)
                     val dist = calculateDistance(userLat, userLon, 0.0, lat, lon, alt)
                     
-                    // Live Range Rate (Doppler) calculation
                     val now = System.currentTimeMillis()
                     var rangeRate = 0.0
                     if (lastDistance != null && lastTimestamp > 0) {
-                        val dt = (now - lastTimestamp) / 1000.0 // seconds
+                        val dt = (now - lastTimestamp) / 1000.0
                         if (dt > 0) {
-                            rangeRate = ((dist - lastDistance!!) / dt).takeIf { !it.isNaN() } ?: 0.0
+                            rangeRate = (dist - lastDistance!!) / dt
                         }
                     }
                     lastDistance = dist
@@ -87,11 +97,10 @@ class SatelliteRepository {
                     val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     sdf.timeZone = TimeZone.getTimeZone("UTC")
 
-                    // Safety check for footprint calculation to avoid NaN
                     val earthRadius = 6371.0
                     val safeAlt = alt.coerceAtLeast(0.0)
                     val acosArg = (earthRadius / (earthRadius + safeAlt)).coerceIn(-1.0, 1.0)
-                    val footprintVal = if (!acosArg.isNaN()) 12756.2 * acos(acosArg) else 0.0
+                    val footprintVal = 12756.2 * acos(acosArg)
 
                     emit(SatellitePosition(
                         name = name,
@@ -107,7 +116,7 @@ class SatelliteRepository {
                         footprint = footprintVal,
                         distance = dist,
                         orbitNumber = (raw["orbit"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0).toInt(),
-                        inclination = 51.6, // Default for ISS
+                        inclination = 51.6,
                         isSunlit = vis == "daylight",
                         localTime = sdf.format(Date()),
                         gridLocator = calculateMaidenhead(lat, lon),
@@ -116,9 +125,8 @@ class SatelliteRepository {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error fetching position: ${e.message}")
-                emit(null)
             }
-            delay(2000)
+            delay(1000) // 1 second update for high performance tracking
         }
     }
 
@@ -126,8 +134,7 @@ class SatelliteRepository {
         try {
             val url = "https://api.wheretheiss.at/v1/satellites/$id/passes?latitude=$lat&longitude=$lon&days=5"
             val response = ApiService.fetchData(url)
-            response?.let {
-                // Mocking for now as the API response structure for passes varies
+            if (response != null) {
                 val now = System.currentTimeMillis() / 1000
                 val metadata = availableSatellites.find { s -> s.id == id }
                 val mockPasses = listOf(
@@ -153,7 +160,6 @@ class SatelliteRepository {
                 cos(phi1) * cos(phi2) *
                 sin(deltaLambda / 2) * sin(deltaLambda / 2)
         
-        // Use asin for better numerical stability and coerce to avoid NaN
         val c = 2 * asin(sqrt(a.coerceIn(0.0, 1.0)))
         val groundDist = re * c
         
@@ -165,43 +171,29 @@ class SatelliteRepository {
         obsLat: Double, obsLon: Double, obsAlt: Double,
         satLat: Double, satLon: Double, satAlt: Double
     ): Pair<Double, Double> {
-        val re = 6371.0 // Earth radius
-        
+        val re = 6371.0
         val lat1 = Math.toRadians(obsLat)
         val lon1 = Math.toRadians(obsLon)
         val lat2 = Math.toRadians(satLat)
         val lon2 = Math.toRadians(satLon)
-        
         val r1 = re + obsAlt
         val r2 = re + satAlt
-        
         val x1 = r1 * cos(lat1) * cos(lon1)
         val y1 = r1 * cos(lat1) * sin(lon1)
         val z1 = r1 * sin(lat1)
-        
         val x2 = r2 * cos(lat2) * cos(lon2)
         val y2 = r2 * cos(lat2) * sin(lon2)
         val z2 = r2 * sin(lat2)
-        
         val rx = x2 - x1
         val ry = y2 - y1
         val rz = z2 - z1
-        
         val s = -sin(lat1) * cos(lon1) * rx - sin(lat1) * sin(lon1) * ry + cos(lat1) * rz
         val e = -sin(lon1) * rx + cos(lon1) * ry
         val z = cos(lat1) * cos(lon1) * rx + cos(lat1) * sin(lon1) * ry + sin(lat1) * rz
-        
         val range = sqrt(s * s + e * e + z * z)
         val el = if (range > 0) asin((z / range).coerceIn(-1.0, 1.0)) else 0.0
         val az = (atan2(e, s) + 2 * PI) % (2 * PI)
-        
-        val resAz = Math.toDegrees(az)
-        val resEl = Math.toDegrees(el)
-        
-        return Pair(
-            if (resAz.isNaN()) 0.0 else resAz,
-            if (resEl.isNaN()) 0.0 else resEl
-        )
+        return Pair(Math.toDegrees(az), Math.toDegrees(el))
     }
 }
 
