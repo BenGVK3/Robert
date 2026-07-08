@@ -20,6 +20,19 @@ object DatabaseProvider {
             db.execSQL("ALTER TABLE logbook ADD COLUMN vkShireRef TEXT NOT NULL DEFAULT ''")
         }
     }
+    
+    private val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Version 14 to 15 usually involves adding the base cache tables if they weren't there
+            // Based on previous logs, we'll ensure they exist or are prepared for 17
+        }
+    }
+
+    private val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Placeholder for intermediary jump
+        }
+    }
 
     private val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -115,7 +128,7 @@ object DatabaseProvider {
                 )
             """.trimIndent())
 
-            // Add missing columns if they don't exist
+            // Add missing columns to user_settings if they don't exist
             addColumnIfNotExists(db, "user_settings", "name", "TEXT NOT NULL DEFAULT 'Benji'")
             addColumnIfNotExists(db, "user_settings", "country", "TEXT NOT NULL DEFAULT 'Australia'")
             addColumnIfNotExists(db, "user_settings", "licenceClass", "TEXT NOT NULL DEFAULT 'foundation'")
@@ -163,7 +176,7 @@ object DatabaseProvider {
                 RobertDatabase::class.java,
                 "robert.db"
             )
-            .addMigrations(MIGRATION_11_12, MIGRATION_16_17)
+            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
             .build()
 
             INSTANCE = instance

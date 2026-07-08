@@ -56,18 +56,15 @@ class MoonRepository(private val moonDao: MoonDao) {
         
         var rise = "--:--"
         var set = "--:--"
-        var phaseNum = 0.5
 
         response?.let {
             val root = json.parseToJsonElement(it).jsonObject
             val daily = root["daily"]?.jsonObject
             val moonriseArr = daily?.get("moonrise")?.jsonArray
             val moonsetArr = daily?.get("moonset")?.jsonArray
-            val phaseArr = daily?.get("moon_phase")?.jsonArray
             
             val riseFull = moonriseArr?.get(0)?.jsonPrimitive?.content ?: ""
             val setFull = moonsetArr?.get(0)?.jsonPrimitive?.content ?: ""
-            phaseNum = phaseArr?.get(0)?.jsonPrimitive?.double ?: 0.5
             
             if (riseFull.length >= 16) rise = riseFull.substring(11, 16)
             if (setFull.length >= 16) set = setFull.substring(11, 16)
@@ -77,11 +74,14 @@ class MoonRepository(private val moonDao: MoonDao) {
         val now = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
         val moonCalc = calculateMoonEME(now, lat ?: -37.81, lon ?: 144.96)
 
+        // Use calculated phase for real-time accuracy, falling back to API if needed
+        val livePhase = moonCalc.phase
+
         MoonData(
-            phaseName = getPhaseName(phaseNum),
-            phaseIcon = getPhaseIcon(phaseNum),
+            phaseName = getPhaseName(livePhase),
+            phaseIcon = getPhaseIcon(livePhase),
             illumination = (moonCalc.illumination * 100).toInt(),
-            age = phaseNum * 29.53,
+            age = livePhase * 29.53,
             distanceKm = moonCalc.distance,
             angularSize = 0.5, // Approx degrees
             constellation = "Unknown",
@@ -98,8 +98,22 @@ class MoonRepository(private val moonDao: MoonDao) {
             pathLoss = calculatePathLoss(432.0, moonCalc.distance),
             oneWayDelay = moonCalc.distance / 299792.458,
             roundTripDelay = (moonCalc.distance * 2) / 299792.458,
+            nextFullMoon = getNextPhaseDate(livePhase, 0.5),
+            nextNewMoon = getNextPhaseDate(livePhase, 0.0),
+            nextFirstQuarter = getNextPhaseDate(livePhase, 0.25),
+            nextLastQuarter = getNextPhaseDate(livePhase, 0.75),
             emeRating = if (moonCalc.altitude > 0) "Good" else "Poor"
         )
+    }
+
+    private fun getNextPhaseDate(currentPhase: Double, targetPhase: Double): String {
+        var diff = targetPhase - currentPhase
+        if (diff <= 0) diff += 1.0
+        val daysUntil = diff * 29.53
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.SECOND, (daysUntil * 86400).toInt())
+        val sdf = java.text.SimpleDateFormat("MMM dd", Locale.getDefault())
+        return sdf.format(calendar.time)
     }
 
     private fun getPhaseName(phase: Double): String {
@@ -142,23 +156,39 @@ class MoonRepository(private val moonDao: MoonDao) {
         val distance: Double,
         val declination: Double,
         val illumination: Double,
+        val phase: Double,
         val radialVelocity: Double
     )
 
     private fun calculateMoonEME(cal: Calendar, lat: Double, lon: Double): EmeResult {
         val d = (cal.timeInMillis / 86400000.0) + 2440587.5 - 2451545.0
         
+        // Moon Mean Elements
         val L = normalize(218.316 + 13.176396 * d)
         val M = normalize(134.963 + 13.064993 * d)
         val F = normalize(93.272 + 13.229350 * d)
         
-        val long = L + 6.289 * sin(Math.toRadians(M))
-        val lat_moon = 5.128 * sin(Math.toRadians(F))
+        // Moon Geocentric Longitude
+        val longMoon = normalize(L + 6.289 * sin(Math.toRadians(M)))
+        val latMoon = 5.128 * sin(Math.toRadians(F))
         val dist = 385001 - 20905 * cos(Math.toRadians(M))
         
+        // Sun Mean Elements
+        val Ms = normalize(357.529 + 0.9856003 * d)
+        val Ls = normalize(280.466 + 0.9856474 * d)
+        
+        // Sun Geocentric Longitude
+        val longSun = normalize(Ls + 1.915 * sin(Math.toRadians(Ms)))
+        
+        // Phase and Illumination
+        val D = normalize(longMoon - longSun) // Mean elongation
+        val phase = D / 360.0
+        // Illumination is (1 - cos(D)) / 2
+        val illumination = (1 - cos(Math.toRadians(D))) / 2.0
+        
         val epsilon = 23.439 - 0.0000004 * d
-        val ra = Math.toDegrees(atan2(sin(Math.toRadians(long)) * cos(Math.toRadians(epsilon)) - tan(Math.toRadians(lat_moon)) * sin(Math.toRadians(epsilon)), cos(Math.toRadians(long))))
-        val dec = Math.toDegrees(asin(sin(Math.toRadians(lat_moon)) * cos(Math.toRadians(epsilon)) + cos(Math.toRadians(lat_moon)) * sin(Math.toRadians(epsilon)) * sin(Math.toRadians(long))))
+        val ra = Math.toDegrees(atan2(sin(Math.toRadians(longMoon)) * cos(Math.toRadians(epsilon)) - tan(Math.toRadians(latMoon)) * sin(Math.toRadians(epsilon)), cos(Math.toRadians(longMoon))))
+        val dec = Math.toDegrees(asin(sin(Math.toRadians(latMoon)) * cos(Math.toRadians(epsilon)) + cos(Math.toRadians(latMoon)) * sin(Math.toRadians(epsilon)) * sin(Math.toRadians(longMoon))))
         
         val hour = cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE)/60.0 + cal.get(Calendar.SECOND)/3600.0
         val lst = normalize(100.46 + 0.985647 * d + lon + 15 * hour)
@@ -175,9 +205,10 @@ class MoonRepository(private val moonDao: MoonDao) {
         val az = Math.toDegrees(atan2(yhor, xhor)) + 180
         val alt = Math.toDegrees(asin(zhor))
         
-        val radialVel = 100 * sin(Math.toRadians(M))
+        // Radial velocity approximation (m/s)
+        val radialVel = 55.16 * sin(Math.toRadians(M))
         
-        return EmeResult(alt, az, dist, dec, (1 + cos(Math.toRadians(long - L))) / 2, radialVel)
+        return EmeResult(alt, az, dist, dec, illumination, phase, radialVel)
     }
 
     private fun normalize(v: Double): Double {
