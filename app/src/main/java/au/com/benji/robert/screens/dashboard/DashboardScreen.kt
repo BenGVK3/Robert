@@ -158,7 +158,7 @@ fun DashboardScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp)
+                        .height(70.dp)
                         .clip(RoundedCornerShape(12.dp))
                 ) {
                     Image(
@@ -222,7 +222,7 @@ fun DashboardScreen(
                 }
 
                 BandConditionsCard(
-                    modifier = Modifier.weight(0.9f),
+                    modifier = Modifier.weight(0.8f),
                     propagationData = propagationData, 
                     navController = navController
                 )
@@ -242,7 +242,7 @@ fun DashboardScreen(
 
                 // --- BOTTOM DASHBOARD CARDS ---
                 DashboardBottomRow(
-                    modifier = Modifier.weight(1.1f),
+                    modifier = Modifier.weight(0.7f),
                     shackSummary = shackSummary,
                     navController = navController
                 )
@@ -426,6 +426,17 @@ fun MoonStatusCard(modifier: Modifier, moonData: MoonData, moonResId: Int, navCo
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Dist", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
                     Text(String.format("%.0fk", moonData.distanceKm/1000), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+            }
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("Rise", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    Text(moonData.riseTime, style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Set", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    Text(moonData.setTime, style = MaterialTheme.typography.labelSmall, color = Color.White)
                 }
             }
             
@@ -660,32 +671,23 @@ fun BottomDashboardCard(
     Card(
         modifier = modifier.fillMaxHeight().clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = Color(0xFF161C24)),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1C242F))
     ) {
-        Column(modifier = Modifier.padding(4.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(icon, null, modifier = Modifier.size(10.dp), tint = Color(0xFF00B2FF))
-                Text(title, style = MaterialTheme.typography.labelSmall, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(title, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color(0xFF00B2FF))
             }
             
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.Center) {
                 items.forEach { (label, value) ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, color = Color.Gray)
-                        Text(value.toString(), style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = Color.Gray)
+                        Text(value.toString(), style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
-            
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF2D3540)))
-            Text(
-                text = "OPEN",
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 7.sp,
-                color = Color(0xFF00B2FF),
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
@@ -700,15 +702,15 @@ fun DashboardCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = Color(0xFF11171F)),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1C242F))
     ) {
-        Column(modifier = Modifier.padding(8.dp).fillMaxSize()) {
+        Column(modifier = Modifier.padding(6.dp).fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(icon, null, modifier = Modifier.size(12.dp), tint = Color(0xFF00B2FF))
-                Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF00B2FF), letterSpacing = 0.5.sp, fontSize = 8.sp)
+                Icon(icon, null, modifier = Modifier.size(11.dp), tint = Color(0xFF00B2FF))
+                Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color(0xFF00B2FF), letterSpacing = 0.5.sp, fontSize = 8.sp)
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             content()
         }
     }

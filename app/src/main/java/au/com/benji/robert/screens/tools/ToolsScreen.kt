@@ -108,7 +108,7 @@ fun ToolsScreen(
                     }
                     item {
                         ToolGridCard(
-                            title = "Lookup",
+                            title = "Callsign Lookup",
                             icon = Icons.Default.Search,
                             onClick = { activeTool = "Callsign Lookup" }
                         )
@@ -348,7 +348,7 @@ fun PrefixMapTool() {
                 modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Small)
             ) {
-                PrefixRegion.entries.chunked(2).forEach { rowRegions ->
+                PrefixRegion.entries.sortedBy { it.displayName }.chunked(2).forEach { rowRegions ->
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                         rowRegions.forEach { region ->
                             Card(
@@ -435,25 +435,42 @@ fun PrefixMapTool() {
 }
 
 enum class PrefixRegion(val displayName: String, val resId: Int) {
-    OCEANIA_SOUTH("Australia / NZ", R.drawable.oceania_south),
+    WORLD_CQ("CQ Zones (World)", R.drawable.cqzas),
+    NORTH_AMERICA("North America", R.drawable.north_america),
     USA_EAST("USA East (W1-4, 8, 9)", R.drawable.usa_east),
     USA_WEST("USA West (W0, 5, 6, 7)", R.drawable.usa_west),
     CANADA_EAST("Canada East", R.drawable.canada_east),
     CANADA_WEST("Canada West", R.drawable.canada_west),
-    CHINA("China", R.drawable.china),
-    ASIA_EAST("East Asia (JA, HL, BY)", R.drawable.asia_east),
-    ASIA_SOUTH_EAST("South-East Asia", R.drawable.south_east_asia),
+    CARIBBEAN_WEST("Caribbean West", R.drawable.caribbean_west),
+    CARIBBEAN_EAST("Caribbean East", R.drawable.caribbean_east),
+    SOUTH_AMERICA("South America", R.drawable.south_america),
+    SOUTH_AMERICA_EAST("South America East", R.drawable.south_america_east),
+    SOUTH_AMERICA_WEST("South America West", R.drawable.south_america_west),
+    SOUTH_AMERICA_SOUTH("South America South", R.drawable.south_america_south),
+    EUROPE("Europe (All)", R.drawable.europe),
     WEST_EUROPE("Western Europe", R.drawable.western_europe),
     EAST_EUROPE("Eastern Europe", R.drawable.eastern_europe),
     SCANDINAVIA("Scandinavia", R.drawable.scandinavia),
+    MED_WEST("Mediterranean West", R.drawable.mediterranean_west),
+    MED_EAST("Mediterranean East", R.drawable.mediterranean_east),
+    AFRICA("Africa (All)", R.drawable.africa),
+    AFRICA_SOUTH("Southern Africa", R.drawable.southern_africa),
+    AFRICA_EAST("East Africa", R.drawable.east_africa),
+    AFRICA_WEST("West Africa", R.drawable.west_africa),
+    RUSSIA("Russia (All)", R.drawable.russia),
     RUSSIA_WEST("Russia West", R.drawable.russia_west),
     RUSSIA_CENTRAL("Russia Central", R.drawable.russia_central),
     RUSSIA_EAST("Russia East", R.drawable.russia_east),
-    SOUTH_AMERICA("South America", R.drawable.south_america),
-    CARIBBEAN("Caribbean", R.drawable.caribbean_west),
-    AFRICA_NORTH("North Africa", R.drawable.africa),
-    AFRICA_SOUTH("Southern Africa", R.drawable.southern_africa),
     MIDDLE_EAST("Middle East", R.drawable.middle_east),
+    ASIA("Asia (All)", R.drawable.asia),
+    ASIA_EAST("East Asia (JA, HL, BY)", R.drawable.asia_east),
+    ASIA_SOUTH("South Asia", R.drawable.south_asia),
+    ASIA_SOUTH_EAST("South-East Asia", R.drawable.south_east_asia),
+    CHINA("China", R.drawable.china),
+    OCEANIA("Oceania (All)", R.drawable.oceania),
+    OCEANIA_SOUTH("Australia / NZ", R.drawable.oceania_south),
+    OCEANIA_NORTH("Pacific North", R.drawable.oceania_north),
+    OCEANIA_EAST("Pacific East", R.drawable.oceania_east),
     ANTARCTICA("Antarctica", R.drawable.antarctica)
 }
 
@@ -465,7 +482,7 @@ fun findRegionForPrefix(query: String): SearchResult? {
     
     // Detailed matching based on official ITU prefix allocations and specific region maps
     return when {
-        // Australia / NZ
+        // Australia / NZ / Oceania
         q.startsWith("VK1") -> SearchResult(PrefixRegion.OCEANIA_SOUTH, Offset(150f, 300f), 6f)
         q.startsWith("VK2") -> SearchResult(PrefixRegion.OCEANIA_SOUTH, Offset(150f, 250f), 6f)
         q.startsWith("VK3") -> SearchResult(PrefixRegion.OCEANIA_SOUTH, Offset(150f, 450f), 7f)
@@ -476,6 +493,11 @@ fun findRegionForPrefix(query: String): SearchResult? {
         q.startsWith("VK8") -> SearchResult(PrefixRegion.OCEANIA_SOUTH, Offset(-100f, -100f), 5f)
         q.startsWith("VK") -> SearchResult(PrefixRegion.OCEANIA_SOUTH, Offset(0f, 0f), 2f)
         q.startsWith("ZL") -> SearchResult(PrefixRegion.OCEANIA_SOUTH, Offset(600f, 700f), 5f)
+        
+        // Pacific North / East
+        q.startsWith("KH6") || q.startsWith("WH6") -> SearchResult(PrefixRegion.OCEANIA_NORTH, Offset(0f, 0f), 3f)
+        q.startsWith("KH") || q.startsWith("NH") -> SearchResult(PrefixRegion.OCEANIA_NORTH, Offset(0f, 0f), 2f)
+        q.startsWith("FK") -> SearchResult(PrefixRegion.OCEANIA_EAST, Offset(0f, 0f), 3f)
         
         // USA
         q.startsWith("W1") || q.startsWith("K1") || q.startsWith("N1") || q.startsWith("A1") -> SearchResult(PrefixRegion.USA_EAST, Offset(500f, -300f), 7f)
@@ -494,53 +516,46 @@ fun findRegionForPrefix(query: String): SearchResult? {
         q.startsWith("VE1") || q.startsWith("VE2") || q.startsWith("VE3") || q.startsWith("VO") -> SearchResult(PrefixRegion.CANADA_EAST, Offset(0f, 0f), 2f)
         q.startsWith("VE") || q.startsWith("VY") || q.startsWith("CY") -> SearchResult(PrefixRegion.CANADA_WEST, Offset(0f, 0f), 2f)
         
-        // China
-        q.startsWith("BY") || q.startsWith("BT") || q.startsWith("BV") -> SearchResult(PrefixRegion.CHINA, Offset(0f, 0f), 2f)
+        // Caribbean
+        q.startsWith("KP4") || q.startsWith("NP4") || q.startsWith("WP4") -> SearchResult(PrefixRegion.CARIBBEAN_EAST, Offset(0f, 0f), 3f)
+        q.startsWith("CO") || q.startsWith("CM") -> SearchResult(PrefixRegion.CARIBBEAN_WEST, Offset(0f, 0f), 3f)
         
-        // Japan
-        q.startsWith("JA") || q.startsWith("JH") || q.startsWith("JR") -> SearchResult(PrefixRegion.ASIA_EAST, Offset(500f, 300f), 6f)
+        // South America
+        q.startsWith("PY") || q.startsWith("PP") || q.startsWith("PT") || q.startsWith("PU") -> SearchResult(PrefixRegion.SOUTH_AMERICA_EAST, Offset(0f, 0f), 2f)
+        q.startsWith("LU") || q.startsWith("LW") || q.startsWith("AY") -> SearchResult(PrefixRegion.SOUTH_AMERICA_SOUTH, Offset(0f, 0f), 2f)
+        q.startsWith("CE") || q.startsWith("CA") || q.startsWith("CB") -> SearchResult(PrefixRegion.SOUTH_AMERICA_WEST, Offset(0f, 0f), 2f)
+        q.startsWith("YV") || q.startsWith("YY") || q.startsWith("YX") || q.startsWith("HK") -> SearchResult(PrefixRegion.SOUTH_AMERICA, Offset(0f, -500f), 3f)
         
-        // UK & Europe
-        q.startsWith("G") || q.startsWith("M") || q.startsWith("2") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(-300f, -400f), 6f)
-        q.startsWith("F") || q.startsWith("TM") || q.startsWith("TK") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(-100f, 100f), 6f)
-        q.startsWith("DL") || q.startsWith("DA") || q.startsWith("DF") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(300f, -200f), 6f)
-        q.startsWith("EA") || q.startsWith("EB") || q.startsWith("ED") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(-400f, 600f), 5f)
-        q.startsWith("CT") || q.startsWith("CU") || q.startsWith("CR") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(-600f, 500f), 6f)
-        q.startsWith("PA") || q.startsWith("PI") || q.startsWith("PD") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(100f, -400f), 7f)
-        q.startsWith("ON") || q.startsWith("OO") || q.startsWith("OR") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(100f, -300f), 7f)
-        q.startsWith("HB") || q.startsWith("HE") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(200f, 0f), 7f)
+        // Europe
+        q.startsWith("G") || q.startsWith("M") || q.startsWith("2") || q.startsWith("F") || q.startsWith("DL") -> SearchResult(PrefixRegion.WEST_EUROPE, Offset(0f, 0f), 2f)
+        q.startsWith("I") || q.startsWith("IS0") -> SearchResult(PrefixRegion.MED_WEST, Offset(0f, 0f), 3f)
+        q.startsWith("SV") || q.startsWith("SY") || q.startsWith("LZ") || q.startsWith("YO") -> SearchResult(PrefixRegion.EAST_EUROPE, Offset(0f, 0f), 2f)
+        q.startsWith("SV") || q.startsWith("5B") || q.startsWith("TA") -> SearchResult(PrefixRegion.MED_EAST, Offset(0f, 0f), 3f)
         
         // Scandinavia
-        q.startsWith("LA") || q.startsWith("LB") || q.startsWith("LI") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(-400f, -200f), 4f)
-        q.startsWith("SM") || q.startsWith("SK") || q.startsWith("SL") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(-100f, 0f), 4f)
-        q.startsWith("OH") || q.startsWith("OI") || q.startsWith("OF") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(300f, -100f), 4f)
-        q.startsWith("OH") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(300f, -100f), 4f)
-        q.startsWith("OZ") || q.startsWith("OU") || q.startsWith("OV") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(-200f, 400f), 5f)
+        q.startsWith("LA") || q.startsWith("SM") || q.startsWith("OH") || q.startsWith("OZ") -> SearchResult(PrefixRegion.SCANDINAVIA, Offset(0f, 0f), 2f)
         
         // Russia
         q.startsWith("UA9") || q.startsWith("RA9") || q.startsWith("RZ9") -> SearchResult(PrefixRegion.RUSSIA_CENTRAL, Offset(0f, 0f), 2f)
         q.startsWith("UA0") || q.startsWith("RA0") || q.startsWith("RZ0") -> SearchResult(PrefixRegion.RUSSIA_EAST, Offset(0f, 0f), 2f)
         q.startsWith("UA") || q.startsWith("RA") || q.startsWith("RZ") -> SearchResult(PrefixRegion.RUSSIA_WEST, Offset(0f, 0f), 2f)
         
+        // China / Asia
+        q.startsWith("BY") || q.startsWith("BT") || q.startsWith("BV") -> SearchResult(PrefixRegion.CHINA, Offset(0f, 0f), 2f)
+        q.startsWith("JA") || q.startsWith("JH") || q.startsWith("JR") -> SearchResult(PrefixRegion.ASIA_EAST, Offset(0f, 0f), 2f)
+        q.startsWith("VU") || q.startsWith("4S") || q.startsWith("9N") -> SearchResult(PrefixRegion.ASIA_SOUTH, Offset(0f, 0f), 2f)
+        q.startsWith("HS") || q.startsWith("9V") || q.startsWith("YB") -> SearchResult(PrefixRegion.ASIA_SOUTH_EAST, Offset(0f, 0f), 2f)
+        
         // Africa
         q.startsWith("ZS") || q.startsWith("ZR") || q.startsWith("ZT") -> SearchResult(PrefixRegion.AFRICA_SOUTH, Offset(0f, 0f), 2f)
-        q.startsWith("D2") || q.startsWith("D3") -> SearchResult(PrefixRegion.AFRICA_SOUTH, Offset(-200f, -300f), 4f)
-        q.startsWith("V5") -> SearchResult(PrefixRegion.AFRICA_SOUTH, Offset(-200f, 0f), 4f)
-        
-        // South America
-        q.startsWith("PY") || q.startsWith("PP") || q.startsWith("PT") || q.startsWith("PU") -> SearchResult(PrefixRegion.SOUTH_AMERICA, Offset(200f, 0f), 2f)
-        q.startsWith("LU") || q.startsWith("LW") || q.startsWith("AY") -> SearchResult(PrefixRegion.SOUTH_AMERICA, Offset(-100f, 500f), 3f)
-        q.startsWith("CE") || q.startsWith("CA") || q.startsWith("CB") -> SearchResult(PrefixRegion.SOUTH_AMERICA, Offset(-300f, 400f), 3f)
-        q.startsWith("YV") || q.startsWith("YY") || q.startsWith("YX") -> SearchResult(PrefixRegion.SOUTH_AMERICA, Offset(-100f, -500f), 4f)
-        q.startsWith("HK") || q.startsWith("HJ") -> SearchResult(PrefixRegion.SOUTH_AMERICA, Offset(-300f, -500f), 4f)
+        q.startsWith("5Z") || q.startsWith("ET") || q.startsWith("ST") -> SearchResult(PrefixRegion.AFRICA_EAST, Offset(0f, 0f), 2f)
+        q.startsWith("EL") || q.startsWith("TU") || q.startsWith("9G") -> SearchResult(PrefixRegion.AFRICA_WEST, Offset(0f, 0f), 2f)
         
         // Middle East
-        q.startsWith("HZ") || q.startsWith("7Z") || q.startsWith("8Z") -> SearchResult(PrefixRegion.MIDDLE_EAST, Offset(0f, 0f), 3f)
-        q.startsWith("YI") -> SearchResult(PrefixRegion.MIDDLE_EAST, Offset(0f, -300f), 5f)
-        q.startsWith("EP") || q.startsWith("EQ") -> SearchResult(PrefixRegion.MIDDLE_EAST, Offset(400f, -300f), 4f)
+        q.startsWith("HZ") || q.startsWith("7Z") || q.startsWith("4X") || q.startsWith("JY") -> SearchResult(PrefixRegion.MIDDLE_EAST, Offset(0f, 0f), 3f)
         
-        // Mexico
-        q.startsWith("XE") || q.startsWith("XF") -> SearchResult(PrefixRegion.USA_WEST, Offset(0f, 600f), 3f)
+        // Antarctica
+        q.startsWith("KC4") || q.startsWith("8J1") || q.startsWith("DP0") || q.startsWith("RI1") -> SearchResult(PrefixRegion.ANTARCTICA, Offset(0f, 0f), 2f)
 
         else -> null
     }

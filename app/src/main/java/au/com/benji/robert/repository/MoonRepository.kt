@@ -58,16 +58,30 @@ class MoonRepository(private val moonDao: MoonDao) {
         var set = "--:--"
 
         response?.let {
-            val root = json.parseToJsonElement(it).jsonObject
-            val daily = root["daily"]?.jsonObject
-            val moonriseArr = daily?.get("moonrise")?.jsonArray
-            val moonsetArr = daily?.get("moonset")?.jsonArray
-            
-            val riseFull = moonriseArr?.get(0)?.jsonPrimitive?.content ?: ""
-            val setFull = moonsetArr?.get(0)?.jsonPrimitive?.content ?: ""
-            
-            if (riseFull.length >= 16) rise = riseFull.substring(11, 16)
-            if (setFull.length >= 16) set = setFull.substring(11, 16)
+            try {
+                val root = json.parseToJsonElement(it).jsonObject
+                val daily = root["daily"]?.jsonObject
+                val moonriseArr = daily?.get("moonrise")?.jsonArray
+                val moonsetArr = daily?.get("moonset")?.jsonArray
+                
+                // Safely find first valid rise/set
+                moonriseArr?.forEach { element ->
+                    val r = (element as? JsonPrimitive)?.content ?: ""
+                    if (r.length >= 16) {
+                        rise = r.substring(11, 16)
+                        return@forEach
+                    }
+                }
+                moonsetArr?.forEach { element ->
+                    val s = (element as? JsonPrimitive)?.content ?: ""
+                    if (s.length >= 16) {
+                        set = s.substring(11, 16)
+                        return@forEach
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback will keep placeholders
+            }
         }
 
         // Real-time calculations for EME

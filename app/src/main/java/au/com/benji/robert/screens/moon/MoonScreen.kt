@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,22 +43,17 @@ fun MoonScreen(
             .fillMaxSize()
             .padding(paddingValues)
             .padding(Spacing.Medium),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+        verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                Icon(
-                    imageVector = Icons.Default.Brightness2,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Moon (EME) Center",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Text(
+                text = "Moon (EME/Moonbounce)",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         item {
