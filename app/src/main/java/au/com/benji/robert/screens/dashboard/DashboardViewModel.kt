@@ -209,11 +209,27 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         )
 
     val shackSummary = equipment.map { gear ->
-        gear.groupBy { it.category }.mapValues { it.value.size }
+        val radios = gear.count { 
+            it.category.equals("Radio", ignoreCase = true) || 
+            it.category.equals("SDR", ignoreCase = true) ||
+            it.category.contains("Rig", ignoreCase = true) ||
+            it.category.contains("Transceiver", ignoreCase = true)
+        }
+        val antennas = gear.count { 
+            it.category.equals("Antenna", ignoreCase = true) ||
+            it.category.contains("Aerial", ignoreCase = true) ||
+            it.category.equals("Antenna Tuner", ignoreCase = true)
+        }
+        mapOf(
+            "Radio" to radios,
+            "Antenna" to antennas,
+            "Total" to gear.size,
+            "Other" to (gear.size - radios - antennas).coerceAtLeast(0)
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyMap()
+        initialValue = mapOf("Radio" to 0, "Antenna" to 0, "Total" to 0, "Other" to 0)
     )
 
     val logs = logRepository.getAllLogs()

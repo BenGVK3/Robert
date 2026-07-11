@@ -80,7 +80,9 @@ fun RobertApp() {
     ) { innerPadding ->
         RobertNavHost(
             navController = navController,
-            paddingValues = innerPadding
+            paddingValues = innerPadding,
+            onShowDxSpots = { showDxSpots = true },
+            onShowShack = { showShack = true }
         )
         
         if (showCommandCenter) {

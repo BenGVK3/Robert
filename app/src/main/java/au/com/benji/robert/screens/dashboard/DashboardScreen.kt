@@ -20,6 +20,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -59,6 +60,8 @@ import java.util.*
 fun DashboardScreen(
     navController: NavHostController,
     paddingValues: PaddingValues,
+    onShowDxSpots: () -> Unit = {},
+    onShowShack: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
@@ -195,7 +198,7 @@ fun DashboardScreen(
                 // --- MAIN GRID ---
                 Row(modifier = Modifier.weight(1.3f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OperatingConditionsCard(
-                        modifier = Modifier.weight(1.1f),
+                        modifier = Modifier.weight(1.1f).clickable { navController.navigate(Screen.Propagation.route) },
                         solarData = solarData,
                         muf = mufResult.value
                     )
@@ -231,7 +234,7 @@ fun DashboardScreen(
                     RecentDxSpotsCard(
                         modifier = Modifier.weight(1f),
                         spots = dxSpots.take(5),
-                        navController = navController
+                        onClick = onShowDxSpots
                     )
                     LatestLogCard(
                         modifier = Modifier.weight(1f),
@@ -244,6 +247,7 @@ fun DashboardScreen(
                 DashboardBottomRow(
                     modifier = Modifier.weight(0.7f),
                     shackSummary = shackSummary,
+                    onShowShack = onShowShack,
                     navController = navController
                 )
             }
@@ -462,13 +466,34 @@ fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, upcomingPasses:
     ) {
         Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Satellite Image/Icon
+                val satImageUrl = remember(nextPass?.name) {
+                    val name = nextPass?.name?.lowercase() ?: ""
+                    when {
+                        name.contains("iss") -> "https://www.nasa.gov/wp-content/uploads/2023/03/iss_pos_11-10-22_v2.png"
+                        name.contains("so-50") || name.contains("saudisat") -> "https://www.amsat.org/wp-content/uploads/2014/01/so50-photo.jpg"
+                        name.contains("ao-91") || name.contains("radfxsat") -> "https://www.amsat.org/wp-content/uploads/2017/11/AO-91_RadFxSat_400.jpg"
+                        name.contains("ao-7") -> "https://www.amsat.org/wp-content/uploads/2014/01/ao7.jpg"
+                        name.contains("noaa") -> "https://www.noaa.gov/sites/default/files/styles/landscape_width_650/public/2021-02/Satellite-NOAA-19-Artist-Rendering-Off-Earth.jpg"
+                        else -> "https://www.amsat.org/wp-content/uploads/2014/01/sat-icon.png"
+                    }
+                }
+
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .background(Color(0xFF1E2632), RoundedCornerShape(4.dp)),
+                        .size(36.dp)
+                        .background(Color(0xFF1E2632), RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(6.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Satellite, null, tint = Color(0xFF00B2FF), modifier = Modifier.size(20.dp))
+                    coil.compose.AsyncImage(
+                        model = satImageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp), // Slightly smaller than the box
+                        contentScale = ContentScale.Fit,
+                        error = painterResource(au.com.benji.robert.R.drawable.satellites1),
+                        placeholder = painterResource(au.com.benji.robert.R.drawable.satellites1)
+                    )
                 }
                 
                 Column(modifier = Modifier.weight(1f)) {
@@ -588,9 +613,9 @@ fun BandMiniGraph(modifier: Modifier, band: BandCondition) {
 }
 
 @Composable
-fun RecentDxSpotsCard(modifier: Modifier, spots: List<DxSpot>, navController: NavHostController) {
+fun RecentDxSpotsCard(modifier: Modifier, spots: List<DxSpot>, onClick: () -> Unit) {
     DashboardCard(
-        modifier = modifier.clickable { navController.navigate(Screen.Propagation.route) },
+        modifier = modifier.clickable { onClick() },
         title = "DX SPOTS",
         icon = Icons.Default.Language
     ) {
@@ -629,6 +654,7 @@ fun LatestLogCard(modifier: Modifier, log: LogEntryEntity?, navController: NavHo
 fun DashboardBottomRow(
     modifier: Modifier = Modifier,
     shackSummary: Map<String, Int>,
+    onShowShack: () -> Unit,
     navController: NavHostController
 ) {
     Row(
@@ -636,7 +662,11 @@ fun DashboardBottomRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         val bottomCards = listOf(
-            Triple("SHACK", Icons.Default.Home, listOf("Rad" to (shackSummary["Radio"] ?: 0), "Ant" to (shackSummary["Antenna"] ?: 0))),
+            Triple("SHACK", Icons.Default.Home, listOf(
+                "Rad" to (shackSummary["Radio"] ?: 0), 
+                "Ant" to (shackSummary["Antenna"] ?: 0),
+                "Gear" to (shackSummary["Total"] ?: 0)
+            )),
             Triple("APRS", Icons.Default.LocationOn, listOf("Pkt" to 128, "Near" to "2.1k")),
             Triple("KIWI", Icons.Default.Wifi, listOf("Lsn" to 12, "Lat" to "42ms")),
             Triple("FAV", Icons.Default.Star, listOf("Sat" to 3, "Rpt" to 2)),
@@ -644,17 +674,22 @@ fun DashboardBottomRow(
         )
 
         bottomCards.forEach { (title, icon, items) ->
-            val route = when(title) {
-                "APRS" -> Screen.Aprs.route
-                "KIWI" -> Screen.Sdr.route
-                else -> Screen.Tools.route // Fallback
+            val isEnabled = title != "FAV" && title != "ALRT"
+            
+            val onClick = when(title) {
+                "SHACK" -> onShowShack
+                "APRS" -> { { navController.navigate(Screen.Aprs.route) } }
+                "KIWI" -> { { navController.navigate(Screen.Sdr.route) } }
+                else -> { {} }
             }
+
             BottomDashboardCard(
                 modifier = Modifier.weight(1f),
                 title = title,
                 icon = icon,
                 items = items,
-                onClick = { navController.navigate(route) }
+                onClick = onClick,
+                enabled = isEnabled
             )
         }
     }
@@ -666,18 +701,41 @@ fun BottomDashboardCard(
     title: String,
     icon: ImageVector,
     items: List<Pair<String, Any?>>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     Card(
-        modifier = modifier.fillMaxHeight().clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161C24)),
+        modifier = modifier
+            .fillMaxHeight()
+            .then(if (enabled) Modifier.clickable { onClick() } else Modifier),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF161C24),
+            contentColor = if (enabled) Color.Unspecified else Color.Gray
+        ),
         shape = RoundedCornerShape(8.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1C242F))
     ) {
-        Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp).fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .fillMaxSize()
+                .then(if (!enabled) Modifier.alpha(0.5f) else Modifier),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(icon, null, modifier = Modifier.size(10.dp), tint = Color(0xFF00B2FF))
-                Text(title, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color(0xFF00B2FF))
+                Icon(
+                    icon, 
+                    null, 
+                    modifier = Modifier.size(10.dp), 
+                    tint = if (enabled) Color(0xFF00B2FF) else Color.Gray
+                )
+                Text(
+                    title, 
+                    style = MaterialTheme.typography.labelSmall, 
+                    fontSize = 9.sp, 
+                    fontWeight = FontWeight.Black, 
+                    color = if (enabled) Color(0xFF00B2FF) else Color.Gray
+                )
             }
             
             Column(verticalArrangement = Arrangement.Center) {

@@ -26,6 +26,8 @@ import au.com.benji.robert.screens.repeater.RepeaterDetailScreen
 fun RobertNavHost(
     navController: NavHostController,
     paddingValues: PaddingValues,
+    onShowDxSpots: () -> Unit = {},
+    onShowShack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
 
@@ -36,7 +38,12 @@ fun RobertNavHost(
     ) {
 
         composable(Screen.Dashboard.route) {
-            DashboardScreen(navController, paddingValues)
+            DashboardScreen(
+                navController = navController,
+                paddingValues = paddingValues,
+                onShowDxSpots = onShowDxSpots,
+                onShowShack = onShowShack
+            )
         }
 
         composable(Screen.Propagation.route) {
