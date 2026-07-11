@@ -66,6 +66,7 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val callsign by viewModel.callsign.collectAsStateWithLifecycle()
+    val name by viewModel.name.collectAsStateWithLifecycle()
     val locationData by viewModel.locationFlow.collectAsStateWithLifecycle()
     val solarData by viewModel.solarData.collectAsStateWithLifecycle()
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
@@ -193,7 +194,7 @@ fun DashboardScreen(
                 }
 
                 // --- GREETING & WEATHER ---
-                GreetingSection(weatherData)
+                GreetingSection(name, weatherData)
 
                 // --- MAIN GRID ---
                 Row(modifier = Modifier.weight(1.3f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -305,7 +306,7 @@ fun HeaderSection(modifier: Modifier = Modifier, callsign: String, gridSquare: S
 }
 
 @Composable
-fun GreetingSection(weather: DetailedWeather?) {
+fun GreetingSection(name: String, weather: DetailedWeather?) {
     val calendar = Calendar.getInstance()
     val hour = calendar.get(Calendar.HOUR_OF_DAY)
     val greeting = when (hour) {
@@ -324,7 +325,7 @@ fun GreetingSection(weather: DetailedWeather?) {
     ) {
         Column {
             Text(
-                text = "$greeting, Benji", 
+                text = if (name.isNotEmpty()) "$greeting, $name" else greeting,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -464,56 +465,67 @@ fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, upcomingPasses:
         title = "NEXT SATELLITE",
         icon = Icons.Default.SatelliteAlt
     ) {
-        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Satellite Image/Icon
-                val satImageUrl = remember(nextPass?.name) {
-                    val name = nextPass?.name?.lowercase() ?: ""
-                    when {
-                        name.contains("iss") -> "https://www.nasa.gov/wp-content/uploads/2023/03/iss_pos_11-10-22_v2.png"
-                        name.contains("so-50") || name.contains("saudisat") -> "https://www.amsat.org/wp-content/uploads/2014/01/so50-photo.jpg"
-                        name.contains("ao-91") || name.contains("radfxsat") -> "https://www.amsat.org/wp-content/uploads/2017/11/AO-91_RadFxSat_400.jpg"
-                        name.contains("ao-7") -> "https://www.amsat.org/wp-content/uploads/2014/01/ao7.jpg"
-                        name.contains("noaa") -> "https://www.noaa.gov/sites/default/files/styles/landscape_width_650/public/2021-02/Satellite-NOAA-19-Artist-Rendering-Off-Earth.jpg"
-                        else -> "https://www.amsat.org/wp-content/uploads/2014/01/sat-icon.png"
+        if (nextPass == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "No upcoming passes",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Satellite Image/Icon
+                    val satImageUrl = remember(nextPass.name) {
+                        val name = nextPass.name.lowercase()
+                        when {
+                            name.contains("iss") -> "https://www.nasa.gov/wp-content/uploads/2023/03/iss_pos_11-10-22_v2.png"
+                            name.contains("so-50") || name.contains("saudisat") -> "https://www.amsat.org/wp-content/uploads/2014/01/so50-photo.jpg"
+                            name.contains("ao-91") || name.contains("radfxsat") -> "https://www.amsat.org/wp-content/uploads/2017/11/AO-91_RadFxSat_400.jpg"
+                            name.contains("ao-7") -> "https://www.amsat.org/wp-content/uploads/2014/01/ao7.jpg"
+                            name.contains("noaa") -> "https://www.noaa.gov/sites/default/files/styles/landscape_width_650/public/2021-02/Satellite-NOAA-19-Artist-Rendering-Off-Earth.jpg"
+                            else -> "https://www.amsat.org/wp-content/uploads/2014/01/sat-icon.png"
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color(0xFF1E2632), RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(6.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        coil.compose.AsyncImage(
+                            model = satImageUrl,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp), // Slightly smaller than the box
+                            contentScale = ContentScale.Fit,
+                            error = painterResource(au.com.benji.robert.R.drawable.satellites1),
+                            placeholder = painterResource(au.com.benji.robert.R.drawable.satellites1)
+                        )
+                    }
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(nextPass.name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("AOS: ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nextPass.startTime * 1000))}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    }
+                    
+                    Column(horizontalAlignment = Alignment.End) {
+                        val timerText = if (nextPassTimer.contains("In ")) nextPassTimer.substringAfter("In ").substringBefore("s") else "--m"
+                        Text(timerText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFFA680FF))
+                        Text("TO AOS", style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, color = Color.Gray)
                     }
                 }
-
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(Color(0xFF1E2632), RoundedCornerShape(6.dp))
-                        .clip(RoundedCornerShape(6.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    coil.compose.AsyncImage(
-                        model = satImageUrl,
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp), // Slightly smaller than the box
-                        contentScale = ContentScale.Fit,
-                        error = painterResource(au.com.benji.robert.R.drawable.satellites1),
-                        placeholder = painterResource(au.com.benji.robert.R.drawable.satellites1)
-                    )
-                }
                 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(nextPass?.name ?: "ISS (Zarya)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("AOS: ${nextPass?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it.startTime * 1000)) } ?: "17:42"}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
-                }
-                
-                Column(horizontalAlignment = Alignment.End) {
-                    val timerText = if (nextPassTimer.contains("In ")) nextPassTimer.substringAfter("In ").substringBefore("s") else "--m"
-                    Text(timerText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFFA680FF))
-                    Text("TO AOS", style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, color = Color.Gray)
-                }
+                Text(
+                    text = "Max El: ${nextPass.maxElevation.toInt()}° • Duration: ${nextPass.duration / 60}m",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    fontSize = 8.sp
+                )
             }
-            
-            Text(
-                text = "Max El: ${nextPass?.maxElevation?.toInt() ?: 53}° • Duration: ${nextPass?.duration?.let { "${it/60}m" } ?: "9m"}",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray,
-                fontSize = 8.sp
-            )
         }
     }
 }
@@ -525,20 +537,31 @@ fun FavoriteRepeaterCard(modifier: Modifier, repeater: Repeater?, navController:
         title = "FAV REPEATER",
         icon = Icons.Default.Podcasts
     ) {
-        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text(repeater?.callsign ?: "VK3RLV", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text("${repeater?.frequency ?: "146.80"} MHz ${repeater?.mode ?: "FM"}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
-                }
-                StatusBadge("ONLINE", Color(0xFF4CAF50))
+        if (repeater == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "No favorites set",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
             }
-            Text(
-                text = "${repeater?.town ?: "Mt Tassie"} • ${String.format("%.1fkm", repeater?.distance ?: 52.6)} SW",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray,
-                fontSize = 8.sp
-            )
+        } else {
+            Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Text(repeater.callsign, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("${repeater.frequency} MHz ${repeater.mode}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    }
+                    StatusBadge("ONLINE", Color(0xFF4CAF50))
+                }
+                Text(
+                    text = "${repeater.town} • ${String.format("%.1fkm", repeater.distance)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    fontSize = 8.sp
+                )
+            }
         }
     }
 }
@@ -639,13 +662,24 @@ fun LatestLogCard(modifier: Modifier, log: LogEntryEntity?, navController: NavHo
         title = "LATEST LOG",
         icon = Icons.Default.Book
     ) {
-        Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(log?.callsign ?: "VK3WRE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
-                Text(log?.band ?: "40m", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+        if (log == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "No logs yet",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
             }
-            Text("${log?.mode ?: "SSB"} • ${log?.frequency ?: "7100"}k • ${log?.power ?: "10"}W", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
-            Text(if (log != null && log.name.isNotEmpty()) log.name else "Ralph, VIC", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00B2FF), fontSize = 8.sp, maxLines = 1)
+        } else {
+            Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(log.callsign, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(log.band, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                }
+                Text("${log.mode} • ${log.frequency}k • ${log.power}W", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                Text(if (log.name.isNotEmpty()) log.name else "---", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00B2FF), fontSize = 8.sp, maxLines = 1)
+            }
         }
     }
 }

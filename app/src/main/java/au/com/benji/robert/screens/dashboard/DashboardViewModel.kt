@@ -68,6 +68,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         initialValue = "VK3XYZ"
     )
 
+    val name = settingsRepository.name.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ""
+    )
+
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true

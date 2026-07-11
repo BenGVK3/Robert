@@ -129,7 +129,7 @@ object DatabaseProvider {
             """.trimIndent())
 
             // Add missing columns to user_settings if they don't exist
-            addColumnIfNotExists(db, "user_settings", "name", "TEXT NOT NULL DEFAULT 'Benji'")
+            addColumnIfNotExists(db, "user_settings", "name", "TEXT NOT NULL DEFAULT ''")
             addColumnIfNotExists(db, "user_settings", "country", "TEXT NOT NULL DEFAULT 'Australia'")
             addColumnIfNotExists(db, "user_settings", "licenceClass", "TEXT NOT NULL DEFAULT 'foundation'")
             addColumnIfNotExists(db, "user_settings", "kiwisdrUrl", "TEXT NOT NULL DEFAULT 'http://kiwisdr.com/public/'")

@@ -18,7 +18,7 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "VK3XYZ")
 
     val name: StateFlow<String> = repository.name
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Benji")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     val gridSquare: StateFlow<String> = repository.gridSquare
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "QF22og")

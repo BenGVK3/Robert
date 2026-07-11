@@ -92,7 +92,7 @@ data class CallsignCacheEntity(
 data class UserSettingsEntity(
     @PrimaryKey val id: Int = 0, // Singleton
     val callsign: String = "VK3XYZ",
-    val name: String = "Benji",
+    val name: String = "",
     val gridSquare: String = "",
     val country: String = "Australia",
     val licenceClass: String = "foundation",
