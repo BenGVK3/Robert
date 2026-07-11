@@ -12,21 +12,22 @@ object MufCalculator {
     data class MufResult(
         val value: Double,
         val isEstimated: Boolean,
-        val confidence: Confidence
+        val confidence: Confidence,
+        val foF2: Double = 0.0
     )
 
     fun calculateMuf(solarData: SolarData, lat: Double? = null, lon: Double? = null): MufResult {
-        val reportedValue = solarData.muf.replace(" MHz", "").toDoubleOrNull()
+        val reportedMuf = solarData.muf.replace(" MHz", "").toDoubleOrNull()
+        val reportedFoF2 = solarData.foF2.replace(" MHz", "").toDoubleOrNull()
         
-        if (reportedValue != null && solarData.muf != "NoRpt" && solarData.muf != "---") {
-            return MufResult(reportedValue, false, Confidence.High)
+        if (reportedMuf != null && solarData.muf != "NoRpt" && solarData.muf != "---") {
+            return MufResult(reportedMuf, false, Confidence.High, reportedFoF2 ?: (reportedMuf / 3.1))
         }
         
         // Estimate MUF
         // 1. Try foF2 if available
-        val foF2 = solarData.foF2.replace(" MHz", "").toDoubleOrNull()
-        if (foF2 != null && foF2 > 1.0) {
-            return MufResult(foF2 * 3.1, true, Confidence.High)
+        if (reportedFoF2 != null && reportedFoF2 > 1.0) {
+            return MufResult(reportedFoF2 * 3.1, true, Confidence.High, reportedFoF2)
         }
         
         // 2. Use SFI, K-Index and Time of Day
@@ -82,11 +83,11 @@ object MufCalculator {
         val confidence = when {
             k > 4 -> Confidence.Low
             sfi < 70 -> Confidence.Medium
-            foF2 != null && foF2 > 0 -> Confidence.High
+            reportedFoF2 != null && reportedFoF2 > 0 -> Confidence.High
             else -> Confidence.Medium
         }
         
-        return MufResult(estimatedMuf, true, confidence)
+        return MufResult(estimatedMuf, true, confidence, reportedFoF2 ?: (estimatedMuf / 3.1))
     }
     
     private fun isDaytime(lat: Double?, lon: Double?): Boolean {

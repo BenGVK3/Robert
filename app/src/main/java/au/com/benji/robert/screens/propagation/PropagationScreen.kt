@@ -241,7 +241,18 @@ fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult, aurora: A
                 ) {
                     Column(modifier = Modifier.padding(Spacing.Small)) {
                         Text("foF2", style = MaterialTheme.typography.labelSmall)
-                        Text(data.foF2, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                text = String.format("%.1f", mufResult.foF2),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = " MHz",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -368,7 +379,56 @@ fun BandConditionCard(band: BandCondition, modifier: Modifier = Modifier) {
                     fontSize = 10.sp
                 )
             }
+
+            if (band.summaries.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    band.summaries.forEach { summary ->
+                        OperatingSummaryRow(summary)
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+fun OperatingSummaryRow(summary: au.com.benji.robert.repository.propagation.OperatingSummary) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = summary.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            fontSize = 9.sp,
+            maxLines = 1
+        )
+        
+        val ratingColor = when (summary.rating) {
+            "Excellent" -> Color(0xFF4CAF50)
+            "Very Good" -> Color(0xFF4CAF50)
+            "Good" -> Color(0xFF8BC34A)
+            "Fair" -> Color(0xFFFFC107)
+            "Poor" -> Color(0xFFF44336)
+            else -> MaterialTheme.colorScheme.outline
+        }
+
+        Text(
+            text = summary.rating,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = ratingColor,
+            fontSize = 9.sp
+        )
     }
 }
 

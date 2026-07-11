@@ -9,7 +9,15 @@ data class BandCondition(
     val trend: String, // Improving, Stable, Declining
     val score: Int = 0,
     val color: String = "#CCCCCC",
-    val history: List<Int> = emptyList()
+    val history: List<Int> = emptyList(),
+    val summaries: List<OperatingSummary> = emptyList()
+)
+
+@Serializable
+data class OperatingSummary(
+    val label: String,
+    val rating: String, // Poor, Fair, Good, Excellent
+    val icon: String = "" // Optional icon or emoji
 )
 
 @Serializable

@@ -3,7 +3,9 @@ package au.com.benji.robert.utils
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.repository.propagation.AuroraReport
 import au.com.benji.robert.repository.propagation.ESkipReport
+import au.com.benji.robert.repository.propagation.OperatingSummary
 import java.util.Calendar
+import kotlin.math.exp
 import kotlin.math.roundToInt
 
 object PropagationCalculator {
@@ -12,7 +14,8 @@ object PropagationCalculator {
         val band: String,
         val score: Int,
         val rating: String,
-        val colorHex: String
+        val colorHex: String,
+        val summaries: List<OperatingSummary> = emptyList()
     )
 
     fun calculateESkip(
@@ -148,31 +151,177 @@ object PropagationCalculator {
         muf: Double,
         lat: Double?,
         lon: Double?,
-        sunrise: String?, // HH:mm
-        sunset: String?   // HH:mm
+        sunrise: String?,
+        sunset: String?
     ): List<BandScore> {
         val sfi = solarData.solarFlux
         val k = solarData.kIndex
         val a = solarData.aIndex
         val isDay = isDaytime(lat, lon, sunrise, sunset)
-        val isGoldenHour = isNearSunriseOrSunset(sunrise, sunset)
         val sporadicE = solarData.eSkip.contains("Strong") || solarData.eSkip.contains("Moderate")
 
-        return listOf(
-            calculate160m(isDay, k, a, sfi, muf),
-            calculate80m(isDay, k, a, sfi),
-            calculate40m(isDay, isGoldenHour, k, muf),
-            calculate30m(sfi, muf, k, a, isDay),
-            calculate20m(sfi, muf, k, a, isDay),
-            calculate17m(sfi, muf, k, isDay),
-            calculate15m(sfi, muf, k),
-            calculate12m(sfi, muf, k),
-            calculate10m(sfi, muf, k, isDay),
-            calculate6m(muf, sporadicE, k)
+        val bands = listOf(
+            BandInfo("160m", 1.8),
+            BandInfo("80m", 3.5),
+            BandInfo("40m", 7.1),
+            BandInfo("30m", 10.1),
+            BandInfo("20m", 14.2),
+            BandInfo("17m", 18.1),
+            BandInfo("15m", 21.2),
+            BandInfo("12m", 24.9),
+            BandInfo("10m", 28.5),
+            BandInfo("6m", 50.1)
         )
+
+        return bands.map { info ->
+            calculateScoreForBand(info, sfi, muf, k, a, isDay, sporadicE)
+        }
     }
 
-    private fun clamp(score: Double): Int = score.roundToInt().coerceIn(0, 100)
+    private data class BandInfo(val name: String, val centerFreq: Double)
+
+    private fun calculateScoreForBand(
+        info: BandInfo,
+        sfi: Int,
+        muf: Double,
+        k: Int,
+        a: Int,
+        isDay: Boolean,
+        sporadicE: Boolean
+    ): BandScore {
+        // 1. SFI Component (35%)
+        val sfiScore = ((sfi.toDouble() - 60.0) / 200.0 * 100.0).coerceIn(0.0, 100.0)
+        
+        // 2. MUF Component (35%)
+        // Sigmoid function to create a realistic drop-off when MUF is below band
+        val mufRatio = muf / info.centerFreq
+        val mufScore = (100.0 / (1.0 + exp(-10.0 * (mufRatio - 0.9)))).coerceIn(0.0, 100.0)
+        
+        // 3. K-Index Component (15%) - Impact increases with frequency generally, 
+        // but high K is bad for all DX.
+        val kImpact = if (info.centerFreq < 10.0) (k * 8.0) else (k * 12.0)
+        val kScore = (100.0 - kImpact).coerceIn(0.0, 100.0)
+        
+        // 4. A-Index Component (10%)
+        val aScore = (100.0 - (a * 2.0)).coerceIn(0.0, 100.0)
+        
+        // 5. Day/Night Component (5%)
+        val isLowBand = info.centerFreq < 10.0
+        val dayNightScore = if (isLowBand) {
+            if (!isDay) 100.0 else 20.0
+        } else {
+            if (isDay) 100.0 else 30.0
+        }
+
+        // Weighted Average
+        var baseScore = (sfiScore * 0.35) + (mufScore * 0.35) + (kScore * 0.15) + (aScore * 0.10) + (dayNightScore * 0.05)
+
+        // Band Specific Refinements
+        baseScore = adjustBandSpecifics(info, baseScore, isDay, muf, sfi, sporadicE)
+
+        val finalScore = baseScore.roundToInt().coerceIn(0, 100)
+        val rating = getRating(finalScore)
+        val color = getColor(finalScore)
+        
+        val summaries = calculateSummaries(info, sfi, muf, k, a, isDay, sporadicE)
+
+        return BandScore(info.name, finalScore, rating, color, summaries)
+    }
+
+    private fun adjustBandSpecifics(info: BandInfo, score: Double, isDay: Boolean, muf: Double, sfi: Int, sporadicE: Boolean): Double {
+        var adjusted = score
+        when (info.name) {
+            "160m" -> {
+                if (isDay) adjusted *= 0.2 // Strong D-layer absorption
+                else adjusted *= 1.2 // Best at night
+                if (muf > 15) adjusted *= 0.8
+            }
+            "80m" -> {
+                if (isDay) adjusted *= 0.3
+                else adjusted *= 1.1 // Strong after sunset
+            }
+            "40m" -> {
+                if (isDay) adjusted *= 0.7 
+                else adjusted *= 1.2 // Excellent at night
+            }
+            "15m" -> {
+                if (muf < 23.0) adjusted *= 0.6
+                if (sfi < 140) adjusted *= 0.8
+            }
+            "12m" -> {
+                if (muf < 26.0) adjusted *= 0.5
+            }
+            "10m" -> {
+                if (muf < 30.0) adjusted *= 0.4
+                if (sfi < 150) adjusted *= 0.7
+            }
+            "6m" -> {
+                adjusted = if (muf > 48.0) adjusted else (if (sporadicE) 65.0 else 10.0)
+            }
+        }
+        
+        // General MUF Hard Cutoff for high bands
+        if (info.centerFreq > 14.0 && muf < info.centerFreq * 0.9) {
+            adjusted *= 0.4
+        }
+        
+        return adjusted
+    }
+
+    private fun calculateSummaries(
+        info: BandInfo,
+        sfi: Int,
+        muf: Double,
+        k: Int,
+        a: Int,
+        isDay: Boolean,
+        sporadicE: Boolean
+    ): List<OperatingSummary> {
+        val summaries = mutableListOf<OperatingSummary>()
+        
+        val isLowBand = info.centerFreq < 10.0
+        val mufRatio = muf / info.centerFreq
+        
+        // 1. Long-haul DX
+        val dxScore = when {
+            k > 4 || a > 20 -> 10.0
+            info.name == "6m" -> if (muf > 48.0 || sporadicE) 60.0 else 5.0
+            info.name == "160m" && isDay -> 0.0
+            info.name == "160m" && !isDay -> scoreComponent(sfi.toDouble(), 70, 200) * 0.3 + 60.0
+            isLowBand && isDay -> 15.0
+            isLowBand && !isDay -> scoreComponent(sfi.toDouble(), 70, 200) * 0.4 + 50.0
+            else -> (scoreComponent(sfi.toDouble(), 80, 250) * 0.5 + scoreComponent(mufRatio, 0.9, 1.3) * 0.5)
+        }
+        summaries.add(OperatingSummary("🌍 Long-haul DX", getRating(dxScore.toInt())))
+
+        // 2. Regional / Local
+        val localScore = when {
+            isLowBand && isDay -> 70.0 - (k * 5)
+            isLowBand && !isDay -> 95.0 - (k * 3)
+            !isLowBand && isDay -> 60.0 * mufRatio.coerceAtMost(1.0)
+            else -> 20.0
+        }
+        val localLabel = if (isLowBand) "🏠 NVIS / Local" else "🇦🇺 Australia-wide"
+        summaries.add(OperatingSummary(localLabel, getRating(localScore.toInt())))
+
+        // 3. Digital (FT8/FT4) - More resilient to noise
+        val digiScore = (dxScore * 1.2).coerceAtMost(100.0)
+        summaries.add(OperatingSummary("📡 Digital (FT8/FT4)", getRating(digiScore.toInt())))
+        
+        // 4. SSB - Needs better SNR
+        val ssbScore = (dxScore * 0.8).coerceAtMost(100.0)
+        summaries.add(OperatingSummary("🎙️ SSB", getRating(ssbScore.toInt())))
+
+        // 5. CW - Middle ground
+        val cwScore = (dxScore * 1.0).coerceAtMost(100.0)
+        summaries.add(OperatingSummary("⚡ CW", getRating(cwScore.toInt())))
+
+        return summaries
+    }
+
+    private fun scoreComponent(value: Double, min: Number, max: Number): Double {
+        return ((value - min.toDouble()) / (max.toDouble() - min.toDouble()) * 100.0).coerceIn(0.0, 100.0)
+    }
 
     fun getRating(score: Int): String = when {
         score >= 90 -> "Excellent"
@@ -184,129 +333,12 @@ object PropagationCalculator {
     }
 
     fun getColor(score: Int): String = when {
-        score >= 90 -> "#00FF00" // Bright Green
-        score >= 75 -> "#4CAF50" // Green
-        score >= 60 -> "#CDDC39" // Lime
-        score >= 40 -> "#FFEB3B" // Yellow
-        score >= 20 -> "#FF9800" // Orange
-        else -> "#F44336" // Red/Grey
-    }
-
-    private fun calculate160m(isDay: Boolean, k: Int, a: Int, sfi: Int, muf: Double): BandScore {
-        var score = 50.0
-        score += if (!isDay) 25 else -30
-        score -= (k * 6)
-        score -= (a * 0.5)
-        if (sfi < 140) score += 8
-        if (sfi > 180) score -= 5
-        if (muf < 12) score += 10
-        if (muf > 18) score -= 10
-        
-        val finalScore = clamp(score)
-        return BandScore("160m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate80m(isDay: Boolean, k: Int, a: Int, sfi: Int): BandScore {
-        var score = 55.0
-        score += if (!isDay) 20 else -20
-        score -= (k * 5)
-        score -= (a * 0.4)
-        if (sfi < 170) score += 5
-        
-        val finalScore = clamp(score)
-        return BandScore("80m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate40m(isDay: Boolean, isGoldenHour: Boolean, k: Int, muf: Double): BandScore {
-        var score = 60.0
-        if (isGoldenHour) score += 20
-        if (!isDay) score += 10
-        score -= (k * 4)
-        if (muf > 10) score += 5
-        
-        val finalScore = clamp(score)
-        return BandScore("40m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate30m(sfi: Int, muf: Double, k: Int, a: Int, isDay: Boolean): BandScore {
-        var score = 55.0
-        score += (sfi * 0.20)
-        score += (muf * 1.5)
-        score -= (k * 5)
-        score -= (a * 0.4)
-        if (isDay) score += 10
-        
-        val finalScore = clamp(score)
-        return BandScore("30m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate20m(sfi: Int, muf: Double, k: Int, a: Int, isDay: Boolean): BandScore {
-        var score = 40.0
-        score += (sfi * 0.30)
-        score += (muf * 2.0)
-        score -= (k * 6)
-        score -= (a * 0.5)
-        score += if (isDay) 15 else -15
-        
-        val finalScore = clamp(score)
-        return BandScore("20m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate17m(sfi: Int, muf: Double, k: Int, isDay: Boolean): BandScore {
-        var score = 30.0
-        score += (sfi * 0.35)
-        score += (muf * 2.5)
-        score -= (k * 7)
-        if (isDay) score += 15
-        
-        val finalScore = clamp(score)
-        return BandScore("17m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate15m(sfi: Int, muf: Double, k: Int): BandScore {
-        var score = 20.0
-        score += (sfi * 0.45)
-        score += (muf * 3.0)
-        score -= (k * 8)
-        if (sfi > 170) score += 20
-        if (sfi < 140) score -= 20
-        
-        val finalScore = clamp(score)
-        return BandScore("15m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate12m(sfi: Int, muf: Double, k: Int): BandScore {
-        var score = 10.0
-        score += (sfi * 0.50)
-        score += (muf * 4.0)
-        score -= (k * 8)
-        if (muf > 24) score += 25
-        
-        val finalScore = clamp(score)
-        return BandScore("12m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate10m(sfi: Int, muf: Double, k: Int, isDay: Boolean): BandScore {
-        var score = 5.0
-        score += (sfi * 0.60)
-        score += (muf * 5.0)
-        score -= (k * 10)
-        if (sfi > 180) score += 30
-        if (muf > 28) score += 25
-        if (!isDay) score -= 30
-        
-        val finalScore = clamp(score)
-        return BandScore("10m", finalScore, getRating(finalScore), getColor(finalScore))
-    }
-
-    private fun calculate6m(muf: Double, sporadicE: Boolean, k: Int): BandScore {
-        var score = 20.0
-        if (muf > 50) score += 40
-        if (sporadicE) score += 60
-        score -= (k * 2)
-        
-        val finalScore = clamp(score)
-        return BandScore("6m", finalScore, getRating(finalScore), getColor(finalScore))
+        score >= 90 -> "#00FF00" 
+        score >= 75 -> "#4CAF50" 
+        score >= 60 -> "#CDDC39" 
+        score >= 40 -> "#FFEB3B" 
+        score >= 20 -> "#FF9800" 
+        else -> "#F44336" 
     }
 
     private fun isDaytime(lat: Double?, lon: Double?, sunrise: String?, sunset: String?): Boolean {
@@ -322,26 +354,7 @@ object PropagationCalculator {
                 return currentMinutes in sunriseMinutes..sunsetMinutes
             }
         }
-        
-        // Fallback
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         return hour in 7..18
-    }
-
-    private fun isNearSunriseOrSunset(sunrise: String?, sunset: String?): Boolean {
-        if (sunrise == null || sunset == null) return false
-        
-        val now = Calendar.getInstance()
-        val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        
-        fun getMinutes(time: String): Int {
-            val parts = time.split(":")
-            return if (parts.size == 2) parts[0].toInt() * 60 + parts[1].toInt() else -1000
-        }
-        
-        val sunriseMinutes = getMinutes(sunrise)
-        val sunsetMinutes = getMinutes(sunset)
-        
-        return Math.abs(currentMinutes - sunriseMinutes) <= 60 || Math.abs(currentMinutes - sunsetMinutes) <= 60
     }
 }

@@ -18,10 +18,13 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import java.io.StringReader
+import kotlin.math.roundToInt
 
 class PropagationRepository(private val propagationDao: PropagationDao) {
     private val TAG = "PropagationRepository"
     private var lastCalculatedTimestamp: Long = 0
+    private val smoothedScores = mutableMapOf<String, Double>()
+    private val alpha = 0.3 // Smoothing factor
 
     fun getPropagationData(
         lat: Double?,
@@ -36,7 +39,7 @@ class PropagationRepository(private val propagationDao: PropagationDao) {
                 if (solar != null) {
                     Log.d(TAG, "Calculating real HF propagation scores...")
                     
-                    val calculatedBands = PropagationCalculator.calculateAllBands(
+                    val rawBands = PropagationCalculator.calculateAllBands(
                         solarData = solar,
                         muf = muf,
                         lat = lat,
@@ -44,6 +47,20 @@ class PropagationRepository(private val propagationDao: PropagationDao) {
                         sunrise = sunrise,
                         sunset = sunset
                     )
+
+                    // Apply Smoothing
+                    val calculatedBands = rawBands.map { raw ->
+                        val prev = smoothedScores[raw.band] ?: raw.score.toDouble()
+                        val smoothed = (alpha * raw.score) + ((1.0 - alpha) * prev)
+                        smoothedScores[raw.band] = smoothed
+                        
+                        val finalScore = smoothed.roundToInt()
+                        raw.copy(
+                            score = finalScore,
+                            rating = PropagationCalculator.getRating(finalScore),
+                            colorHex = PropagationCalculator.getColor(finalScore)
+                        )
+                    }
 
                     val now = System.currentTimeMillis()
                     
@@ -80,7 +97,8 @@ class PropagationRepository(private val propagationDao: PropagationDao) {
                             trend = trend,
                             score = bandScore.score,
                             color = bandScore.colorHex,
-                            history = history.map { it.score }
+                            history = history.map { it.score },
+                            summaries = bandScore.summaries
                         )
                     }
 
