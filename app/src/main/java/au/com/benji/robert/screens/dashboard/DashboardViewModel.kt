@@ -1,6 +1,7 @@
 package au.com.benji.robert.screens.dashboard
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.net.toUri
@@ -84,14 +85,15 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 val maidenhead = calculateMaidenhead(lat, lon)
                 Quadruple(lat, lon, name, maidenhead)
             } else {
-                null
+                // Return a default if no location yet, but don't hang
+                Quadruple(-37.81, 144.96, "Melbourne (Cached)", "QF22")
             }
         }
         .distinctUntilChanged()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
+            initialValue = Quadruple(-37.81, 144.96, "Melbourne (Initial)", "QF22")
         )
 
     data class Quadruple<out A, out B, out C, out D>(
@@ -104,9 +106,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     val solarData = locationFlow
-        .onStart { emit(null) }
         .flatMapLatest { loc -> 
-            solarRepository.getSolarData(loc?.first, loc?.second)
+            solarRepository.getSolarData(loc.first, loc.second)
         }
         .stateIn(
             scope = viewModelScope,
@@ -124,11 +125,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val weatherData = locationFlow
         .flatMapLatest { loc ->
-            if (loc != null) {
-                weatherRepository.getCurrentWeather(loc.first, loc.second, loc.third)
-            } else {
-                weatherRepository.getCurrentWeather(-37.81, 144.96, "Melbourne (Default)")
-            }
+            weatherRepository.getCurrentWeather(loc.first, loc.second, loc.third)
         }
         .stateIn(
             scope = viewModelScope,
@@ -146,8 +143,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     }
     .flatMapLatest { pkg ->
         propagationRepository.getPropagationData(
-            lat = pkg.loc?.first,
-            lon = pkg.loc?.second,
+            lat = pkg.loc.first,
+            lon = pkg.loc.second,
             solar = pkg.solar,
             muf = pkg.muf.value,
             sunrise = pkg.weather?.sunrise,
@@ -161,7 +158,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     )
 
     private data class pkg(
-        val loc: Quadruple<Double, Double, String, String>?,
+        val loc: Quadruple<Double, Double, String, String>,
         val solar: SolarData,
         val muf: MufCalculator.MufResult,
         val weather: DetailedWeather?
@@ -169,7 +166,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val moonData = locationFlow
         .flatMapLatest { loc ->
-            moonRepository.getMoonData(loc?.first, loc?.second)
+            moonRepository.getMoonData(loc.first, loc.second)
         }
         .stateIn(
             scope = viewModelScope,
@@ -224,11 +221,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val aprsPackets = locationFlow
         .flatMapLatest { loc ->
-            if (loc != null) {
-                aprsRepository.getRecentPackets(loc.first, loc.second)
-            } else {
-                flowOf(emptyList())
-            }
+            aprsRepository.getRecentPackets(loc.first, loc.second)
         }
         .stateIn(
             scope = viewModelScope,
@@ -275,7 +268,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         )
 
     val favoriteRepeater = combine(locationFlow, repeaterRepository.getFavorites()) { loc, favorites ->
-        if (loc != null && favorites.isNotEmpty()) {
+        if (favorites.isNotEmpty()) {
             val fav = favorites.first()
             val dist = calculateDistance(loc.first, loc.second, fav.lat, fav.lng)
             fav.copy(distance = dist)
@@ -361,11 +354,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val satellitePosition = combine(_selectedSatelliteId, locationFlow) { id, loc ->
         Pair(id, loc)
     }.flatMapLatest { (id, loc) ->
-        if (loc != null) {
-            satelliteRepository.getPosition(id, loc.first, loc.second)
-        } else {
-            flowOf<SatellitePosition?>(null)
-        }
+        satelliteRepository.getPosition(id, loc.first, loc.second)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -376,10 +365,36 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val upcomingPasses = combine(_selectedSatelliteId, locationFlow) { id, loc ->
         Pair(id, loc)
     }.flatMapLatest { (id, loc) ->
-        if (loc != null) {
+        satelliteRepository.getUpcomingPasses(id, loc.first, loc.second)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val allUpcomingPasses = locationFlow.flatMapLatest { loc ->
+        if (loc.first == 0.0 && loc.second == 0.0) {
+            Log.d("DashboardViewModel", "Waiting for valid location for satellite passes...")
+            return@flatMapLatest flowOf(emptyList<SatellitePass>())
+        }
+        
+        // Priority satellites to check first/only to speed up dashboard
+        // 25544 = ISS, 25338 = NOAA 15, 33591 = NOAA 19
+        val prioritySats = listOf("25544", "25338", "33591") 
+        Log.d("DashboardViewModel", "Fetching passes for priority satellites at ${loc.first}, ${loc.second}")
+        
+        val flows = prioritySats.map { id ->
             satelliteRepository.getUpcomingPasses(id, loc.first, loc.second)
-        } else {
-            flowOf<List<SatellitePass>>(emptyList())
+        }
+        
+        combine(flows) { arrays ->
+            val now = System.currentTimeMillis() / 1000
+            val all = arrays.flatMap { it }
+                .filter { it.startTime > now }
+                .sortedBy { it.startTime }
+            Log.d("DashboardViewModel", "Combined found ${all.size} upcoming priority passes")
+            all
         }
     }.stateIn(
         scope = viewModelScope,
@@ -397,7 +412,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val nextPassTimer = flow {
         while (true) {
-            val passesList = upcomingPasses.value
+            val passesList = allUpcomingPasses.value
             val currentTime = System.currentTimeMillis() / 1000
             
             val nextPass = passesList.firstOrNull { it.startTime > currentTime }

@@ -60,19 +60,37 @@ fun SatellitesScreen(
     Scaffold(
         modifier = Modifier.padding(paddingValues),
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { 
                     if (!isSearchActive) {
-                        Text("Satellite Tracking", fontWeight = FontWeight.Bold)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "SATELLITE TRACKING", 
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Box(
+                                modifier = Modifier
+                                    .height(3.dp)
+                                    .width(30.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
                     } else {
                         TextField(
                             value = searchQuery,
                             onValueChange = { viewModel.updateSatelliteSearchQuery(it) },
-                            placeholder = { Text("Search...") },
+                            placeholder = { Text("Search Satellites...") },
                             modifier = Modifier.fillMaxWidth(),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
                             ),
                             singleLine = true
                         )
@@ -80,9 +98,16 @@ fun SatellitesScreen(
                 },
                 actions = {
                     IconButton(onClick = { isSearchActive = !isSearchActive }) {
-                        Icon(if (isSearchActive) Icons.Default.Close else Icons.Default.Search, contentDescription = "Search")
+                        Icon(
+                            if (isSearchActive) Icons.Default.Close else Icons.Default.Search, 
+                            contentDescription = "Search",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { padding ->
@@ -178,43 +203,76 @@ fun SatellitesScreen(
 
 @Composable
 fun SectionHeader(title: String) {
-    Text(
-        text = title.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Black,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
-        letterSpacing = 1.sp
-    )
+    Row(
+        modifier = Modifier
+            .padding(start = 16.dp, top = 20.dp, bottom = 8.dp)
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 1.5.sp
+        )
+        Spacer(Modifier.width(12.dp))
+        HorizontalDivider(
+            modifier = Modifier.weight(1f).padding(end = 16.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+            thickness = 1.dp
+        )
+    }
 }
 
 @Composable
 fun NextPassCard(pass: SatellitePass) {
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    
+    LaunchedEffect(pass) {
+        while (true) {
+            currentTime = System.currentTimeMillis() / 1000
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
     val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    val currentTime = System.currentTimeMillis() / 1000
     val countdown = (pass.startTime - currentTime).coerceAtLeast(0)
-    val mins = countdown / 60
-    val secs = countdown % 60
+    val isInProgress = currentTime >= pass.startTime && currentTime <= pass.endTime
+    val losCountdown = (pass.endTime - currentTime).coerceAtLeast(0)
+    
+    val mins = if (isInProgress) losCountdown / 60 else countdown / 60
+    val secs = if (isInProgress) losCountdown % 60 else countdown % 60
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        shape = RoundedCornerShape(16.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isInProgress) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer
+        ),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column {
-                    Text("AOS COUNTDOWN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     Text(
-                        text = if (countdown > 0) String.format(Locale.US, "%02dm %02ds", mins, secs) else "IN PROGRESS",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Black
+                        if (isInProgress) "LOS COUNTDOWN (LIVE)" else "AOS COUNTDOWN", 
+                        style = MaterialTheme.typography.labelSmall, 
+                        color = if (isInProgress) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = String.format(Locale.US, "%02dm %02ds", mins, secs),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        color = if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
                 
@@ -225,24 +283,42 @@ fun NextPassCard(pass: SatellitePass) {
                         "Good" -> Color(0xFF8BC34A)
                         else -> Color(0xFFFFC107)
                     },
-                    shape = RoundedCornerShape(4.dp)
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
                         quality.uppercase(), 
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Black,
                         color = Color.White
                     )
                 }
             }
             
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f))
+            if (isInProgress) {
+                val totalDuration = (pass.endTime - pass.startTime).coerceAtLeast(1)
+                val elapsed = (currentTime - pass.startTime).coerceAtLeast(0)
+                val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+                
+                Spacer(Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                    color = MaterialTheme.colorScheme.tertiary,
+                    trackColor = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.1f)
+                )
+            }
+            
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 16.dp), 
+                color = (if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer).copy(alpha = 0.1f)
+            )
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 PassInfoItem("AOS", sdf.format(Date(pass.startTime * 1000)))
                 PassInfoItem("MAX EL", "${pass.maxElevation.toInt()}°")
                 PassInfoItem("DUR", "${pass.duration / 60}m")
+                PassInfoItem("LOS", sdf.format(Date(pass.endTime * 1000)))
             }
         }
     }
@@ -284,17 +360,26 @@ fun TelemetryCard(modifier: Modifier, label: String, value: String, icon: ImageV
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(icon, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Surface(
+                modifier = Modifier.size(30.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+            }
             Column {
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.outline)
+                Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }

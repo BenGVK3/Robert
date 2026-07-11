@@ -78,7 +78,7 @@ fun DashboardScreen(
     
     val dxSpots by viewModel.dxSpots.collectAsStateWithLifecycle()
     val favoriteRepeater by viewModel.favoriteRepeater.collectAsStateWithLifecycle()
-    val upcomingPasses by viewModel.upcomingPasses.collectAsStateWithLifecycle()
+    val allUpcomingPasses by viewModel.allUpcomingPasses.collectAsStateWithLifecycle()
     val shackSummary by viewModel.shackSummary.collectAsStateWithLifecycle()
     val latestLog by viewModel.latestLog.collectAsStateWithLifecycle()
     val nextNet by viewModel.nextNet.collectAsStateWithLifecycle()
@@ -208,7 +208,7 @@ fun DashboardScreen(
                     SatellitePassCard(
                         modifier = Modifier.weight(1f),
                         nextPassTimer = nextPassTimer,
-                        upcomingPasses = upcomingPasses,
+                        allUpcomingPasses = allUpcomingPasses,
                         navController = navController
                     )
                 }
@@ -520,8 +520,8 @@ fun NextNetCard(modifier: Modifier, net: NetEntity?, navController: NavHostContr
 }
 
 @Composable
-fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, upcomingPasses: List<SatellitePass>, navController: NavHostController) {
-    val nextPass = upcomingPasses.firstOrNull { it.startTime > System.currentTimeMillis() / 1000 }
+fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, allUpcomingPasses: List<SatellitePass>, navController: NavHostController) {
+    val nextPass = allUpcomingPasses.firstOrNull()
     
     DashboardCard(
         modifier = modifier.clickable { navController.navigate(Screen.Satellites.route) },
@@ -531,7 +531,7 @@ fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, upcomingPasses:
         if (nextPass == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "No upcoming passes",
+                    text = if (nextPassTimer.contains("Scanning")) "Scanning sky..." else "No upcoming passes",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.Gray,
                     textAlign = TextAlign.Center
@@ -540,54 +540,45 @@ fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, upcomingPasses:
         } else {
             Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Satellite Image/Icon
-                    val satImageUrl = remember(nextPass.name) {
-                        val name = nextPass.name.lowercase()
-                        when {
-                            name.contains("iss") -> "https://www.nasa.gov/wp-content/uploads/2023/03/iss_pos_11-10-22_v2.png"
-                            name.contains("so-50") || name.contains("saudisat") -> "https://www.amsat.org/wp-content/uploads/2014/01/so50-photo.jpg"
-                            name.contains("ao-91") || name.contains("radfxsat") -> "https://www.amsat.org/wp-content/uploads/2017/11/AO-91_RadFxSat_400.jpg"
-                            name.contains("ao-7") -> "https://www.amsat.org/wp-content/uploads/2014/01/ao7.jpg"
-                            name.contains("noaa") -> "https://www.noaa.gov/sites/default/files/styles/landscape_width_650/public/2021-02/Satellite-NOAA-19-Artist-Rendering-Off-Earth.jpg"
-                            else -> "https://www.amsat.org/wp-content/uploads/2014/01/sat-icon.png"
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(Color(0xFF1E2632), RoundedCornerShape(6.dp))
-                            .clip(RoundedCornerShape(6.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        coil.compose.AsyncImage(
-                            model = satImageUrl,
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp), // Slightly smaller than the box
-                            contentScale = ContentScale.Fit,
-                            error = painterResource(au.com.benji.robert.R.drawable.satellites1),
-                            placeholder = painterResource(au.com.benji.robert.R.drawable.satellites1)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = nextPass.name, 
+                            style = MaterialTheme.typography.labelMedium, 
+                            fontWeight = FontWeight.Bold, 
+                            color = Color.White, 
+                            maxLines = 1, 
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Max El: ${nextPass.maxElevation.toInt()}°", 
+                            style = MaterialTheme.typography.labelSmall, 
+                            color = Color.Gray, 
+                            fontSize = 8.sp
                         )
                     }
                     
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(nextPass.name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("AOS: ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nextPass.startTime * 1000))}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
-                    }
-                    
                     Column(horizontalAlignment = Alignment.End) {
-                        val timerText = if (nextPassTimer.contains("In ")) nextPassTimer.substringAfter("In ").substringBefore("s") else "--m"
-                        Text(timerText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFFA680FF))
-                        Text("TO AOS", style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, color = Color.Gray)
+                        val timerText = if (nextPassTimer.contains(" • In ")) {
+                            nextPassTimer.substringAfter(" • In ").substringBefore("s")
+                        } else if (nextPassTimer.contains("m ")) {
+                            nextPassTimer.substringBefore("s")
+                        } else {
+                            "--m"
+                        }
+                        Text(
+                            text = timerText, 
+                            style = MaterialTheme.typography.labelLarge, 
+                            fontWeight = FontWeight.Bold, 
+                            color = Color(0xFFA680FF)
+                        )
+                        Text(
+                            text = "TO AOS", 
+                            style = MaterialTheme.typography.labelSmall, 
+                            fontSize = 6.sp, 
+                            color = Color.Gray
+                        )
                     }
                 }
-                
-                Text(
-                    text = "Max El: ${nextPass.maxElevation.toInt()}° • Duration: ${nextPass.duration / 60}m",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray,
-                    fontSize = 8.sp
-                )
             }
         }
     }
@@ -773,8 +764,7 @@ fun DashboardBottomRow(
         val bottomCards = listOf(
             Triple("SHACK", Icons.Default.Home, listOf(
                 "Rad" to (shackSummary["Radio"] ?: 0), 
-                "Ant" to (shackSummary["Antenna"] ?: 0),
-                "Gear" to (shackSummary["Total"] ?: 0)
+                "Ant" to (shackSummary["Antenna"] ?: 0)
             )),
             Triple("APRS", Icons.Default.LocationOn, listOf("Pkt" to 128, "Near" to "2.1k")),
             Triple("KIWI", Icons.Default.Wifi, listOf("Lsn" to 12, "Lat" to "42ms")),

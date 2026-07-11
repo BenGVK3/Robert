@@ -27,11 +27,11 @@ data class SatellitePosition(
 
 @Serializable
 data class SatellitePass(
-    val name: String,
-    val startTime: Long, // Unix timestamp
-    val endTime: Long,
-    val maxElevation: Double,
-    val duration: Long, // Seconds
+    val name: String = "",
+    @kotlinx.serialization.SerialName("start") val startTime: Long, // Unix timestamp
+    @kotlinx.serialization.SerialName("end") val endTime: Long,
+    val maxElevation: Double = 0.0,
+    val duration: Long = 0, // Seconds
     val aosAzimuth: Double = 0.0,
     val losAzimuth: Double = 0.0,
     val quality: String = "Fair",

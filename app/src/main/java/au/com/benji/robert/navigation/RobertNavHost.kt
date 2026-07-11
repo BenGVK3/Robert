@@ -59,7 +59,7 @@ fun RobertNavHost(
         }
 
         composable(
-            route = Screen.Tools.route,
+            route = "tools?initialTool={initialTool}",
             arguments = listOf(
                 navArgument("initialTool") { 
                     type = NavType.StringType
