@@ -49,17 +49,12 @@ fun LeafletMapView(
             zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
             setHasTransientState(true)
             
-            // Crucial: Intercept touch events to prevent parent scrolling (LazyColumn/PullToRefresh)
+            // Intercept touch events to prevent parent scrolling
             setOnTouchListener { v, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        parent.requestDisallowInterceptTouchEvent(true)
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        parent.requestDisallowInterceptTouchEvent(false)
-                    }
+                if (event.action == MotionEvent.ACTION_DOWN) {
+                    parent.requestDisallowInterceptTouchEvent(true)
                 }
-                false // Allow MapView to handle the event as well
+                false
             }
         }
     }
@@ -79,13 +74,22 @@ fun LeafletMapView(
                 hasInitializedCenter = true
             }
             
-            // Only rebuild overlays if the data actually changed to prevent flickering while panning
             if (currentRepeatersRef.value != repeaters) {
                 currentRepeatersRef.value = repeaters
                 
                 mv.overlays.clear()
+
+                // 1. Map Click Listener Overlay (must be at the bottom)
+                val mapEventsOverlay = org.osmdroid.views.overlay.MapEventsOverlay(object : org.osmdroid.events.MapEventsReceiver {
+                    override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                        InfoWindow.closeAllInfoWindowsOn(mv)
+                        return true
+                    }
+                    override fun longPressHelper(p: GeoPoint?): Boolean = false
+                })
+                mv.overlays.add(mapEventsOverlay)
                 
-                // User Location: Blue Dot
+                // 2. User Location: Blue Dot
                 val userMarker = Marker(mv).apply {
                     position = GeoPoint(lat, lon)
                     icon = createUserLocationIcon(context)
@@ -106,6 +110,8 @@ fun LeafletMapView(
                         
                         setOnMarkerClickListener { m, _ ->
                             if (!m.isInfoWindowShown) {
+                                // Close all others before opening this one
+                                InfoWindow.closeAllInfoWindowsOn(mv)
                                 m.showInfoWindow()
                                 mv.controller.animateTo(m.position)
                             } else {
@@ -148,27 +154,41 @@ private fun createUserLocationIcon(context: Context): Drawable {
 }
 
 private fun createRepeaterIcon(context: Context, isGroup: Boolean): Drawable {
-    val px = (28 * context.resources.displayMetrics.density).toInt()
+    val density = context.resources.displayMetrics.density
+    val px = (32 * density).toInt()
     val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     
-    val color = if (isGroup) Color.parseColor("#FF9800") else Color.parseColor("#673AB7")
+    val mainColor = Color.parseColor("#673AB7")
     
-    paint.color = Color.parseColor("#40000000")
-    canvas.drawCircle(px / 2f, px / 2f, px / 2f, paint)
+    paint.color = Color.parseColor("#33000000")
+    canvas.drawCircle(px / 2f, px / 2f + (1 * density), px / 2.2f, paint)
     
-    paint.color = color
-    canvas.drawCircle(px / 2f, px / 2f, px / 2.4f, paint)
-    
-    paint.style = Paint.Style.STROKE
     paint.color = Color.WHITE
-    paint.strokeWidth = 2 * context.resources.displayMetrics.density
-    canvas.drawCircle(px / 2f, px / 2f, px / 2.4f, paint)
+    canvas.drawCircle(px / 2f, px / 2f, px / 2.5f, paint)
     
-    paint.style = Paint.Style.FILL
+    paint.color = mainColor
+    canvas.drawCircle(px / 2f, px / 2f, px / 3.2f, paint)
+    
     paint.color = Color.WHITE
-    canvas.drawCircle(px / 2f, px / 2f, px / 6f, paint)
+    canvas.drawCircle(px / 2f, px / 2f, px / 8f, paint)
+    
+    if (isGroup) {
+        val badgeRadius = 6 * density
+        val centerX = px / 2f + (8 * density)
+        val centerY = px / 2f - (8 * density)
+        
+        paint.color = Color.parseColor("#FF9800")
+        canvas.drawCircle(centerX, centerY, badgeRadius, paint)
+        
+        paint.color = Color.WHITE
+        paint.strokeWidth = 1.5f * density
+        paint.style = Paint.Style.STROKE
+        val s = 3 * density
+        canvas.drawLine(centerX - s, centerY, centerX + s, centerY, paint)
+        canvas.drawLine(centerX, centerY - s, centerX, centerY + s, paint)
+    }
     
     return BitmapDrawable(context.resources, bitmap)
 }
@@ -182,12 +202,16 @@ class RepeaterInfoWindow(
     companion object {
         private fun createLayout(context: Context): View {
             val density = context.resources.displayMetrics.density
-            return LinearLayout(context).apply {
+            val widthPx = (200 * density).toInt()
+            
+            // We use an anonymous class to force the width via onMeasure
+            return object : LinearLayout(context) {
+                override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                    val fixedWidthSpec = MeasureSpec.makeMeasureSpec(widthPx, MeasureSpec.EXACTLY)
+                    super.onMeasure(fixedWidthSpec, heightMeasureSpec)
+                }
+            }.apply {
                 orientation = LinearLayout.VERTICAL
-                layoutParams = ViewGroup.LayoutParams(
-                    (280 * density).toInt(), // Limit width
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
             }
         }
     }
@@ -198,13 +222,13 @@ class RepeaterInfoWindow(
         layout.removeAllViews()
         
         val density = context.resources.displayMetrics.density
-        val padding = (12 * density).toInt()
+        val padding = (8 * density).toInt()
         layout.setPadding(padding, padding, padding, padding)
 
         val bg = android.graphics.drawable.GradientDrawable().apply {
-            setColor(Color.parseColor("#EE1A1A1A").toInt())
-            cornerRadius = 12 * density
-            setStroke((1 * density).toInt(), Color.parseColor("#444444").toInt())
+            setColor(Color.parseColor("#F51A1A1A").toInt())
+            cornerRadius = 8 * density
+            setStroke((1 * density).toInt(), Color.parseColor("#555555").toInt())
         }
         layout.background = bg
 
@@ -213,7 +237,7 @@ class RepeaterInfoWindow(
                 val divider = View(context).apply {
                     layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt())
                     setBackgroundColor(Color.parseColor("#333333"))
-                    val margin = (8 * density).toInt()
+                    val margin = (6 * density).toInt()
                     (layoutParams as LinearLayout.LayoutParams).setMargins(0, margin, 0, margin)
                 }
                 layout.addView(divider)
@@ -221,7 +245,10 @@ class RepeaterInfoWindow(
 
             val repeaterLayout = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(0, 0, (8 * density).toInt(), 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
                 setOnClickListener {
                     onDetailsClick(repeater.callsign, repeater.frequency)
                     close()
@@ -231,25 +258,28 @@ class RepeaterInfoWindow(
             val titleView = TextView(context).apply {
                 text = "${repeater.callsign}${if (!repeater.name.isNullOrBlank()) " - ${repeater.name}" else ""}"
                 setTextColor(Color.parseColor("#2196F3"))
-                textSize = 15f
+                textSize = 13f
                 setTypeface(null, Typeface.BOLD)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
             }
             repeaterLayout.addView(titleView)
 
             val infoView = TextView(context).apply {
-                val mode = if (!repeater.mode.isNullOrBlank()) " [${repeater.mode}]" else ""
-                val town = if (!repeater.town.isNullOrBlank()) " @ ${repeater.town}" else if (!repeater.location.isNullOrBlank()) " @ ${repeater.location}" else ""
-                text = "${repeater.frequency} MHz$mode$town"
+                val mode = if (!repeater.mode.isNullOrBlank()) " ${repeater.mode}" else ""
+                val town = if (!repeater.town.isNullOrBlank()) " @ ${repeater.town}" else ""
+                text = "${repeater.frequency}$mode$town"
                 setTextColor(Color.WHITE)
-                textSize = 13f
+                textSize = 11f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
             }
             repeaterLayout.addView(infoView)
             
             val tapView = TextView(context).apply {
                 text = "Tap for details ›"
-                setTextColor(Color.parseColor("#888888"))
-                textSize = 11f
-                setPadding(0, 4, 0, 0)
+                setTextColor(Color.parseColor("#777777"))
+                textSize = 9f
             }
             repeaterLayout.addView(tapView)
 
@@ -258,11 +288,11 @@ class RepeaterInfoWindow(
         
         if (repeaters.size > 5) {
             val moreView = TextView(context).apply {
-                text = "+ ${repeaters.size - 5} more here"
+                text = "+ ${repeaters.size - 5} more"
                 setTextColor(Color.parseColor("#AAAAAA"))
-                textSize = 12f
-                setPadding(0, 8, 0, 0)
+                textSize = 10f
                 gravity = Gravity.CENTER
+                setPadding(0, 4, 0, 0)
             }
             layout.addView(moreView)
         }
