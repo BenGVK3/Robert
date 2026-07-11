@@ -181,10 +181,11 @@ class RepeaterInfoWindow(
 
     companion object {
         private fun createLayout(context: Context): View {
+            val density = context.resources.displayMetrics.density
             return LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    (280 * density).toInt(), // Limit width
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
             }
@@ -220,7 +221,7 @@ class RepeaterInfoWindow(
 
             val repeaterLayout = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(0, 0, (24 * density).toInt(), 0)
+                setPadding(0, 0, (8 * density).toInt(), 0)
                 setOnClickListener {
                     onDetailsClick(repeater.callsign, repeater.frequency)
                     close()

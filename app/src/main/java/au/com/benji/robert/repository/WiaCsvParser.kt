@@ -24,8 +24,7 @@ object WiaCsvParser {
                 val parts = parseCsvLine(line)
                 
                 if (header == null) {
-                    // Look for the header line which usually contains 'Callsign'
-                    if (parts.any { it.contains("Callsign", ignoreCase = true) || it.contains("Call", ignoreCase = true) }) {
+                    if (parts.any { it.contains("Call", ignoreCase = true) || it.contains("Freq", ignoreCase = true) }) {
                         header = parts.map { it.trim().lowercase() }
                         Log.d(TAG, "Found header: $header")
                     }
@@ -42,6 +41,7 @@ object WiaCsvParser {
             }
         }
         
+        Log.d(TAG, "Parsed ${repeaters.size} repeaters")
         return repeaters
     }
 
@@ -67,49 +67,86 @@ object WiaCsvParser {
     private fun mapToEntity(parts: List<String>, header: List<String>): RepeaterEntity? {
         if (parts.size < 3) return null
         
-        val data = header.mapIndexed { index, name -> 
-            name to (parts.getOrNull(index) ?: "")
-        }.toMap()
+        val data = mutableMapOf<String, String>()
+        header.forEachIndexed { index, name ->
+            val value = parts.getOrNull(index)?.trim() ?: ""
+            data[name] = value
+        }
         
-        // Match columns based on various possible names in WIA CSV
-        val callsign = data["callsign"] ?: data["call"] ?: data["call sign"] ?: ""
-        if (callsign.isEmpty() || callsign.lowercase() == "callsign") return null
+        fun find(vararg keys: String): String? {
+            for (key in keys) {
+                val k = key.lowercase()
+                if (data.containsKey(k)) return data[k]
+                val actualKey = data.keys.find { it.contains(k) }
+                if (actualKey != null) return data[actualKey]
+            }
+            return null
+        }
 
-        val frequency = data["freq (mhz)"] ?: data["frequency"] ?: data["output"] ?: data["freq"] ?: ""
+        val callsign = find("callsign", "call sign", "call", "stn call") ?: ""
+        if (callsign.isEmpty() || callsign.lowercase() == "callsign" || callsign.lowercase() == "call") return null
+
+        val frequency = find("output", "freq (mhz)", "frequency", "freq", "output (mhz)") ?: ""
         if (frequency.isEmpty()) return null
         
-        val lat = data["lat"]?.toDoubleOrNull() ?: data["latitude"]?.toDoubleOrNull() ?: 0.0
-        val lng = data["long"]?.toDoubleOrNull() ?: data["longitude"]?.toDoubleOrNull() ?: data["lng"]?.toDoubleOrNull() ?: 0.0
+        val lat = find("lat", "latitude")?.toDoubleOrNull() ?: 0.0
+        val lng = find("long", "longitude", "lng")?.toDoubleOrNull() ?: 0.0
         
-        val offset = data["offset (mhz)"] ?: data["offset"] ?: ""
-        val inputFreq = data["input"] ?: data["input freq"] ?: try {
-            val freqNum = frequency.toDouble()
-            val offsetNum = offset.toDoubleOrNull() ?: 0.0
-            (freqNum + offsetNum).toString()
-        } catch (e: Exception) {
-            null
+        val offset = find("offset", "shift", "offset (mhz)") ?: ""
+        
+        var inputFreq = find("input", "input (mhz)", "input freq") ?: ""
+        if (inputFreq.isEmpty() && offset.isNotEmpty()) {
+            try {
+                val freqNum = frequency.toDouble()
+                val offsetNum = offset.toDoubleOrNull() ?: 0.0
+                inputFreq = (freqNum + offsetNum).toString()
+            } catch (e: Exception) { }
+        }
+
+        // Improved state detection
+        var state = find("state", "st", "territory", "region")
+        if (state.isNullOrBlank()) {
+            // Fallback: Infer state from callsign if it's Australian
+            state = inferStateFromCallsign(callsign)
         }
 
         return RepeaterEntity(
             callsign = callsign.uppercase(),
             frequency = frequency,
-            name = data["name"] ?: data["repeater name"] ?: data["site name"],
-            inputFreq = inputFreq,
+            name = find("name", "repeater name", "site name", "repeater", "description"),
+            inputFreq = if (inputFreq.isNotBlank()) inputFreq else null,
             offset = offset,
-            band = data["band"] ?: data["band (m)"],
-            mode = data["mode"] ?: data["digital mode"],
-            tone = data["ctcss (hz)"] ?: data["ctcss"] ?: data["tone"] ?: data["access"],
-            dcs = data["dcs"],
-            location = data["location"] ?: data["site"],
-            town = data["town"] ?: data["locality"],
-            state = data["state"],
+            band = find("band", "band (m)", "frequency band"),
+            mode = find("mode", "digital mode", "emission", "type"),
+            tone = find("ctcss", "tone", "access", "tone/access", "subtone"),
+            dcs = find("dcs", "dtcs"),
+            location = find("location", "site", "site name"),
+            town = find("town", "locality", "city", "suburb"),
+            state = state,
             lat = lat,
             lng = lng,
-            gridSquare = data["grid square"] ?: data["grid"] ?: calculateMaidenhead(lat, lng),
-            elevation = data["asl (m)"] ?: data["elevation"] ?: data["asl"] ?: data["height"],
-            notes = data["notes"] ?: data["sota/pota"] ?: data["comments"],
-            status = data["status"],
-            lastUpdate = data["last updated"] ?: data["updated"] ?: data["date"]
+            gridSquare = find("grid square", "grid") ?: calculateMaidenhead(lat, lng),
+            elevation = find("asl", "elevation", "height", "ht"),
+            notes = find("notes", "sota/pota", "comments", "remarks", "info"),
+            status = find("status", "condition", "state"),
+            lastUpdate = find("last updated", "updated", "date", "revision")
         )
+    }
+
+    private fun inferStateFromCallsign(callsign: String): String? {
+        val upper = callsign.uppercase()
+        return when {
+            upper.startsWith("VK1") -> "ACT"
+            upper.startsWith("VK2") -> "NSW"
+            upper.startsWith("VK3") -> "VIC"
+            upper.startsWith("VK4") -> "QLD"
+            upper.startsWith("VK5") -> "SA"
+            upper.startsWith("VK6") -> "WA"
+            upper.startsWith("VK7") -> "TAS"
+            upper.startsWith("VK8") -> "NT"
+            upper.startsWith("VK9") -> "External Territory"
+            upper.startsWith("VK0") -> "Antarctica"
+            else -> null
+        }
     }
 }
