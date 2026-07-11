@@ -34,8 +34,10 @@ fun RepeaterListScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
     
     var showFilterDialog by remember { mutableStateOf(false) }
+    var isMapExpanded by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -90,6 +92,56 @@ fun RepeaterListScreen(
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium
                 )
+
+                // Repeater Map Section
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isMapExpanded = !isMapExpanded }
+                                .padding(Spacing.Medium),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(Spacing.Medium))
+                                Text("Repeater Map", style = MaterialTheme.typography.titleMedium)
+                            }
+                            Icon(
+                                if (isMapExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isMapExpanded) "Collapse" else "Expand"
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = isMapExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Box(modifier = Modifier
+                                .fillMaxWidth()
+                                .height(400.dp)
+                                .padding(Spacing.Small)
+                            ) {
+                                LeafletMapView(
+                                    lat = userLocation?.first ?: -37.8136,
+                                    lon = userLocation?.second ?: 144.9631,
+                                    repeaters = repeaters,
+                                    onMarkerClick = onNavigateToDetail
+                                )
+                            }
+                        }
+                    }
+                }
 
                 if (repeaters.isEmpty() && !isLoading) {
                     EmptyState(
