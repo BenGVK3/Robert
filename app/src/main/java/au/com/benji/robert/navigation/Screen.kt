@@ -15,6 +15,7 @@ sealed class Screen(
     object Aprs : Screen("aprs")
     object Satellites : Screen("satellites")
     object Moon : Screen("moon")
+    object DxLook : Screen("dxlook")
     object BandPlan : Screen("bandplan")
     object RepeaterList : Screen("repeaterlist")
     object RepeaterMap : Screen("repeatermap")

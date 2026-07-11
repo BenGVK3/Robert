@@ -8,6 +8,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.screens.dashboard.DashboardScreen
 import au.com.benji.robert.screens.propagation.PropagationScreen
 import au.com.benji.robert.screens.moon.MoonScreen
@@ -15,6 +16,7 @@ import au.com.benji.robert.screens.logbook.LogbookScreen
 import au.com.benji.robert.screens.settings.SettingsScreen
 import au.com.benji.robert.screens.tools.ToolsScreen
 import au.com.benji.robert.screens.sdr.SdrScreen
+import au.com.benji.robert.screens.dxlook.DxLookScreen
 import au.com.benji.robert.screens.aprs.AprsScreen
 import au.com.benji.robert.screens.satellites.SatellitesScreen
 import au.com.benji.robert.screens.tools.BandPlanScreen
@@ -47,7 +49,7 @@ fun RobertNavHost(
         }
 
         composable(Screen.Propagation.route) {
-            PropagationScreen(paddingValues)
+            PropagationScreen(paddingValues, dashboardViewModel = viewModel(), navController = navController)
         }
 
         composable(Screen.Moon.route) {
@@ -78,6 +80,10 @@ fun RobertNavHost(
 
         composable(Screen.Sdr.route) {
             SdrScreen(paddingValues)
+        }
+
+        composable(Screen.DxLook.route) {
+            DxLookScreen(paddingValues)
         }
 
         composable(Screen.Aprs.route) {

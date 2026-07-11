@@ -31,11 +31,25 @@ fun RobertMap(
                         // Refined JS to target N2YO map elements specifically
                         view?.loadUrl("javascript:(function() { " +
                                 "var style = document.createElement('style');" +
-                                "style.innerHTML = 'html, body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; } " +
-                                "table, #n2yowidget, .n2yowidget, #n2yomap, .n2yomap { width: 100vw !important; height: 100vh !important; border: none !important; } " +
+                                "style.innerHTML = '* { box-sizing: border-box !important; } " +
+                                "html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; overflow: hidden !important; background: #000 !important; } " +
+                                "table, #n2yowidget, .n2yowidget, #n2yomap, .n2yomap, .n2yowidget_main, tr, td { " +
+                                "  width: 100% !important; height: 100% !important; border: none !important; " +
+                                "  margin: 0 !important; padding: 0 !important; display: block !important; border-collapse: collapse !important; " +
+                                "} " +
                                 ".n2yowidget_header, .n2yowidget_footer, #header, #footer { display: none !important; } " +
-                                "#map, #map_canvas { width: 100% !important; height: 100% !important; }';" +
+                                "#map, #map_canvas, .leaflet-container { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; position: absolute !important; top: 0 !important; left: 0 !important; }';" +
                                 "document.head.appendChild(style);" +
+                                "function fixMap() { " +
+                                "  if (typeof L !== 'undefined') { " +
+                                "    var maps = document.querySelectorAll('.leaflet-container'); " +
+                                "    maps.forEach(function(m) { " +
+                                "      if(m._leaflet_map) { m._leaflet_map.invalidateSize(); } " +
+                                "      else if (window.map) { window.map.invalidateSize(); } " +
+                                "    }); " +
+                                "  } " +
+                                "} " +
+                                "fixMap(); setTimeout(fixMap, 500); setTimeout(fixMap, 2000);" +
                                 "})()")
                     }
                 }

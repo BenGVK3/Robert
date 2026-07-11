@@ -140,6 +140,7 @@ fun PremiumActionCard(
                                 icon == au.com.benji.robert.R.drawable.satellites1 ||
                                 icon == au.com.benji.robert.R.drawable.moon1 ||
                                 icon == au.com.benji.robert.R.drawable.repeaters1 ||
+                                icon == au.com.benji.robert.R.drawable.dxlook1 ||
                                 icon == au.com.benji.robert.R.drawable.kiwisdr1) {
                                 Image(
                                     painter = painterResource(id = icon),
@@ -210,6 +211,7 @@ fun ImportantMetricSmall(
                         )
                     } else if (icon == au.com.benji.robert.R.drawable.propagation1 ||
                         icon == au.com.benji.robert.R.drawable.dxspots1 ||
+                        icon == au.com.benji.robert.R.drawable.dxlook1 ||
                         icon == au.com.benji.robert.R.drawable.theshack1) {
                         Image(
                             painter = painterResource(id = icon),

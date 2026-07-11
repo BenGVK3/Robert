@@ -26,6 +26,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -671,17 +673,31 @@ fun BandMiniGraph(modifier: Modifier, band: BandCondition) {
                 )
             } else {
                 val stepX = size.width / (band.history.size - 1)
+                val points = band.history.mapIndexed { index, score ->
+                    Offset(index * stepX, size.height - (score.toFloat() / 100f * size.height))
+                }
                 val path = Path().apply {
-                    band.history.forEachIndexed { index, score ->
-                        val x = index * stepX
-                        val y = size.height - (score.toFloat() / 100f * size.height)
-                        if (index == 0) moveTo(x, y) else lineTo(x, y)
+                    moveTo(points[0].x, points[0].y)
+                    for (i in 0 until points.size - 1) {
+                        val p0 = points[(i - 1).coerceAtLeast(0)]
+                        val p1 = points[i]
+                        val p2 = points[i + 1]
+                        val p3 = points[(i + 2).coerceAtMost(points.size - 1)]
+                        
+                        val cp1 = p1 + (p2 - p0) / 6f
+                        val cp2 = p2 - (p3 - p1) / 6f
+                        
+                        cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y)
                     }
                 }
                 drawPath(
                     path = path,
                     color = color,
-                    style = Stroke(width = 1.5.dp.toPx())
+                    style = Stroke(
+                        width = 1.5.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
                 )
             }
         }

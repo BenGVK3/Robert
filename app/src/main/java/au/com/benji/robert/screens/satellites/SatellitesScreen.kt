@@ -58,97 +58,122 @@ fun SatellitesScreen(
     val categories = listOf("All", "Amateur", "ISS", "Weather", "Experimental")
 
     Scaffold(
-        modifier = Modifier.padding(paddingValues),
+        modifier = Modifier
+            .padding(bottom = paddingValues.calculateBottomPadding())
+            .statusBarsPadding(), // Add proper system insets
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
-                    if (!isSearchActive) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "SATELLITE TRACKING", 
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Box(
-                                modifier = Modifier
-                                    .height(3.dp)
-                                    .width(30.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                        }
-                    } else {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.updateSatelliteSearchQuery(it) },
-                            placeholder = { Text("Search Satellites...") },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            ),
-                            singleLine = true
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxHeight()
+                    ) {
+                        Text(
+                            "SATELLITE TRACKING", 
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.2.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { isSearchActive = !isSearchActive }) {
-                        Icon(
-                            if (isSearchActive) Icons.Default.Close else Icons.Default.Search, 
-                            contentDescription = "Search",
-                            tint = MaterialTheme.colorScheme.primary
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Box(
+                            modifier = Modifier
+                                .height(2.dp)
+                                .width(20.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
-                )
+                ),
+                modifier = Modifier.height(44.dp) // Slightly more compact header
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-        ) {
-            // --- FIXED MAP AT TOP ---
-            SatelliteMap(
-                position = position,
-                selectedId = selectedId,
-                userLat = userLat,
-                userLon = userLon,
-                onRefresh = { viewModel.refresh() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-
-            // --- SCROLLABLE CONTENT BELOW ---
-            LazyColumn(
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Categories Row
+                // --- FIXED MAP AT TOP ---
+                SatelliteMap(
+                    position = position,
+                    selectedId = selectedId,
+                    userLat = userLat,
+                    userLon = userLon,
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(260.dp) // Adjusted height slightly for better peeking
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                // --- SCROLLABLE CONTENT BELOW ---
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 80.dp), // Extra space at bottom
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                // Search and Filters Row
                 item {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        categories.forEach { category ->
-                            FilterChip(
-                                selected = selectedCategory == category,
-                                onClick = { selectedCategory = category },
-                                label = { Text(category, fontSize = 11.sp) }
+                        // Search Toggle / Field
+                        if (isSearchActive) {
+                            TextField(
+                                value = searchQuery,
+                                onValueChange = { viewModel.updateSatelliteSearchQuery(it) },
+                                placeholder = { Text("Search...", fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                ),
+                                shape = RoundedCornerShape(24.dp),
+                                singleLine = true,
+                                trailingIcon = {
+                                    IconButton(onClick = { 
+                                        isSearchActive = false
+                                        viewModel.updateSatelliteSearchQuery("")
+                                    }) {
+                                        Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
                             )
+                        } else {
+                            IconButton(
+                                onClick = { isSearchActive = true },
+                                modifier = Modifier.size(36.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Search, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                            
+                            Spacer(Modifier.width(8.dp))
+                            
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                categories.forEach { category ->
+                                    FilterChip(
+                                        selected = selectedCategory == category,
+                                        onClick = { selectedCategory = category },
+                                        label = { Text(category, fontSize = 10.sp) },
+                                        modifier = Modifier.height(28.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -198,7 +223,24 @@ fun SatellitesScreen(
                 }
             }
         }
+
+        // Bottom Gradient Fade for scroll indication
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(60.dp)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                        )
+                    )
+                )
+        )
     }
+}
 }
 
 @Composable
@@ -244,6 +286,24 @@ fun NextPassCard(pass: SatellitePass) {
     val mins = if (isInProgress) losCountdown / 60 else countdown / 60
     val secs = if (isInProgress) losCountdown % 60 else countdown % 60
 
+    // Quality Calculation (Scale 0-1)
+    val elevationFactor = (pass.maxElevation / 90.0).coerceIn(0.0, 1.0) * 0.5
+    val durationFactor = (pass.duration / 900.0).coerceIn(0.0, 1.0) * 0.3
+    val sunlitFactor = (if (pass.isDaylight) 1.0 else 0.5) * 0.1
+    val qualityScore = (elevationFactor + durationFactor + sunlitFactor + 0.1).coerceIn(0.0, 1.0)
+    val qualityPercent = (qualityScore * 100).toInt()
+    val qualityColor = when {
+        qualityScore > 0.7 -> Color(0xFF4CAF50)
+        qualityScore > 0.4 -> Color(0xFFFFC107)
+        else -> Color(0xFFF44336)
+    }
+    val qualityText = when {
+        qualityScore > 0.8 -> "Excellent for all antennas"
+        qualityScore > 0.6 -> "Good for handheld"
+        qualityScore > 0.4 -> "Fair - High elevation needed"
+        else -> "Poor - Near horizon"
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -254,81 +314,141 @@ fun NextPassCard(pass: SatellitePass) {
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header Row: Sat Name + Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (isInProgress) "LOS COUNTDOWN (LIVE)" else "AOS COUNTDOWN", 
-                        style = MaterialTheme.typography.labelSmall, 
-                        color = if (isInProgress) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp
-                    )
-                    Text(
-                        text = String.format(Locale.US, "%02dm %02ds", mins, secs),
-                        style = MaterialTheme.typography.headlineMedium,
+                        text = pass.name,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
                         color = if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
                     )
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        color = qualityColor,
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = pass.quality.uppercase().ifEmpty { "FAIR" },
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                    }
                 }
                 
-                val quality = pass.quality.ifEmpty { "Fair" }
-                Surface(
-                    color = when(quality) {
-                        "Excellent" -> Color(0xFF4CAF50)
-                        "Good" -> Color(0xFF8BC34A)
-                        else -> Color(0xFFFFC107)
-                    },
-                    shape = RoundedCornerShape(6.dp)
-                ) {
-                    Text(
-                        quality.uppercase(), 
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                }
-            }
-            
-            if (isInProgress) {
-                val totalDuration = (pass.endTime - pass.startTime).coerceAtLeast(1)
-                val elapsed = (currentTime - pass.startTime).coerceAtLeast(0)
-                val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-                
-                Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
-                    color = MaterialTheme.colorScheme.tertiary,
-                    trackColor = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.1f)
+                Text(
+                    if (isInProgress) "LIVE" else "NEXT PASS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = (if (isInProgress) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary).copy(alpha = 0.8f),
+                    fontWeight = FontWeight.Black
                 )
             }
-            
+
+            Spacer(Modifier.height(8.dp))
+
+            // Large Countdown Focus
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = String.format(Locale.US, "%02dm %02ds", mins, secs),
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Black,
+                    color = if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    text = if (isInProgress) "UNTIL LOSS OF SIGNAL" else "UNTIL ACQUISITION",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = (if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer).copy(alpha = 0.6f),
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Text(
+                    text = "Next pass: ${pass.quality} visibility • Max elevation ${pass.maxElevation.toInt()}°",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = (if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer).copy(alpha = 0.8f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Pass Quality Bar
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "PASS QUALITY",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        color = (if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer).copy(alpha = 0.5f)
+                    )
+                    Text(
+                        "$qualityPercent%",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        color = qualityColor
+                    )
+                }
+                
+                // Visual Bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background((if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer).copy(alpha = 0.1f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(qualityScore.toFloat())
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(qualityColor)
+                    )
+                }
+                
+                Text(
+                    text = qualityText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = (if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer).copy(alpha = 0.7f),
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                )
+            }
+
             HorizontalDivider(
-                modifier = Modifier.padding(vertical = 16.dp), 
+                modifier = Modifier.padding(vertical = 12.dp), 
                 color = (if (isInProgress) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer).copy(alpha = 0.1f)
             )
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                PassInfoItem("AOS", sdf.format(Date(pass.startTime * 1000)))
-                PassInfoItem("MAX EL", "${pass.maxElevation.toInt()}°")
-                PassInfoItem("DUR", "${pass.duration / 60}m")
-                PassInfoItem("LOS", sdf.format(Date(pass.endTime * 1000)))
+            // Four Columns with Icons
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                PassInfoItem("AOS", sdf.format(Date(pass.startTime * 1000)), Icons.Default.Launch)
+                PassInfoItem("LOS", sdf.format(Date(pass.endTime * 1000)), Icons.Default.VerticalAlignBottom)
+                PassInfoItem("DUR", "${pass.duration / 60}m", Icons.Default.Schedule)
+                PassInfoItem("MAX EL", "${pass.maxElevation.toInt()}°", Icons.AutoMirrored.Filled.TrendingUp)
             }
         }
     }
 }
 
 @Composable
-fun PassInfoItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+fun PassInfoItem(label: String, value: String, icon: ImageVector) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Icon(icon, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
+        Text(value, style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), fontWeight = FontWeight.Black)
     }
 }
 

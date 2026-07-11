@@ -27,11 +27,17 @@ fun SatelliteMap(
     modifier: Modifier = Modifier
 ) {
     val mapUrl = remember(selectedId, userLat, userLon) {
+        // Updated URL to request a large size and ensuring parameters are passed correctly
         "https://www.n2yo.com/widgets/widget-tracker.php?s=$selectedId&size=large&all=1&lat=$userLat&lon=$userLon"
     }
 
-    Box(modifier = modifier.clip(RoundedCornerShape(24.dp))) {
-        // Using the project's stable WebView-based map to avoid Google Maps SDK crashes (missing API keys)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.Black)
+    ) {
+        // Using the project's stable WebView-based map
         RobertMap(
             url = mapUrl,
             modifier = Modifier.fillMaxSize()

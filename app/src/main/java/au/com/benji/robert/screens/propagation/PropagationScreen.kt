@@ -1,18 +1,22 @@
 package au.com.benji.robert.screens.propagation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -20,39 +24,38 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.foundation.Canvas
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
+import au.com.benji.robert.R
+import au.com.benji.robert.components.PremiumActionCard
 import au.com.benji.robert.models.SolarData
-import au.com.benji.robert.utils.MufCalculator
+import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.repository.propagation.BandCondition
-import au.com.benji.robert.repository.propagation.AuroraReport
-import au.com.benji.robert.repository.propagation.ESkipReport
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
-
-import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PropagationScreen(
     paddingValues: PaddingValues,
-    dashboardViewModel: DashboardViewModel = viewModel()
+    dashboardViewModel: DashboardViewModel = viewModel(),
+    navController: NavController
 ) {
     val solarData by dashboardViewModel.solarData.collectAsStateWithLifecycle()
     val mufResult by dashboardViewModel.mufResult.collectAsStateWithLifecycle()
     val bandConditions by dashboardViewModel.propagationData.collectAsStateWithLifecycle()
     val isRefreshing by dashboardViewModel.isRefreshing.collectAsStateWithLifecycle()
-    val location by dashboardViewModel.locationFlow.collectAsStateWithLifecycle()
 
     val pullToRefreshState = rememberPullToRefreshState()
     
@@ -62,315 +65,280 @@ fun PropagationScreen(
         state = pullToRefreshState,
         modifier = Modifier.fillMaxSize().padding(paddingValues)
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(Spacing.Medium),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
+            contentPadding = PaddingValues(Spacing.Medium),
+            modifier = Modifier.fillMaxSize()
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    Image(
-                        painter = painterResource(id = au.com.benji.robert.R.drawable.propagation1),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(62.dp),
-                        colorFilter = null,
-                        contentScale = ContentScale.Fit
-                    )
-                    Text(
-                        text = "Propagation Center",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-
-            item {
-                solarData?.let { data ->
-                    SolarDataCard(data, mufResult, bandConditions?.aurora, bandConditions?.eSkip)
-                }
-            }
-
-            item {
-                Text(
-                    text = "Live Band Conditions",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            bandConditions?.let { data ->
-                val chunkedBands = data.bands.chunked(2)
-                items(chunkedBands) { rowBands ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-                    ) {
-                        rowBands.forEach { band ->
-                            BandConditionCard(band, modifier = Modifier.weight(1f))
-                        }
-                        if (rowBands.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            } ?: item { 
-                Box(modifier = Modifier.fillMaxWidth().padding(Spacing.Large), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(Spacing.Small))
-                        Text("Calculating band stability...", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
+            item(span = { GridItemSpan(2) }) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, 
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                    modifier = Modifier.padding(bottom = 8.dp)
                 ) {
-                    Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(Spacing.Small))
+                    Surface(
+                        modifier = Modifier.size(56.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = R.drawable.propagation1),
+                                contentDescription = null,
+                                modifier = Modifier.size(42.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                    Column {
                         Text(
-                            text = "Data combines real-time NOAA solar indices and traffic density.",
-                            style = MaterialTheme.typography.labelSmall
+                            text = "Propagation Center",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Real-time HF & Solar Analysis",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
             }
+
+            item(span = { GridItemSpan(2) }) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    PremiumActionCard(
+                        icon = R.drawable.dxlook1,
+                        title = "Open DXLook",
+                        onClick = { 
+                            try {
+                                navController.navigate(Screen.DxLook.route) 
+                            } catch (e: Exception) {
+                                android.util.Log.e("PropagationScreen", "Navigation to DXLook failed", e)
+                            }
+                        },
+                        modifier = Modifier.widthIn(min = 180.dp, max = 220.dp)
+                    )
+                }
+            }
+
+            item(span = { GridItemSpan(2) }) {
+                SectionHeader("Solar Data", Icons.Default.WbSunny)
+            }
+
+            item(span = { GridItemSpan(2) }) {
+                solarData?.let { data ->
+                    OperatingConditionsCard(data, mufResult.value)
+                }
+            }
+
+            item(span = { GridItemSpan(2) }) {
+                SectionHeader("Live Band Conditions", Icons.Default.Podcasts)
+            }
+
+            val bands = bandConditions?.bands ?: emptyList()
+            if (bands.isEmpty()) {
+                item(span = { GridItemSpan(2) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 3.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                "Analyzing band conditions...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(bands) { condition ->
+                    DetailedBandCard(condition)
+                }
+            }
+
+            item(span = { GridItemSpan(2) }) {
+                SolarDataDisclaimer()
+            }
             
-            item { Spacer(modifier = Modifier.height(Spacing.Large)) }
+            item(span = { GridItemSpan(2) }) {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
         }
     }
 }
 
 @Composable
-fun SolarDataCard(data: SolarData, mufResult: MufCalculator.MufResult, aurora: AuroraReport? = null, eSkip: ESkipReport? = null) {
+fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 1.2.sp
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+fun DetailedBandCard(condition: BandCondition) {
+    val scoreColor = try {
+        Color(android.graphics.Color.parseColor(condition.color))
+    } catch (e: Exception) {
+        MaterialTheme.colorScheme.primary
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        )
     ) {
         Column(modifier = Modifier.padding(Spacing.Medium)) {
-            Text(
-                text = "HAMQSL SOLAR INDICES",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(Spacing.Medium))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricItem("SFI", data.solarFlux.toString())
-                MetricItem("SN", data.sunspots.toString())
-                MetricItem("A-Idx", data.aIndex.toString())
-                MetricItem("K-Idx", data.kIndex.toString())
-            }
-            
-            Spacer(modifier = Modifier.height(Spacing.Medium))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(Spacing.Medium))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(modifier = Modifier.weight(1f)) {
-                    DetailRow("X-Ray", data.xRay)
-                    DetailRow("Wind", data.solarWind)
-                    DetailRow("Magnetic", data.magneticField)
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    DetailRow("Proton", data.protonFlux)
-                    DetailRow("Electron", data.electronFlux)
-                    DetailRow("Aurora", data.aurora)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.Medium))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Column(modifier = Modifier.padding(Spacing.Small)) {
-                        Text(
-                            text = if (mufResult.isEstimated) "Estimated MUF" else "Reported MUF",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (mufResult.isEstimated) MaterialTheme.colorScheme.primary else Color.Unspecified
-                        )
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                text = String.format("%.1f", mufResult.value),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                text = " MHz",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(bottom = 2.dp)
-                            )
-                        }
-                    }
-                }
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Column(modifier = Modifier.padding(Spacing.Small)) {
-                        Text("foF2", style = MaterialTheme.typography.labelSmall)
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                text = String.format("%.1f", mufResult.foF2),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                text = " MHz",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(bottom = 2.dp)
-                            )
-                        }
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(Spacing.Medium))
-            Text("VHF CONDITIONS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val statusColor = remember(aurora?.color) {
-                    try {
-                        if (aurora?.color != null) Color(android.graphics.Color.parseColor(aurora.color)) else null
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-                
-                val skipColor = remember(eSkip?.color) {
-                    try {
-                        if (eSkip?.color != null) Color(android.graphics.Color.parseColor(eSkip.color)) else null
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-                
-                Text(
-                    text = "VHF Aurora: ${aurora?.status ?: data.vhfAurora}", 
-                    style = MaterialTheme.typography.bodySmall,
-                    color = statusColor ?: MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (aurora != null) FontWeight.Bold else FontWeight.Normal
-                )
-                Text(
-                    text = "E-Skip: ${eSkip?.status ?: data.eSkip}", 
-                    style = MaterialTheme.typography.bodySmall,
-                    color = skipColor ?: MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (eSkip != null) FontWeight.Bold else FontWeight.Normal
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun DetailRow(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-        Text(text = "$label: ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun MetricItem(label: String, value: String) {
-    Column {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-        Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun BandConditionCard(band: BandCondition, modifier: Modifier = Modifier) {
-    val color = try {
-        Color(android.graphics.Color.parseColor(band.color))
-    } catch (e: Exception) {
-        when (band.rating) {
-            "Excellent" -> Color(0xFF4CAF50)
-            "Very Good" -> Color(0xFF4CAF50)
-            "Good" -> Color(0xFF8BC34A)
-            "Fair" -> Color(0xFFFFC107)
-            "Poor" -> Color(0xFFF44336)
-            else -> MaterialTheme.colorScheme.primary
-        }
-    }
-
-    val (trendIcon, trendColor) = when (band.trend) {
-        "Improving" -> Icons.AutoMirrored.Filled.TrendingUp to Color(0xFF4CAF50)
-        "Declining" -> Icons.AutoMirrored.Filled.TrendingDown to Color(0xFFF44336)
-        else -> Icons.AutoMirrored.Filled.TrendingFlat to MaterialTheme.colorScheme.outline
-    }
-
-    Card(
-        modifier = modifier.padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    ) {
-        Column(
-            modifier = Modifier.padding(Spacing.Small),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = band.band, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Icon(
-                    imageVector = trendIcon,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = trendColor
+                Text(
+                    text = condition.band,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-            }
-            
-            Box(modifier = Modifier.fillMaxWidth().height(30.dp), contentAlignment = Alignment.Center) {
-                if (band.history.isNotEmpty()) {
-                    SparklineGraph(
-                        history = band.history,
-                        color = color,
-                        modifier = Modifier.fillMaxSize().padding(vertical = 4.dp)
+                Surface(
+                    color = when (condition.trend) {
+                        "Improving" -> Color(0xFF4CAF50).copy(alpha = 0.1f)
+                        "Declining" -> Color.Red.copy(alpha = 0.1f)
+                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    },
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = when (condition.trend) {
+                            "Declining" -> Icons.AutoMirrored.Filled.TrendingDown
+                            "Improving" -> Icons.AutoMirrored.Filled.TrendingUp
+                            else -> Icons.AutoMirrored.Filled.TrendingFlat
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.padding(4.dp).size(14.dp),
+                        tint = when (condition.trend) {
+                            "Declining" -> Color.Red
+                            "Improving" -> Color(0xFF4CAF50)
+                            else -> MaterialTheme.colorScheme.outline
+                        }
                     )
-                } else {
-                    Text("---", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }
             }
 
-            Surface(
-                color = color.copy(alpha = 0.15f),
-                shape = CircleShape
+            Spacer(modifier = Modifier.height(Spacing.Small))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(scoreColor.copy(alpha = 0.05f))
+                    .padding(vertical = 4.dp)
             ) {
-                Text(
-                    text = "${band.score} - ${band.rating.uppercase()}",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Black,
-                    color = color,
-                    fontSize = 10.sp
+                SparklineGraph(
+                    data = condition.history,
+                    color = scoreColor,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
 
-            if (band.summaries.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    band.summaries.forEach { summary ->
-                        OperatingSummaryRow(summary)
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+
+            Surface(
+                color = scoreColor.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "${condition.score} • ${condition.rating.uppercase()}",
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = scoreColor,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                condition.summaries.forEach { summary ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = summary.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            fontSize = 10.sp
+                        )
+                        val ratingColor = when (summary.rating) {
+                            "Excellent", "Very Good", "Good" -> Color(0xFF4CAF50)
+                            "Fair" -> Color(0xFFFFC107)
+                            "Poor" -> Color(0xFFFF9800)
+                            else -> Color.Red
+                        }
+                        Text(
+                            text = summary.rating,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 10.sp,
+                            color = ratingColor
+                        )
                     }
                 }
             }
@@ -379,60 +347,105 @@ fun BandConditionCard(band: BandCondition, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun OperatingSummaryRow(summary: au.com.benji.robert.repository.propagation.OperatingSummary) {
-    Row(
+fun OperatingConditionsCard(solarData: SolarData, muf: Double) {
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        Text(
-            text = summary.label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            fontSize = 9.sp,
-            maxLines = 1
-        )
-        
-        val ratingColor = when (summary.rating) {
-            "Excellent" -> Color(0xFF4CAF50)
-            "Very Good" -> Color(0xFF4CAF50)
-            "Good" -> Color(0xFF8BC34A)
-            "Fair" -> Color(0xFFFFC107)
-            "Poor" -> Color(0xFFF44336)
-            else -> MaterialTheme.colorScheme.outline
+        Column(modifier = Modifier.padding(Spacing.Large)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                MetricItemCompact("SFI", solarData.solarFlux.toString(), Icons.Default.WbSunny)
+                MetricItemCompact("K-IDX", solarData.kIndex.toString(), Icons.Default.Speed)
+                MetricItemCompact("A-IDX", solarData.aIndex.toString(), Icons.Default.ShowChart)
+                MetricItemCompact("MUF", String.format(Locale.US, "%.1f", muf), Icons.Default.Wifi)
+            }
+            Spacer(modifier = Modifier.height(Spacing.Large))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                MetricItemCompact("Spots", solarData.sunspots.toString(), Icons.Default.BrightnessLow)
+                MetricItemCompact("X-Ray", solarData.xRay, Icons.Default.Bolt)
+                MetricItemCompact("Wind", solarData.solarWind.take(4), Icons.Default.Air)
+                MetricItemCompact("Field", solarData.magneticField, Icons.Default.Explore)
+            }
         }
-
-        Text(
-            text = summary.rating,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = ratingColor,
-            fontSize = 9.sp
-        )
     }
 }
 
 @Composable
-fun SparklineGraph(history: List<Int>, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        if (history.size < 2) return@Canvas
-        
-        val width = size.width
-        val height = size.height
-        val maxScore = 100f
-        val stepX = width / (history.size - 1)
-        
-        val path = Path().apply {
-            history.forEachIndexed { index, score ->
-                val x = index * stepX
-                val y = height - (score.toFloat() / maxScore * height)
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
-            }
+fun MetricItemCompact(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(icon, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontSize = 9.sp)
+        Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Black)
+    }
+}
+
+@Composable
+fun SolarDataDisclaimer() {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = Spacing.Small),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.Medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+        ) {
+            Icon(Icons.Default.Info, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+            Text(
+                text = "Data combines real-time NOAA solar indices and traffic density analysis.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 14.sp
+            )
         }
+    }
+}
+
+@Composable
+fun SparklineGraph(data: List<Int>, color: Color, modifier: Modifier) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        if (data.size < 2) return@Canvas
+        val path = androidx.compose.ui.graphics.Path()
+        val max = data.maxOrNull()?.coerceAtLeast(1) ?: 100
+        val min = data.minOrNull() ?: 0
+        val range = (max - min).coerceAtLeast(1).toFloat()
+        
+        val stepX = size.width / (data.size - 1)
+        
+        val points = data.mapIndexed { index, value ->
+            androidx.compose.ui.geometry.Offset(
+                x = index * stepX,
+                y = size.height - ((value - min).toFloat() / range * size.height)
+            )
+        }
+
+        path.moveTo(points[0].x, points[0].y)
+        
+        for (i in 0 until points.size - 1) {
+            val p0 = points[(i - 1).coerceAtLeast(0)]
+            val p1 = points[i]
+            val p2 = points[i + 1]
+            val p3 = points[(i + 2).coerceAtMost(points.size - 1)]
+            
+            val cp1 = p1 + (p2 - p0) / 6f
+            val cp2 = p2 - (p3 - p1) / 6f
+            
+            path.cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y)
+        }
+        
         drawPath(
             path = path,
             color = color,
-            style = Stroke(width = 2.dp.toPx())
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 2.dp.toPx(),
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
+            )
         )
     }
 }

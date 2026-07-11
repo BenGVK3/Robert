@@ -44,6 +44,7 @@ fun CommandCenterSheet(
                 CommandAction("The Shack", au.com.benji.robert.R.drawable.theshack1, CommandActionType.Dialog(DialogType.SHACK)),
                 CommandAction("KiwiSDR", au.com.benji.robert.R.drawable.kiwisdr1, CommandActionType.Navigate(Screen.Sdr.route)),
                 CommandAction("APRS Map", au.com.benji.robert.R.drawable.aprs1, CommandActionType.Navigate(Screen.Aprs.route)),
+                CommandAction("DXLook", au.com.benji.robert.R.drawable.dxlook1, CommandActionType.Navigate(Screen.DxLook.route)),
                 CommandAction("Satellites", au.com.benji.robert.R.drawable.satellites1, CommandActionType.Navigate(Screen.Satellites.route)),
                 CommandAction("Moon (EME/Moonbounce)", au.com.benji.robert.R.drawable.moon1, CommandActionType.Navigate(Screen.Moon.route)),
                 CommandAction("Repeaters", au.com.benji.robert.R.drawable.repeaters1, CommandActionType.Navigate(Screen.RepeaterList.route))
