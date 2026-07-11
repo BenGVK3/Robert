@@ -93,53 +93,29 @@ fun RepeaterListScreen(
                     shape = MaterialTheme.shapes.medium
                 )
 
-                // Repeater Map Section
+                // Repeater Map Entry Card
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
+                        .padding(horizontal = Spacing.Medium, vertical = Spacing.Small)
+                        .clickable { isMapExpanded = true },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     )
                 ) {
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isMapExpanded = !isMapExpanded }
-                                .padding(Spacing.Medium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(Spacing.Medium))
-                                Text("Repeater Map", style = MaterialTheme.typography.titleMedium)
-                            }
-                            Icon(
-                                if (isMapExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (isMapExpanded) "Collapse" else "Expand"
-                            )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(Spacing.Medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(Spacing.Medium))
+                            Text("Open Repeater Map", style = MaterialTheme.typography.titleMedium)
                         }
-
-                        AnimatedVisibility(
-                            visible = isMapExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut()
-                        ) {
-                            Box(modifier = Modifier
-                                .fillMaxWidth()
-                                .height(400.dp)
-                                .padding(Spacing.Small)
-                            ) {
-                                LeafletMapView(
-                                    lat = userLocation?.first ?: -37.8136,
-                                    lon = userLocation?.second ?: 144.9631,
-                                    repeaters = repeaters,
-                                    onMarkerClick = onNavigateToDetail
-                                )
-                            }
-                        }
+                        Icon(Icons.Default.OpenInFull, contentDescription = "Open Full Map")
                     }
                 }
 
@@ -177,6 +153,45 @@ fun RepeaterListScreen(
                 showFilterDialog = false
             }
         )
+    }
+
+    if (isMapExpanded) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { isMapExpanded = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("Repeater Map") },
+                        navigationIcon = {
+                            IconButton(onClick = { isMapExpanded = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { viewModel.refreshLocation() }) {
+                                Icon(Icons.Default.MyLocation, contentDescription = "Find Me")
+                            }
+                        }
+                    )
+                }
+            ) { padding ->
+                Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                    LeafletMapView(
+                        lat = userLocation?.first ?: -37.8136,
+                        lon = userLocation?.second ?: 144.9631,
+                        repeaters = repeaters,
+                        onMarkerClick = { callsign, freq ->
+                            isMapExpanded = false
+                            onNavigateToDetail(callsign, freq)
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 

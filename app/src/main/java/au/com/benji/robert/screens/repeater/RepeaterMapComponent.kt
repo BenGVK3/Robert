@@ -5,6 +5,7 @@ import android.graphics.*
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -38,12 +39,28 @@ fun LeafletMapView(
         true
     }
 
+    // Keep track of the current repeaters to avoid unnecessary marker refreshes
+    val currentRepeatersRef = remember { mutableStateOf<List<Repeater>>(emptyList()) }
+
     val mapView = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
             setHasTransientState(true)
+            
+            // Crucial: Intercept touch events to prevent parent scrolling (LazyColumn/PullToRefresh)
+            setOnTouchListener { v, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        parent.requestDisallowInterceptTouchEvent(true)
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        parent.requestDisallowInterceptTouchEvent(false)
+                    }
+                }
+                false // Allow MapView to handle the event as well
+            }
         }
     }
 
@@ -55,47 +72,52 @@ fun LeafletMapView(
     AndroidView(
         factory = { mapView },
         update = { mv ->
-            // Only set the initial center once to avoid overriding user panning
+            // Initial centering
             if (!hasInitializedCenter && lat != 0.0 && lon != 0.0) {
-                mv.controller.setZoom(9.0) // Shows roughly 200km radius surroundings
+                mv.controller.setZoom(9.0)
                 mv.controller.setCenter(GeoPoint(lat, lon))
                 hasInitializedCenter = true
             }
             
-            mv.overlays.clear()
-            
-            // User Location: Blue Dot
-            val userMarker = Marker(mv).apply {
-                position = GeoPoint(lat, lon)
-                icon = createUserLocationIcon(context)
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                title = "You are here"
-                infoWindow = null
-            }
-            mv.overlays.add(userMarker)
-            
-            // Repeater Markers
-            groupedRepeaters.forEach { (coords, list) ->
-                val marker = Marker(mv).apply {
-                    position = GeoPoint(coords.first, coords.second)
-                    icon = createRepeaterIcon(context, list.size > 1)
+            // Only rebuild overlays if the data actually changed to prevent flickering while panning
+            if (currentRepeatersRef.value != repeaters) {
+                currentRepeatersRef.value = repeaters
+                
+                mv.overlays.clear()
+                
+                // User Location: Blue Dot
+                val userMarker = Marker(mv).apply {
+                    position = GeoPoint(lat, lon)
+                    icon = createUserLocationIcon(context)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    
-                    infoWindow = RepeaterInfoWindow(mv, list, onMarkerClick)
-                    
-                    setOnMarkerClickListener { m, _ ->
-                        if (!m.isInfoWindowShown) {
-                            m.showInfoWindow()
-                            mv.controller.animateTo(m.position)
-                        } else {
-                            m.closeInfoWindow()
-                        }
-                        true
-                    }
+                    title = "You are here"
+                    infoWindow = null
                 }
-                mv.overlays.add(marker)
+                mv.overlays.add(userMarker)
+                
+                // Repeater Markers
+                groupedRepeaters.forEach { (coords, list) ->
+                    val marker = Marker(mv).apply {
+                        position = GeoPoint(coords.first, coords.second)
+                        icon = createRepeaterIcon(context, list.size > 1)
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        
+                        infoWindow = RepeaterInfoWindow(mv, list, onMarkerClick)
+                        
+                        setOnMarkerClickListener { m, _ ->
+                            if (!m.isInfoWindowShown) {
+                                m.showInfoWindow()
+                                mv.controller.animateTo(m.position)
+                            } else {
+                                m.closeInfoWindow()
+                            }
+                            true
+                        }
+                    }
+                    mv.overlays.add(marker)
+                }
+                mv.invalidate()
             }
-            mv.invalidate()
         },
         modifier = Modifier.fillMaxSize()
     )
@@ -113,15 +135,12 @@ private fun createUserLocationIcon(context: Context): Drawable {
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     
-    // Shadow/Glow
     paint.color = Color.parseColor("#40000000")
     canvas.drawCircle(px / 2f, px / 2f, px / 2f, paint)
     
-    // Outer white
     paint.color = Color.WHITE
     canvas.drawCircle(px / 2f, px / 2f, px / 2.2f, paint)
     
-    // Inner blue
     paint.color = Color.parseColor("#2196F3")
     canvas.drawCircle(px / 2f, px / 2f, px / 3.2f, paint)
     
@@ -136,21 +155,17 @@ private fun createRepeaterIcon(context: Context, isGroup: Boolean): Drawable {
     
     val color = if (isGroup) Color.parseColor("#FF9800") else Color.parseColor("#673AB7")
     
-    // Shadow
     paint.color = Color.parseColor("#40000000")
     canvas.drawCircle(px / 2f, px / 2f, px / 2f, paint)
     
-    // Main Circle
     paint.color = color
     canvas.drawCircle(px / 2f, px / 2f, px / 2.4f, paint)
     
-    // White Border
     paint.style = Paint.Style.STROKE
     paint.color = Color.WHITE
     paint.strokeWidth = 2 * context.resources.displayMetrics.density
     canvas.drawCircle(px / 2f, px / 2f, px / 2.4f, paint)
     
-    // Inner Symbol (Dot)
     paint.style = Paint.Style.FILL
     paint.color = Color.WHITE
     canvas.drawCircle(px / 2f, px / 2f, px / 6f, paint)
@@ -205,7 +220,7 @@ class RepeaterInfoWindow(
 
             val repeaterLayout = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(0, 0, (24 * density).toInt(), 0) // Leave space for the arrow
+                setPadding(0, 0, (24 * density).toInt(), 0)
                 setOnClickListener {
                     onDetailsClick(repeater.callsign, repeater.frequency)
                     close()
