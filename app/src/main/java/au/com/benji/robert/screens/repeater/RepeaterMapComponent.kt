@@ -57,7 +57,7 @@ fun LeafletMapView(
         update = { mv ->
             // Only set the initial center once to avoid overriding user panning
             if (!hasInitializedCenter && lat != 0.0 && lon != 0.0) {
-                mv.controller.setZoom(13.0) // Start zoomed in on the user's surroundings
+                mv.controller.setZoom(9.0) // Shows roughly 200km radius surroundings
                 mv.controller.setCenter(GeoPoint(lat, lon))
                 hasInitializedCenter = true
             }
