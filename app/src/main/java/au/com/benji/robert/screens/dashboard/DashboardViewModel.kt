@@ -7,6 +7,7 @@ import androidx.core.net.toUri
 import au.com.benji.robert.database.DatabaseModule
 import au.com.benji.robert.database.LogEntryEntity
 import au.com.benji.robert.database.ShackEntity
+import au.com.benji.robert.database.NetEntity
 import au.com.benji.robert.location.LocationService
 import au.com.benji.robert.models.*
 import au.com.benji.robert.navigation.Screen
@@ -24,6 +25,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
@@ -43,24 +45,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
     private val logRepository = LogRepository(DatabaseModule.logDao(application))
     private val repeaterRepository = RepeaterRepository(DatabaseModule.repeaterDao(application))
+    private val netRepository = NetRepository(DatabaseModule.netDao(application))
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
     
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
-
-    private val _mapIsCollapsed = MutableStateFlow(true)
-    val mapIsCollapsed = _mapIsCollapsed.asStateFlow()
-
-    private val _mapBand = MutableStateFlow("20m")
-    val mapBand = _mapBand.asStateFlow()
-
-    private val _mapMode = MutableStateFlow("All")
-    val mapMode = _mapMode.asStateFlow()
-
-    fun toggleMapCollapse() { _mapIsCollapsed.value = !_mapIsCollapsed.value }
-    fun setMapBand(band: String) { _mapBand.value = band }
-    fun setMapMode(mode: String) { _mapMode.value = mode }
 
     val callsign = settingsRepository.callsign.stateIn(
         scope = viewModelScope,
@@ -103,26 +93,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
-
-    val mapSpots = combine(locationFlow, _mapBand) { loc, band ->
-        Pair(loc, band)
-    }.flatMapLatest { (loc, band) ->
-        flow {
-            while(true) {
-                val spots = propagationRepository.getLiveSpots(
-                    if (band == "All") "20m" else band,
-                    loc?.first,
-                    loc?.second
-                )
-                emit(spots)
-                delay(5 * 60 * 1000)
-            }
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
 
     data class Quadruple<out A, out B, out C, out D>(
         val first: A,
@@ -317,6 +287,50 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
     )
+
+    val nextNet = netRepository.getAllNets()
+        .map { nets ->
+            if (nets.isEmpty()) return@map null
+            
+            val now = Calendar.getInstance()
+            val currentMillis = now.timeInMillis
+
+            nets.mapNotNull { net ->
+                if (net.specificDate != null) {
+                    // Handle one-off events
+                    if (net.specificDate > currentMillis) {
+                        Pair(net, net.specificDate)
+                    } else {
+                        null
+                    }
+                } else {
+                    // Handle weekly recurring nets
+                    val day = net.dayOfWeek ?: return@mapNotNull null
+                    val timeParts = net.time.split(":")
+                    if (timeParts.size != 2) return@mapNotNull null
+                    
+                    val netCalendar = Calendar.getInstance()
+                    netCalendar.set(Calendar.DAY_OF_WEEK, day)
+                    netCalendar.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                    netCalendar.set(Calendar.MINUTE, timeParts[1].toInt())
+                    netCalendar.set(Calendar.SECOND, 0)
+                    netCalendar.set(Calendar.MILLISECOND, 0)
+
+                    if (netCalendar.timeInMillis <= currentMillis) {
+                        netCalendar.add(Calendar.WEEK_OF_YEAR, 1)
+                    }
+                    
+                    Pair(net, netCalendar.timeInMillis)
+                }
+            }
+            .sortedBy { it.second }
+            .firstOrNull()?.first
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
 
     private val _satelliteSearchQuery = MutableStateFlow("")
     val satelliteSearchQuery = _satelliteSearchQuery.asStateFlow()

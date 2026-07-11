@@ -6,7 +6,9 @@ sealed class Screen(
     object Dashboard : Screen("dashboard")
     object Propagation : Screen("propagation")
     object Logbook : Screen("logbook")
-    object Tools : Screen("tools")
+    object Tools : Screen("tools?initialTool={initialTool}") {
+        fun createRoute(initialTool: String? = null) = if (initialTool != null) "tools?initialTool=$initialTool" else "tools"
+    }
     object Settings : Screen("settings")
 
     object Sdr : Screen("sdr")

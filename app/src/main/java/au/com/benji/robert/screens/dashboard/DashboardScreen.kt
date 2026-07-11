@@ -44,6 +44,7 @@ import au.com.benji.robert.components.*
 import au.com.benji.robert.theme.Spacing
 import au.com.benji.robert.models.*
 import au.com.benji.robert.database.LogEntryEntity
+import au.com.benji.robert.database.NetEntity
 import au.com.benji.robert.repository.propagation.PropagationData
 import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.network.SatellitePass
@@ -80,6 +81,7 @@ fun DashboardScreen(
     val upcomingPasses by viewModel.upcomingPasses.collectAsStateWithLifecycle()
     val shackSummary by viewModel.shackSummary.collectAsStateWithLifecycle()
     val latestLog by viewModel.latestLog.collectAsStateWithLifecycle()
+    val nextNet by viewModel.nextNet.collectAsStateWithLifecycle()
     val aprsPackets by viewModel.aprsPackets.collectAsStateWithLifecycle()
     val nextPassTimer by viewModel.nextPassTimer.collectAsStateWithLifecycle()
 
@@ -197,6 +199,20 @@ fun DashboardScreen(
                 GreetingSection(name, weatherData)
 
                 // --- MAIN GRID ---
+                Row(modifier = Modifier.weight(0.9f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NextNetCard(
+                        modifier = Modifier.weight(1f),
+                        net = nextNet,
+                        navController = navController
+                    )
+                    SatellitePassCard(
+                        modifier = Modifier.weight(1f),
+                        nextPassTimer = nextPassTimer,
+                        upcomingPasses = upcomingPasses,
+                        navController = navController
+                    )
+                }
+
                 Row(modifier = Modifier.weight(1.3f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OperatingConditionsCard(
                         modifier = Modifier.weight(1.1f).clickable { navController.navigate(Screen.Propagation.route) },
@@ -212,15 +228,14 @@ fun DashboardScreen(
                 }
 
                 Row(modifier = Modifier.weight(0.9f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SatellitePassCard(
-                        modifier = Modifier.weight(1f),
-                        nextPassTimer = nextPassTimer,
-                        upcomingPasses = upcomingPasses,
-                        navController = navController
-                    )
                     FavoriteRepeaterCard(
                         modifier = Modifier.weight(1f),
                         repeater = favoriteRepeater,
+                        navController = navController
+                    )
+                    LatestLogCard(
+                        modifier = Modifier.weight(1f),
+                        log = latestLog,
                         navController = navController
                     )
                 }
@@ -231,18 +246,11 @@ fun DashboardScreen(
                     navController = navController
                 )
 
-                Row(modifier = Modifier.weight(1.1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RecentDxSpotsCard(
-                        modifier = Modifier.weight(1f),
-                        spots = dxSpots.take(5),
-                        onClick = onShowDxSpots
-                    )
-                    LatestLogCard(
-                        modifier = Modifier.weight(1f),
-                        log = latestLog,
-                        navController = navController
-                    )
-                }
+                RecentDxSpotsCard(
+                    modifier = Modifier.weight(0.8f).fillMaxWidth(),
+                    spots = dxSpots.take(3),
+                    onClick = onShowDxSpots
+                )
 
                 // --- BOTTOM DASHBOARD CARDS ---
                 DashboardBottomRow(
@@ -457,6 +465,61 @@ fun MoonStatusCard(modifier: Modifier, moonData: MoonData, moonResId: Int, navCo
 }
 
 @Composable
+fun NextNetCard(modifier: Modifier, net: NetEntity?, navController: NavHostController) {
+    DashboardCard(
+        modifier = modifier.clickable { 
+            navController.navigate(Screen.Tools.createRoute("Club Nets"))
+        },
+        title = "NEXT CLUB NET",
+        icon = Icons.Default.Groups
+    ) {
+        if (net == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "No nets scheduled",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = net.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Surface(
+                        color = Color(0xFFFFC107).copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = au.com.benji.robert.screens.tools.getDayString(net.dayOfWeek),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFFFC107),
+                            fontSize = 8.sp
+                        )
+                    }
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.CellTower, null, modifier = Modifier.size(10.dp), tint = Color.Gray)
+                    Text(net.frequency, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(net.time, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = Color(0xFF00B2FF))
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun SatellitePassCard(modifier: Modifier, nextPassTimer: String, upcomingPasses: List<SatellitePass>, navController: NavHostController) {
     val nextPass = upcomingPasses.firstOrNull { it.startTime > System.currentTimeMillis() / 1000 }
     
@@ -639,16 +702,28 @@ fun BandMiniGraph(modifier: Modifier, band: BandCondition) {
 fun RecentDxSpotsCard(modifier: Modifier, spots: List<DxSpot>, onClick: () -> Unit) {
     DashboardCard(
         modifier = modifier.clickable { onClick() },
-        title = "DX SPOTS",
+        title = "RECENT DX SPOTS",
         icon = Icons.Default.Language
     ) {
         Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
-            spots.forEach { spot ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(spot.callsign, modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 8.sp, maxLines = 1)
-                    Text(spot.band, modifier = Modifier.weight(0.7f), style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
-                    Text(spot.normalizedMode, modifier = Modifier.weight(0.7f), style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
-                    Text(spot.timeZulu.take(5), modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
+            if (spots.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No spots available", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                }
+            } else {
+                spots.forEach { spot ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), 
+                        horizontalArrangement = Arrangement.spacedBy(8.dp), 
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(spot.callsign, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = Color.White, maxLines = 1)
+                        Text(spot.frequency, style = MaterialTheme.typography.labelSmall, color = Color(0xFF00B2FF), fontWeight = FontWeight.Bold)
+                        Text(spot.band, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text(spot.normalizedMode, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.weight(0.2f))
+                        Text(spot.timeZulu.take(5), style = MaterialTheme.typography.labelSmall, color = Color.Gray, textAlign = TextAlign.End)
+                    }
                 }
             }
         }

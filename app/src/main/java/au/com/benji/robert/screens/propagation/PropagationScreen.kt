@@ -33,7 +33,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.Canvas
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.utils.MufCalculator
-import au.com.benji.robert.components.PropagationMap
 import au.com.benji.robert.repository.propagation.BandCondition
 import au.com.benji.robert.repository.propagation.AuroraReport
 import au.com.benji.robert.repository.propagation.ESkipReport
@@ -53,11 +52,6 @@ fun PropagationScreen(
     val mufResult by dashboardViewModel.mufResult.collectAsStateWithLifecycle()
     val bandConditions by dashboardViewModel.propagationData.collectAsStateWithLifecycle()
     val isRefreshing by dashboardViewModel.isRefreshing.collectAsStateWithLifecycle()
-    
-    val mapIsCollapsed by dashboardViewModel.mapIsCollapsed.collectAsStateWithLifecycle()
-    val mapBand by dashboardViewModel.mapBand.collectAsStateWithLifecycle()
-    val mapMode by dashboardViewModel.mapMode.collectAsStateWithLifecycle()
-    val mapSpots by dashboardViewModel.mapSpots.collectAsStateWithLifecycle()
     val location by dashboardViewModel.locationFlow.collectAsStateWithLifecycle()
 
     val pullToRefreshState = rememberPullToRefreshState()
@@ -92,20 +86,6 @@ fun PropagationScreen(
                 }
             }
 
-            item {
-                PropagationMap(
-                    isCollapsed = mapIsCollapsed,
-                    onToggleCollapse = { dashboardViewModel.toggleMapCollapse() },
-                    userLat = location?.first,
-                    userLon = location?.second,
-                    propagationData = bandConditions,
-                    spots = mapSpots,
-                    selectedBand = mapBand,
-                    onBandSelected = { dashboardViewModel.setMapBand(it) },
-                    selectedMode = mapMode,
-                    onModeSelected = { dashboardViewModel.setMapMode(it) }
-                )
-            }
 
             item {
                 solarData?.let { data ->

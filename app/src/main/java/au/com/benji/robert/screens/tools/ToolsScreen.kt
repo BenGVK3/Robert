@@ -50,9 +50,10 @@ import au.com.benji.robert.theme.Spacing
 fun ToolsScreen(
     navController: androidx.navigation.NavController,
     paddingValues: PaddingValues,
+    initialTool: String? = null,
     viewModel: DashboardViewModel = viewModel()
 ) {
-    var activeTool by remember { mutableStateOf<String?>(null) }
+    var activeTool by remember { mutableStateOf<String?>(initialTool) }
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val pullToRefreshState = rememberPullToRefreshState()
 
@@ -122,6 +123,13 @@ fun ToolsScreen(
                     }
                     item {
                         ToolGridCard(
+                            title = "Club Nets",
+                            icon = Icons.Default.Groups,
+                            onClick = { activeTool = "Club Nets" }
+                        )
+                    }
+                    item {
+                        ToolGridCard(
                             title = "Glossary",
                             icon = Icons.Default.Book,
                             onClick = { activeTool = "Glossary" }
@@ -136,6 +144,7 @@ fun ToolsScreen(
                         "Prefix Map" -> PrefixMapTool()
                         "Callsign Lookup" -> CallsignLookupTool()
                         "Band Plan" -> BandPlanScreen()
+                        "Club Nets" -> ClubNetsScreen()
                         "Glossary" -> GlossaryScreen()
                     }
                 }

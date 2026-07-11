@@ -43,4 +43,8 @@ object DatabaseModule {
     fun cacheDao(context: Context): CacheDao {
         return database(context).cacheDao()
     }
+
+    fun netDao(context: Context): NetDao {
+        return database(context).netDao()
+    }
 }

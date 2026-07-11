@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import au.com.benji.robert.repository.BandPlanRepository
 import au.com.benji.robert.repository.SettingsRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -13,6 +15,9 @@ class SettingsViewModel(
     private val repository: SettingsRepository,
     private val bandPlanRepository: BandPlanRepository
 ) : ViewModel() {
+
+    private val _saveSuccess = MutableSharedFlow<Unit>()
+    val saveSuccess = _saveSuccess.asSharedFlow()
 
     val callsign: StateFlow<String> = repository.callsign
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "VK3XYZ")
@@ -41,6 +46,7 @@ class SettingsViewModel(
     fun saveSettings(callsign: String, name: String, gridSquare: String, country: String, licenceClass: String) {
         viewModelScope.launch {
             repository.saveSettings(callsign, name, gridSquare, country, licenceClass)
+            _saveSuccess.emit(Unit)
         }
     }
 

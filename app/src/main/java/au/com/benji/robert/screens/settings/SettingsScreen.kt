@@ -1,18 +1,25 @@
 package au.com.benji.robert.screens.settings
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.database.DatabaseModule
@@ -20,6 +27,7 @@ import au.com.benji.robert.repository.BandPlanRepository
 import au.com.benji.robert.repository.SettingsRepository
 import au.com.benji.robert.theme.Spacing
 import au.com.benji.robert.viewmodel.RobertViewModelFactory
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +47,16 @@ fun SettingsScreen(
     val savedCountry by viewModel.country.collectAsStateWithLifecycle()
     val savedLicenceClass by viewModel.licenceClass.collectAsStateWithLifecycle()
     val savedThemeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+
+    var showToast by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.saveSuccess.collect {
+            showToast = true
+            delay(2000)
+            showToast = false
+        }
+    }
 
     var callsign by remember(savedCallsign) { mutableStateOf(savedCallsign) }
     var name by remember(savedName) { mutableStateOf(savedName) }
@@ -73,14 +91,15 @@ fun SettingsScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = Spacing.Medium)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = Spacing.Medium)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
             Text(text = "Station", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -232,6 +251,44 @@ fun SettingsScreen(
                     fontSize = 9.sp
                 )
             }
+        } // End of Column
+
+        // Custom Toast at the top
+        AnimatedVisibility(
+            visible = showToast,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = innerPadding.calculateTopPadding() + 16.dp)
+                .zIndex(1f)
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = CircleShape,
+                tonalElevation = 4.dp,
+                shadowElevation = 6.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Settings saved successfully",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
+}
 }

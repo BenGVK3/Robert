@@ -58,8 +58,18 @@ fun RobertNavHost(
             LogbookScreen(paddingValues)
         }
 
-        composable(Screen.Tools.route) {
-            ToolsScreen(navController, paddingValues)
+        composable(
+            route = Screen.Tools.route,
+            arguments = listOf(
+                navArgument("initialTool") { 
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val initialTool = backStackEntry.arguments?.getString("initialTool")
+            ToolsScreen(navController, paddingValues, initialTool = initialTool)
         }
 
         composable(Screen.Settings.route) {

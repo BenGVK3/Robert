@@ -148,6 +148,23 @@ object DatabaseProvider {
         }
     }
 
+    private val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS club_nets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    frequency TEXT NOT NULL,
+                    dayOfWeek INTEGER,
+                    specificDate INTEGER,
+                    time TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    notes TEXT NOT NULL DEFAULT ''
+                )
+            """.trimIndent())
+        }
+    }
+
     private fun addColumnIfNotExists(db: SupportSQLiteDatabase, tableName: String, columnName: String, columnDef: String) {
         val cursor = db.query("PRAGMA table_info($tableName)")
         var exists = false
@@ -176,7 +193,7 @@ object DatabaseProvider {
                 RobertDatabase::class.java,
                 "robert.db"
             )
-            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
             .build()
 
             INSTANCE = instance
