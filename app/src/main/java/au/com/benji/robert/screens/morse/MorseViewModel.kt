@@ -40,9 +40,6 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _lastElementSent = MutableStateFlow("")
     val lastElementSent = _lastElementSent.asStateFlow()
 
-    private val _estimatedWpm = MutableStateFlow(0)
-    val estimatedWpm = _estimatedWpm.asStateFlow()
-
     // Trainer specific state
     private val _trainerTarget = MutableStateFlow("")
     val trainerTarget = _trainerTarget.asStateFlow()
@@ -50,14 +47,25 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _trainerFeedback = MutableStateFlow<TrainerFeedback?>(null)
     val trainerFeedback = _trainerFeedback.asStateFlow()
 
+    // Diagnostic state
+    private val _diagnostics = MutableStateFlow<List<KeyerDiagnosticEntry>>(emptyList())
+    val diagnostics = _diagnostics.asStateFlow()
+
+    private val _latencyLog = MutableStateFlow<List<String>>(emptyList())
+    val latencyLog = _latencyLog.asStateFlow()
+
     private var decodeJob: Job? = null
     
-    // Iambic State
+    // Keyer State
     private var dotPressed = false
     private var dashPressed = false
     private var iambicJob: Job? = null
     private var modeBExtra = false
     private var lastSentElement = ""
+    
+    // Precision Timing State
+    private var lastEventTimeNano = 0L
+    private var lastElementEndTimeNano = 0L
 
     private val lessons = listOf(
         "K M", "K M R", "K M R S", "K M R S U", "K M R S U A", "K M R S U A P",
@@ -77,10 +85,14 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private fun stopAll() {
         engine.stop()
         iambicJob?.cancel()
+        decodeJob?.cancel()
         _isPlaying.value = false
         _decodedText.value = ""
         _currentSymbolBuffer.value = ""
         _trainerFeedback.value = null
+        _isKeyBusy.value = false
+        _lastElementSent.value = ""
+        _diagnostics.value = emptyList()
     }
 
     fun updateSettings(newSettings: MorseSettings) {
@@ -106,18 +118,68 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         _isPlaying.value = false
     }
 
-    // --- Keying Logic ---
+    // --- Core Keying Logic (Professional Precision) ---
 
-    private var keyStartTime = 0L
+    private fun onElementStart(element: String) {
+        val now = System.nanoTime()
+        engine.startSidetone() // PRIORITY 1: SOUND
+        
+        decodeJob?.cancel()
+        
+        // Background tasks
+        viewModelScope.launch(Dispatchers.Default) {
+            if (lastElementEndTimeNano > 0) {
+                val gapDurationMs = (now - lastElementEndTimeNano) / 1_000_000
+                val unit = 1200 / _settings.value.wpm
+                val type = if (gapDurationMs < unit * 2) "GAP" else if (gapDurationMs < unit * 5) "CHAR_GAP" else "WORD_GAP"
+                addDiagnostic(type, gapDurationMs, (if (type == "GAP") unit else if (type == "CHAR_GAP") unit * 3 else unit * 7).toLong(), "")
+            }
+            lastEventTimeNano = now
+            
+            withContext(Dispatchers.Main) {
+                _isKeyBusy.value = true
+                _lastElementSent.value = element
+                _currentSymbolBuffer.value += element
+            }
+        }
+    }
+
+    private fun onElementEnd(element: String) {
+        val now = System.nanoTime()
+        engine.stopSidetone() // PRIORITY 1: SILENCE
+        
+        viewModelScope.launch(Dispatchers.Default) {
+            val durationMs = (now - lastEventTimeNano) / 1_000_000
+            val unit = 1200 / _settings.value.wpm
+            lastElementEndTimeNano = now
+            
+            addDiagnostic(if (element == ".") "DIT" else "DAH", durationMs, (if (element == ".") unit else unit * 3).toLong(), element)
+
+            withContext(Dispatchers.Main) {
+                _isKeyBusy.value = false
+                viewModelScope.launch {
+                    delay(150)
+                    if (!_isKeyBusy.value) _lastElementSent.value = ""
+                }
+                startDecodingTimer()
+            }
+        }
+    }
+
+    private fun addDiagnostic(type: String, duration: Long, expected: Long, decoded: String) {
+        val entry = KeyerDiagnosticEntry(type, duration, expected, decoded)
+        _diagnostics.value = (_diagnostics.value + entry).takeLast(20)
+        
+        // Log latency
+        val latency = System.currentTimeMillis() - entry.timestamp
+        _latencyLog.value = (_latencyLog.value + "Touch -> Sidetone: ${latency}ms").takeLast(10)
+    }
 
     fun onKeyDown(isRightPaddle: Boolean) {
         val isDash = if (_settings.value.paddleOrientation == PaddleOrientation.LeftDitRightDah) isRightPaddle else !isRightPaddle
 
         if (_settings.value.keyerMode == KeyerMode.Straight) {
-            engine.startSidetone()
-            keyStartTime = System.currentTimeMillis()
-            _isKeyBusy.value = true
-            decodeJob?.cancel()
+            onElementStart("") 
         } else {
             if (isDash) dashPressed = true else dotPressed = true
             startIambicLogic()
@@ -126,19 +188,16 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onKeyUp(isRightPaddle: Boolean) {
         if (_settings.value.keyerMode == KeyerMode.Straight) {
-            engine.stopSidetone()
-            _isKeyBusy.value = false
-            val duration = System.currentTimeMillis() - keyStartTime
-            val unit = (1200 / _settings.value.wpm).toLong()
-            val element = if (duration < unit * 2) "." else "-"
+            val now = System.nanoTime()
+            val durationMs = (now - lastEventTimeNano) / 1_000_000
+            val unit = 1200 / _settings.value.wpm
+            val element = if (durationMs < unit * 2) "." else "-"
             
-            _currentSymbolBuffer.value += element
-            _lastElementSent.value = element
-            viewModelScope.launch {
-                delay(200)
-                if (_lastElementSent.value == element) _lastElementSent.value = ""
+            if (_currentSymbolBuffer.value.endsWith("")) {
+                _currentSymbolBuffer.value = _currentSymbolBuffer.value.dropLast(0) + element
             }
-            startDecodingTimer()
+            
+            onElementEnd(element)
         } else {
             val isDash = if (_settings.value.paddleOrientation == PaddleOrientation.LeftDitRightDah) isRightPaddle else !isRightPaddle
             if (isDash) dashPressed = false else dotPressed = false
@@ -166,44 +225,27 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
                 val duration = if (nextElement == ".") unit else (unit * 3 * _settings.value.weighting).toLong()
                 lastSentElement = nextElement
                 
-                // Play
-                engine.startSidetone()
-                withContext(Dispatchers.Main) { 
-                    _currentSymbolBuffer.value += nextElement 
-                    _lastElementSent.value = nextElement
-                    _isKeyBusy.value = true
-                }
+                withContext(Dispatchers.Main) { onElementStart(nextElement) }
                 
-                // Track for Iambic B extra
                 val startTime = System.currentTimeMillis()
                 while (System.currentTimeMillis() - startTime < duration) {
-                    delay(5)
+                    delay(1) 
                     if (_settings.value.keyerMode == KeyerMode.IambicB) {
                         if (nextElement == "." && dashPressed) modeBExtra = true
                         if (nextElement == "-" && dotPressed) modeBExtra = true
                     }
                 }
-                engine.stopSidetone()
-                withContext(Dispatchers.Main) { 
-                    _isKeyBusy.value = false
-                    val currentE = nextElement
-                    viewModelScope.launch {
-                        delay(200)
-                        if (_lastElementSent.value == currentE) _lastElementSent.value = ""
-                    }
-                }
                 
-                // Inter-element space
+                withContext(Dispatchers.Main) { onElementEnd(nextElement) }
+                
                 val spaceStartTime = System.currentTimeMillis()
                 while (System.currentTimeMillis() - spaceStartTime < unit) {
-                    delay(5)
+                    delay(1)
                     if (_settings.value.keyerMode == KeyerMode.IambicB) {
                         if (nextElement == "." && dashPressed) modeBExtra = true
                         if (nextElement == "-" && dotPressed) modeBExtra = true
                     }
                 }
-                
-                startDecodingTimer()
             }
             lastSentElement = ""
         }
@@ -212,19 +254,24 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private fun startDecodingTimer() {
         decodeJob?.cancel()
         decodeJob = viewModelScope.launch {
-            val unit = (1200 / _settings.value.wpm).toLong()
-            delay(unit * 3) // Letter space
+            val farnsworthUnit = 1200 / _settings.value.farnsworthWpm
+            val charGap = if (_settings.value.keyerMode == KeyerMode.Straight) farnsworthUnit * 3 else farnsworthUnit * 2
             
-            val char = MorseCodeMap.entries.find { it.value == _currentSymbolBuffer.value }?.key
-            if (char != null) {
-                _decodedText.value += char
-                if (_currentSection.value == MorseSection.Trainer) {
-                    checkTrainerProgress()
+            delay(charGap.toLong())
+            
+            val buffer = _currentSymbolBuffer.value
+            if (buffer.isNotEmpty()) {
+                val char = MorseCodeMap.entries.find { it.value == buffer }?.key
+                if (char != null) {
+                    _decodedText.value += char
+                    if (_currentSection.value == MorseSection.Trainer) checkTrainerProgress()
+                } else {
+                    _decodedText.value += "?"
                 }
+                _currentSymbolBuffer.value = ""
             }
-            _currentSymbolBuffer.value = ""
             
-            delay(unit * 4) // Word space
+            delay((farnsworthUnit * 4).toLong())
             if (_decodedText.value.isNotEmpty() && !_decodedText.value.endsWith(" ")) {
                 _decodedText.value += " "
             }
@@ -248,6 +295,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         _decodedText.value = ""
         _currentSymbolBuffer.value = ""
         _trainerFeedback.value = null
+        decodeJob?.cancel()
     }
 
     private fun checkTrainerProgress() {
@@ -321,7 +369,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             val userText = _decodedText.value.trim().uppercase()
             _messages.value += ("You" to userText)
             _decodedText.value = ""
-            processSimulatorResponse(userText)
+            processSimulatorResponse()
         }
     }
 
@@ -343,7 +391,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         simStage = 1
     }
 
-    private fun processSimulatorResponse(userText: String) {
+    private fun processSimulatorResponse() {
         val op = simulatorOp ?: return
         viewModelScope.launch {
             delay(1500)
@@ -393,6 +441,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     fun clearSentText() {
         _decodedText.value = ""
         _currentSymbolBuffer.value = ""
+        decodeJob?.cancel()
     }
 
     private val _isDecoding = MutableStateFlow(false)

@@ -13,6 +13,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.sin
 
+/**
+ * Professional Morse Audio Engine.
+ * Optimized for zero-latency gating and pure sine-wave generation.
+ * Eliminates distortion by maintaining phase continuity and using smooth envelopes.
+ */
 class MorseEngine(
     private val context: Context,
     private val scope: CoroutineScope
@@ -21,22 +26,18 @@ class MorseEngine(
     private var audioTrack: AudioTrack? = null
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     
-    private var wpm = 20
-    private var farnsworthWpm = 20
+    @Volatile private var wpm = 20
+    @Volatile private var farnsworthWpm = 20
     @Volatile private var frequency = 600
     @Volatile private var sidetoneVolume = 0.8f
     @Volatile private var playbackVolume = 0.8f
 
     private val sampleRate = 44100
-    private val bufferSize = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+    private val bufferSamples = 256 // Slightly larger for stability against underruns
     
     private val isRunning = AtomicBoolean(true)
-    private val sidetoneActive = AtomicBoolean(false)
+    private val gateActive = AtomicBoolean(false)
     private val playbackActive = AtomicBoolean(false)
-    
-    @Volatile
-    private var playbackQueue = mutableListOf<MorseElement>()
-    private val playbackLock = Any()
 
     private var audioThread: Thread? = null
 
@@ -64,11 +65,19 @@ class MorseEngine(
     }
 
     private fun initAudio() {
+        // Abandon any previous focus if we're re-initializing
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        }
+
+        val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        
         audioTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setFlags(AudioAttributes.FLAG_LOW_LATENCY)
                     .build()
             )
             .setAudioFormat(
@@ -78,47 +87,63 @@ class MorseEngine(
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()
             )
-            .setBufferSizeInBytes(bufferSize)
+            // Use a reasonably sized buffer to avoid underruns on Android's scheduling
+            .setBufferSizeInBytes(minBufferSize.coerceAtLeast(bufferSamples * 8))
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
+            
         audioTrack?.play()
     }
 
     private fun startAudioThread() {
         audioThread = Thread({
-            val bufferSamples = 128 // Further reduced for even lower latency
             val samples = ShortArray(bufferSamples)
             var phase = 0.0
             var currentEnvelope = 0.0f
-            val attackStep = 1.0f / (sampleRate * 0.002f) // 2ms attack for snappier response
-            val releaseStep = 1.0f / (sampleRate * 0.002f) // 2ms release
+            
+            // Professional 5ms ramps to eliminate clicks/pops
+            val rampTimeSeconds = 0.005f
+            val envelopeStep = 1.0f / (sampleRate * rampTimeSeconds)
 
             while (isRunning.get()) {
-                val sidetone = sidetoneActive.get()
-                val playing = playbackActive.get()
-                val targetEnvelope = if (sidetone || playing) 1.0f else 0.0f
+                val gActive = gateActive.get()
+                val pActive = playbackActive.get()
+                val targetEnvelope = if (gActive || pActive) 1.0f else 0.0f
+                
+                // Copy volatiles to locals for this buffer
+                val freq = frequency.toDouble()
+                val vol = if (pActive) playbackVolume else sidetoneVolume
+                val maxAmp = (vol * Short.MAX_VALUE).toDouble()
+                val phaseStep = freq / sampleRate
 
                 for (i in 0 until bufferSamples) {
-                    // Update envelope for smooth ramp
+                    // Smooth linear amplitude ramp
                     if (currentEnvelope < targetEnvelope) {
-                        currentEnvelope = (currentEnvelope + attackStep).coerceAtMost(targetEnvelope)
+                        currentEnvelope = (currentEnvelope + envelopeStep).coerceAtMost(targetEnvelope)
                     } else if (currentEnvelope > targetEnvelope) {
-                        currentEnvelope = (currentEnvelope - releaseStep).coerceAtLeast(targetEnvelope)
+                        currentEnvelope = (currentEnvelope - envelopeStep).coerceAtLeast(targetEnvelope)
                     }
 
-                    if (currentEnvelope > 0) {
-                        val angle = 2.0 * PI * phase
-                        val vol = if (playing) playbackVolume else sidetoneVolume
-                        samples[i] = (sin(angle) * currentEnvelope * vol * Short.MAX_VALUE).toInt().toShort()
-                        
-                        phase += frequency.toDouble() / sampleRate
-                        if (phase > 1.0) phase -= 1.0
+                    // Pure Sine Wave Generation
+                    // We maintain phase continuity even when silent to avoid any pops on start
+                    val sampleValue = if (currentEnvelope > 0) {
+                        (sin(2.0 * PI * phase) * currentEnvelope * maxAmp).toInt().toShort()
                     } else {
-                        samples[i] = 0
-                        phase = 0.0 
+                        0.toShort()
                     }
+                    
+                    samples[i] = sampleValue
+                    
+                    phase += phaseStep
+                    if (phase >= 1.0) phase -= 1.0
                 }
-                audioTrack?.write(samples, 0, bufferSamples)
+                
+                // Blocking write is more stable for dedicated threads
+                // It ensures we stay in sync with the hardware clock
+                val result = audioTrack?.write(samples, 0, bufferSamples, AudioTrack.WRITE_BLOCKING)
+                if (result != null && result < 0) {
+                    Log.e(TAG, "AudioTrack write error: $result")
+                }
             }
         }, "MorseAudioThread").apply {
             priority = Thread.MAX_PRIORITY
@@ -148,31 +173,31 @@ class MorseEngine(
         
         scope.launch(Dispatchers.Default) {
             playbackActive.set(false)
-            val dotDuration = 1200 / wpm
-            val charSpace = 1200 / farnsworthWpm * 3
-            val wordSpace = 1200 / farnsworthWpm * 7
+            val unit = 1200 / wpm
+            val farnsworthCharGap = (1200 / farnsworthWpm) * 3
+            val farnsworthWordGap = (1200 / farnsworthWpm) * 7
 
             for (char in text.uppercase()) {
                 if (!isActive) break
                 if (char == ' ') {
-                    delay(wordSpace.toLong())
+                    delay(farnsworthWordGap.toLong())
                     continue
                 }
 
                 val code = MorseCodeMap[char] ?: continue
                 for (i in code.indices) {
                     val symbol = code[i]
-                    val duration = if (symbol == '.') dotDuration else dotDuration * 3
+                    val duration = if (symbol == '.') unit else unit * 3
                     
                     playbackActive.set(true)
                     delay(duration.toLong())
                     playbackActive.set(false)
                     
                     if (i < code.length - 1) {
-                        delay(dotDuration.toLong())
+                        delay(unit.toLong())
                     }
                 }
-                delay(charSpace.toLong())
+                delay(farnsworthCharGap.toLong())
             }
             onComplete()
         }
@@ -180,16 +205,16 @@ class MorseEngine(
 
     fun startSidetone() {
         if (!requestFocus()) return
-        sidetoneActive.set(true)
+        gateActive.set(true)
     }
 
     fun stopSidetone() {
-        sidetoneActive.set(false)
+        gateActive.set(false)
     }
 
     fun stop() {
         playbackActive.set(false)
-        sidetoneActive.set(false)
+        gateActive.set(false)
     }
 
     fun generateExercise(type: ExerciseType): String {
@@ -220,12 +245,13 @@ class MorseEngine(
     fun release() {
         isRunning.set(false)
         try {
-            audioThread?.join(500)
+            audioThread?.join(1000)
         } catch (e: Exception) {
             Log.e(TAG, "Error joining audio thread", e)
         }
         audioTrack?.stop()
         audioTrack?.release()
+        audioTrack = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
         } else {
@@ -233,9 +259,4 @@ class MorseEngine(
             audioManager.abandonAudioFocus(null)
         }
     }
-}
-
-sealed class MorseElement {
-    data class Tone(val durationMs: Int) : MorseElement()
-    data class Silence(val durationMs: Int) : MorseElement()
 }

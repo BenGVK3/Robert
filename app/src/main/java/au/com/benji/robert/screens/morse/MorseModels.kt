@@ -90,6 +90,15 @@ data class SimulatorOperator(
     val wpm: Int
 )
 
+@Serializable
+data class KeyerDiagnosticEntry(
+    val type: String, // "DIT", "DAH", "GAP", "CHAR_GAP", "WORD_GAP"
+    val durationMs: Long,
+    val expectedMs: Long,
+    val decodedAs: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 data class MorseCharacter(
     val char: Char,
     val code: String

@@ -46,11 +46,15 @@ fun MorseScreen(
 ) {
     val currentSection by viewModel.currentSection.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val diagnostics by viewModel.diagnostics.collectAsStateWithLifecycle()
+    val latencyLog by viewModel.latencyLog.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
 
     if (showSettings) {
         MorseSettingsDialog(
             settings = settings,
+            diagnostics = diagnostics,
+            latencyLog = latencyLog,
             onDismiss = { showSettings = false },
             onSave = { viewModel.updateSettings(it) }
         )
@@ -113,6 +117,8 @@ fun MorseScreen(
 @Composable
 fun MorseSettingsDialog(
     settings: MorseSettings,
+    diagnostics: List<KeyerDiagnosticEntry>,
+    latencyLog: List<String>,
     onDismiss: () -> Unit,
     onSave: (MorseSettings) -> Unit
 ) {
@@ -209,16 +215,37 @@ fun MorseSettingsDialog(
                             onValueChange = { onSave(settings.copy(weighting = it)) },
                             valueRange = 0.5f..2.0f
                         )
-                        
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Auto Character Spacing", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(Modifier.weight(1f))
-                            Switch(checked = settings.autoCharacterSpacing, onCheckedChange = { onSave(settings.copy(autoCharacterSpacing = it)) })
+                    }
+                }
+
+                // Diagnostics Section
+                PreferenceCard(title = "Keyer Diagnostics", icon = Icons.Default.BarChart) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Live Timing (ms)", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+                        diagnostics.forEach { diag ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "${diag.type}: ${diag.durationMs}ms",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (diag.durationMs in (diag.expectedMs - 30)..(diag.expectedMs + 30)) RobertColors.StatusGreen else RobertColors.TextPrimary
+                                )
+                                Text(
+                                    "(Exp: ${diag.expectedMs}ms)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = RobertColors.TextSecondary
+                                )
+                            }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Auto Word Spacing", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(Modifier.weight(1f))
-                            Switch(checked = settings.autoWordSpacing, onCheckedChange = { onSave(settings.copy(autoWordSpacing = it)) })
+
+                        if (latencyLog.isNotEmpty()) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = RobertColors.TextSecondary.copy(alpha = 0.1f))
+                            Text("Latency Monitor (Touch -> Sidetone)", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+                            latencyLog.forEach { log ->
+                                Text(log, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                            }
                         }
                     }
                 }
