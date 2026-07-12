@@ -352,34 +352,174 @@ fun OperatingConditionsCard(solarData: SolarData, muf: Double) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
     ) {
-        Column(modifier = Modifier.padding(Spacing.Large)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricItemCompact("SFI", solarData.solarFlux.toString(), Icons.Default.WbSunny)
-                MetricItemCompact("K-IDX", solarData.kIndex.toString(), Icons.Default.Speed)
-                MetricItemCompact("A-IDX", solarData.aIndex.toString(), Icons.Default.ShowChart)
-                MetricItemCompact("MUF", String.format(Locale.US, "%.1f", muf), Icons.Default.Wifi)
+        Column(modifier = Modifier.padding(Spacing.Medium)) {
+            // 1. Primary Solar Indices (Top Row)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PrimaryMetricCard(Modifier.weight(1f), "SFI", solarData.solarFlux.toString())
+                PrimaryMetricCard(Modifier.weight(1f), "SN", solarData.sunspots.toString())
+                PrimaryMetricCard(Modifier.weight(1f), "A-IDX", solarData.aIndex.toString())
+                PrimaryMetricCard(Modifier.weight(1f), "K-IDX", solarData.kIndex.toString())
             }
+
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f))
+            Spacer(modifier = Modifier.height(Spacing.Medium))
+
+            // 2. Secondary Solar Data (Two Columns)
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                    SecondaryMetricItem("X-RAY", solarData.xRay)
+                    SecondaryMetricItem("SOLAR WIND", solarData.solarWind)
+                    SecondaryMetricItem("MAG FIELD (Bz)", solarData.magneticField)
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                    SecondaryMetricItem("PROTON FLUX", solarData.protonFlux)
+                    SecondaryMetricItem("ELECTRON FLUX", solarData.electronFlux)
+                    SecondaryMetricItem("AURORA INDEX", solarData.aurora)
+                }
+            }
+
             Spacer(modifier = Modifier.height(Spacing.Large))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MetricItemCompact("Spots", solarData.sunspots.toString(), Icons.Default.BrightnessLow)
-                MetricItemCompact("X-Ray", solarData.xRay, Icons.Default.Bolt)
-                MetricItemCompact("Wind", solarData.solarWind.take(4), Icons.Default.Air)
-                MetricItemCompact("Field", solarData.magneticField, Icons.Default.Explore)
+
+            // 3. Highlighted Radio Metrics
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
+            ) {
+                HighlightedMetricCard(
+                    Modifier.weight(1f),
+                    "ESTIMATED MUF",
+                    if (muf > 0) String.format(Locale.US, "%.1f MHz", muf) else solarData.muf,
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                )
+                HighlightedMetricCard(
+                    Modifier.weight(1f),
+                    "foF2",
+                    solarData.foF2,
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.Large))
+
+            // 4. VHF Conditions Row
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = Spacing.Small, horizontal = Spacing.Medium),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    VhfStatusItem("VHF AURORA", solarData.vhfAurora)
+                    Box(modifier = Modifier.width(1.dp).height(16.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+                    VhfStatusItem("E-SKIP", solarData.eSkip)
+                }
             }
         }
     }
 }
 
 @Composable
-fun MetricItemCompact(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontSize = 9.sp)
-        Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Black)
+private fun PrimaryMetricCard(modifier: Modifier, label: String, value: String) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 10.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF81D4FA),
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+private fun SecondaryMetricItem(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF81D4FA),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White
+        )
+    }
+}
+
+@Composable
+private fun HighlightedMetricCard(modifier: Modifier, label: String, value: String, backgroundColor: Color) {
+    Surface(
+        modifier = modifier,
+        color = backgroundColor,
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.Medium),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF81D4FA).copy(alpha = 0.8f),
+                fontWeight = FontWeight.Black,
+                fontSize = 9.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+private fun VhfStatusItem(label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF81D4FA),
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Black,
+            color = Color.White
+        )
     }
 }
 
