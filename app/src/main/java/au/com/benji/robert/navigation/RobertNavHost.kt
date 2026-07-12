@@ -23,6 +23,8 @@ import au.com.benji.robert.screens.tools.BandPlanScreen
 import au.com.benji.robert.screens.repeater.RepeaterMapScreen
 import au.com.benji.robert.screens.repeater.RepeaterListScreen
 import au.com.benji.robert.screens.repeater.RepeaterDetailScreen
+import au.com.benji.robert.screens.propagation.BandDetailScreen
+import au.com.benji.robert.screens.morse.MorseScreen
 
 @Composable
 fun RobertNavHost(
@@ -94,6 +96,13 @@ fun RobertNavHost(
             SatellitesScreen(paddingValues)
         }
 
+        composable(Screen.Morse.route) {
+            MorseScreen(
+                paddingValues = paddingValues,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Screen.BandPlan.route) {
             BandPlanScreen(paddingValues)
         }
@@ -131,6 +140,19 @@ fun RobertNavHost(
                 frequency = frequency,
                 onBack = { navController.popBackStack() },
                 paddingValues = paddingValues
+            )
+        }
+
+        composable(
+            route = Screen.BandDetail.route,
+            arguments = listOf(
+                navArgument("band") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val band = backStackEntry.arguments?.getString("band") ?: ""
+            BandDetailScreen(
+                bandName = band,
+                onBack = { navController.popBackStack() }
             )
         }
     }

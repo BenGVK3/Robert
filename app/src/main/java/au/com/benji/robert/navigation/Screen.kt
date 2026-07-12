@@ -22,4 +22,8 @@ sealed class Screen(
     object RepeaterDetail : Screen("repeaterdetail/{callsign}/{frequency}") {
         fun createRoute(callsign: String, frequency: String) = "repeaterdetail/$callsign/$frequency"
     }
+    object BandDetail : Screen("banddetail/{band}") {
+        fun createRoute(band: String) = "banddetail/$band"
+    }
+    object Morse : Screen("morse")
 }

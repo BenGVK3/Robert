@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -68,7 +69,7 @@ fun PropagationScreen(
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(Spacing.Medium),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Small),
             contentPadding = PaddingValues(Spacing.Medium),
             modifier = Modifier.fillMaxSize()
         ) {
@@ -139,7 +140,24 @@ fun PropagationScreen(
             }
 
             item(span = { GridItemSpan(2) }) {
-                SectionHeader("Live Band Conditions", Icons.Default.Podcasts)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SectionHeader("Live Band Conditions", Icons.Default.Podcasts)
+                    
+                    bandConditions?.let { data ->
+                        val mins = (System.currentTimeMillis() - data.timestamp) / 60000
+                        Text(
+                            text = if (mins < 1) "LIVE" else "${mins}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
             }
 
             val bands = bandConditions?.bands ?: emptyList()
@@ -170,7 +188,9 @@ fun PropagationScreen(
                 }
             } else {
                 items(bands) { condition ->
-                    DetailedBandCard(condition)
+                    DetailedBandCard(condition, onClick = {
+                        navController.navigate(Screen.BandDetail.createRoute(condition.band))
+                    })
                 }
             }
 
@@ -189,7 +209,7 @@ fun PropagationScreen(
 fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
     ) {
         Icon(
             imageVector = icon,
@@ -223,7 +243,7 @@ fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.Image
 }
 
 @Composable
-fun DetailedBandCard(condition: BandCondition) {
+fun DetailedBandCard(condition: BandCondition, onClick: () -> Unit) {
     val scoreColor = try {
         Color(android.graphics.Color.parseColor(condition.color))
     } catch (e: Exception) {
@@ -231,7 +251,7 @@ fun DetailedBandCard(condition: BandCondition) {
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -551,41 +571,54 @@ fun SparklineGraph(data: List<Int>, color: Color, modifier: Modifier) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         if (data.size < 2) return@Canvas
         val path = androidx.compose.ui.graphics.Path()
-        val max = data.maxOrNull()?.coerceAtLeast(1) ?: 100
-        val min = data.minOrNull() ?: 0
-        val range = (max - min).coerceAtLeast(1).toFloat()
         
         val stepX = size.width / (data.size - 1)
-        
         val points = data.mapIndexed { index, value ->
             androidx.compose.ui.geometry.Offset(
                 x = index * stepX,
-                y = size.height - ((value - min).toFloat() / range * size.height)
+                y = size.height - (value.toFloat() / 100f * size.height)
             )
         }
 
         path.moveTo(points[0].x, points[0].y)
         
         for (i in 0 until points.size - 1) {
-            val p0 = points[(i - 1).coerceAtLeast(0)]
             val p1 = points[i]
             val p2 = points[i + 1]
-            val p3 = points[(i + 2).coerceAtMost(points.size - 1)]
-            
-            val cp1 = p1 + (p2 - p0) / 6f
-            val cp2 = p2 - (p3 - p1) / 6f
-            
-            path.cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y)
+            val controlPoint1 = androidx.compose.ui.geometry.Offset(p1.x + (p2.x - p1.x) / 2, p1.y)
+            val controlPoint2 = androidx.compose.ui.geometry.Offset(p1.x + (p2.x - p1.x) / 2, p2.y)
+            path.cubicTo(controlPoint1.x, controlPoint1.y, controlPoint2.x, controlPoint2.y, p2.x, p2.y)
         }
         
+        // Shadow/Fill
+        val fillPath = androidx.compose.ui.graphics.Path().apply {
+            addPath(path)
+            lineTo(points.last().x, size.height)
+            lineTo(points.first().x, size.height)
+            close()
+        }
+        drawPath(
+            path = fillPath,
+            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                colors = listOf(color.copy(alpha = 0.15f), Color.Transparent)
+            )
+        )
+
         drawPath(
             path = path,
             color = color,
             style = androidx.compose.ui.graphics.drawscope.Stroke(
-                width = 2.dp.toPx(),
+                width = 2.5.dp.toPx(),
                 cap = androidx.compose.ui.graphics.StrokeCap.Round,
                 join = androidx.compose.ui.graphics.StrokeJoin.Round
             )
+        )
+        
+        // Draw terminal point
+        drawCircle(
+            color = color,
+            radius = 3.dp.toPx(),
+            center = points.last()
         )
     }
 }

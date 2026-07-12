@@ -397,8 +397,11 @@ fun OperatingConditionsCard(modifier: Modifier, solarData: SolarData, muf: Doubl
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 StatusBadge("OVERALL: GOOD", Color(0xFF4CAF50))
+                
+                val timeDiff = System.currentTimeMillis() - solarData.lastUpdated
+                val mins = (timeDiff / 60000).coerceAtLeast(0)
                 Text(
-                    text = "3m ago",
+                    text = if (mins < 1) "Just now" else "${mins}m ago",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.Gray,
                     fontSize = 8.sp
@@ -625,7 +628,7 @@ fun FavoriteRepeaterCard(modifier: Modifier, repeater: Repeater?, navController:
 @Composable
 fun BandConditionsCard(modifier: Modifier = Modifier, propagationData: PropagationData?, navController: NavHostController) {
     DashboardCard(
-        modifier = modifier.fillMaxWidth().clickable { navController.navigate(Screen.Propagation.route) },
+        modifier = modifier.fillMaxWidth(),
         title = "HF BAND CONDITIONS",
         icon = Icons.Default.BarChart
     ) {
@@ -644,9 +647,26 @@ fun BandConditionsCard(modifier: Modifier = Modifier, propagationData: Propagati
                     )
                 } else {
                     bandsToShow.take(9).forEach { band ->
-                        BandMiniGraph(modifier = Modifier.weight(1f), band = band)
+                        BandMiniGraph(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { navController.navigate(Screen.BandDetail.createRoute(band.band)) },
+                            band = band
+                        )
                     }
                 }
+            }
+            
+            if (propagationData != null) {
+                val mins = (System.currentTimeMillis() - propagationData.timestamp) / 60000
+                Text(
+                    text = if (mins < 1) "Updated just now" else "Updated ${mins}m ago",
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray.copy(alpha = 0.6f),
+                    fontSize = 6.sp,
+                    textAlign = TextAlign.End
+                )
             }
         }
     }
@@ -661,47 +681,73 @@ fun BandMiniGraph(modifier: Modifier, band: BandCondition) {
     }
     
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(band.band, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 7.sp)
+        Text(band.band, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White, fontSize = 7.sp)
         
-        Canvas(modifier = Modifier.height(24.dp).fillMaxWidth()) {
-            if (band.history.size < 2) {
-                drawLine(
-                    color = color.copy(alpha = 0.3f),
-                    start = Offset(0f, size.height / 2),
-                    end = Offset(size.width, size.height / 2),
-                    strokeWidth = 1.dp.toPx()
-                )
-            } else {
-                val stepX = size.width / (band.history.size - 1)
-                val points = band.history.mapIndexed { index, score ->
-                    Offset(index * stepX, size.height - (score.toFloat() / 100f * size.height))
-                }
-                val path = Path().apply {
-                    moveTo(points[0].x, points[0].y)
-                    for (i in 0 until points.size - 1) {
-                        val p0 = points[(i - 1).coerceAtLeast(0)]
-                        val p1 = points[i]
-                        val p2 = points[i + 1]
-                        val p3 = points[(i + 2).coerceAtMost(points.size - 1)]
-                        
-                        val cp1 = p1 + (p2 - p0) / 6f
-                        val cp2 = p2 - (p3 - p1) / 6f
-                        
-                        cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y)
-                    }
-                }
-                drawPath(
-                    path = path,
-                    color = color,
-                    style = Stroke(
-                        width = 1.5.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round
+        Box(modifier = Modifier.height(28.dp).fillMaxWidth().padding(vertical = 2.dp)) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                if (band.history.size < 2) {
+                    drawLine(
+                        color = color.copy(alpha = 0.2f),
+                        start = Offset(0f, size.height / 2),
+                        end = Offset(size.width, size.height / 2),
+                        strokeWidth = 1.dp.toPx()
                     )
-                )
+                } else {
+                    val stepX = size.width / (band.history.size - 1)
+                    val points = band.history.mapIndexed { index, score ->
+                        Offset(index * stepX, size.height - (score.toFloat() / 100f * size.height))
+                    }
+                    
+                    val path = Path().apply {
+                        moveTo(points[0].x, points[0].y)
+                        for (i in 0 until points.size - 1) {
+                            val p1 = points[i]
+                            val p2 = points[i + 1]
+                            val controlPoint1 = Offset(p1.x + (p2.x - p1.x) / 2, p1.y)
+                            val controlPoint2 = Offset(p1.x + (p2.x - p1.x) / 2, p2.y)
+                            cubicTo(controlPoint1.x, controlPoint1.y, controlPoint2.x, controlPoint2.y, p2.x, p2.y)
+                        }
+                    }
+                    
+                    // Shadow/Fill
+                    val fillPath = Path().apply {
+                        addPath(path)
+                        lineTo(points.last().x, size.height)
+                        lineTo(points.first().x, size.height)
+                        close()
+                    }
+                    drawPath(
+                        path = fillPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(color.copy(alpha = 0.25f), Color.Transparent)
+                        )
+                    )
+
+                    drawPath(
+                        path = path,
+                        color = color,
+                        style = Stroke(
+                            width = 2.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                    
+                    // Current point indicator
+                    drawCircle(
+                        color = color,
+                        radius = 2.dp.toPx(),
+                        center = points.last()
+                    )
+                }
             }
         }
-        Text(band.rating.take(1), style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, fontWeight = FontWeight.Black, color = color)
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("24H", style = MaterialTheme.typography.labelSmall, fontSize = 5.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.width(2.dp))
+            Text(band.rating.take(1), style = MaterialTheme.typography.labelSmall, fontSize = 6.sp, fontWeight = FontWeight.Black, color = color)
+        }
     }
 }
 

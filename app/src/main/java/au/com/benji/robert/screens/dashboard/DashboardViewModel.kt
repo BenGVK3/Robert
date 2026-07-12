@@ -36,7 +36,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = DashboardRepository()
     private val solarRepository = SolarDataRepository(cacheDao)
     private val weatherRepository = WeatherRepository(DatabaseModule.weatherDao(application))
-    private val propagationRepository = PropagationRepository(DatabaseModule.propagationDao(application))
+    private val bandConditionsRepository = DatabaseModule.bandConditionsRepository(application)
     private val moonRepository = MoonRepository(DatabaseModule.moonDao(application))
     private val aprsRepository = AprsRepository(cacheDao)
     private val dxRepository = DxRepository(cacheDao)
@@ -133,29 +133,35 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             initialValue = null
         )
 
-    val propagationData = combine(
-        locationFlow,
-        solarData,
-        mufResult,
-        weatherData
-    ) { loc, solar, muf, weather ->
-        pkg(loc, solar, muf, weather)
-    }
-    .flatMapLatest { pkg ->
-        propagationRepository.getPropagationData(
-            lat = pkg.loc.first,
-            lon = pkg.loc.second,
-            solar = pkg.solar,
-            muf = pkg.muf.value,
-            sunrise = pkg.weather?.sunrise,
-            sunset = pkg.weather?.sunset
+    val propagationData = bandConditionsRepository.propagationData
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
+
+    init {
+        // Shared refresh orchestration
+        combine(
+            locationFlow,
+            solarData,
+            mufResult,
+            weatherData
+        ) { loc, solar, muf, weather ->
+            pkg(loc, solar, muf, weather)
+        }.onEach { pkg ->
+            if (pkg.solar.solarFlux > 0) {
+                bandConditionsRepository.refresh(
+                    lat = pkg.loc.first,
+                    lon = pkg.loc.second,
+                    solar = pkg.solar,
+                    muf = pkg.muf.value,
+                    sunrise = pkg.weather?.sunrise,
+                    sunset = pkg.weather?.sunset
+                )
+            }
+        }.launchIn(viewModelScope)
     }
-    .stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
 
     private data class pkg(
         val loc: Quadruple<Double, Double, String, String>,

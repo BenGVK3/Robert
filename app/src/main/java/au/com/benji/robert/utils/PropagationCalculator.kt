@@ -189,28 +189,28 @@ object PropagationCalculator {
         isDay: Boolean,
         sporadicE: Boolean
     ): BandScore {
-        // 1. SFI Component (35%)
-        val sfiScore = ((sfi.toDouble() - 60.0) / 200.0 * 100.0).coerceIn(0.0, 100.0)
+        // 1. SFI Component (35%) - Normalizing to a more realistic range
+        // SFI rarely goes below 65. 150+ is excellent. 250+ is historic.
+        val sfiScore = ((sfi.toDouble() - 65.0) / 120.0 * 100.0).coerceIn(10.0, 100.0)
         
         // 2. MUF Component (35%)
         // Sigmoid function to create a realistic drop-off when MUF is below band
         val mufRatio = muf / info.centerFreq
-        val mufScore = (100.0 / (1.0 + exp(-10.0 * (mufRatio - 0.9)))).coerceIn(0.0, 100.0)
+        val mufScore = (100.0 / (1.0 + exp(-12.0 * (mufRatio - 0.85)))).coerceIn(0.0, 100.0)
         
-        // 3. K-Index Component (15%) - Impact increases with frequency generally, 
-        // but high K is bad for all DX.
-        val kImpact = if (info.centerFreq < 10.0) (k * 8.0) else (k * 12.0)
-        val kScore = (100.0 - kImpact).coerceIn(0.0, 100.0)
+        // 3. K-Index Component (15%) - Impact increases with frequency generally
+        val kImpact = if (info.centerFreq < 10.0) (k * 6.0) else (k * 10.0)
+        val kScore = (100.0 - kImpact).coerceIn(5.0, 100.0)
         
         // 4. A-Index Component (10%)
-        val aScore = (100.0 - (a * 2.0)).coerceIn(0.0, 100.0)
+        val aScore = (100.0 - (a * 1.5)).coerceIn(5.0, 100.0)
         
         // 5. Day/Night Component (5%)
         val isLowBand = info.centerFreq < 10.0
         val dayNightScore = if (isLowBand) {
-            if (!isDay) 100.0 else 20.0
+            if (!isDay) 100.0 else 30.0
         } else {
-            if (isDay) 100.0 else 30.0
+            if (isDay) 100.0 else 40.0
         }
 
         // Weighted Average
@@ -230,42 +230,42 @@ object PropagationCalculator {
 
     private fun adjustBandSpecifics(info: BandInfo, score: Double, isDay: Boolean, muf: Double, sfi: Int, sporadicE: Boolean): Double {
         var adjusted = score
+        val mufRatio = muf / info.centerFreq
+
         when (info.name) {
             "160m" -> {
-                if (isDay) adjusted *= 0.2 // Strong D-layer absorption
-                else adjusted *= 1.2 // Best at night
-                if (muf > 15) adjusted *= 0.8
+                if (isDay) adjusted *= 0.15 // D-layer is very effective
+                else adjusted *= 1.3
             }
             "80m" -> {
-                if (isDay) adjusted *= 0.3
-                else adjusted *= 1.1 // Strong after sunset
+                if (isDay) adjusted *= 0.25
+                else adjusted *= 1.2
             }
             "40m" -> {
-                if (isDay) adjusted *= 0.7 
-                else adjusted *= 1.2 // Excellent at night
+                if (isDay) adjusted *= 0.6
+                else adjusted *= 1.25
             }
             "15m" -> {
-                if (muf < 23.0) adjusted *= 0.6
-                if (sfi < 140) adjusted *= 0.8
+                if (mufRatio < 0.9) adjusted *= 0.7
             }
             "12m" -> {
-                if (muf < 26.0) adjusted *= 0.5
+                if (mufRatio < 0.9) adjusted *= 0.6
             }
             "10m" -> {
-                if (muf < 30.0) adjusted *= 0.4
-                if (sfi < 150) adjusted *= 0.7
+                if (mufRatio < 0.85) adjusted *= 0.5
+                if (sporadicE) adjusted = maxOf(adjusted, 75.0)
             }
             "6m" -> {
-                adjusted = if (muf > 48.0) adjusted else (if (sporadicE) 65.0 else 10.0)
+                adjusted = if (muf > 48.0) adjusted else (if (sporadicE) 70.0 else 5.0)
             }
         }
         
-        // General MUF Hard Cutoff for high bands
-        if (info.centerFreq > 14.0 && muf < info.centerFreq * 0.9) {
-            adjusted *= 0.4
+        // Bonus for being near the MUF (best propagation often just below MUF)
+        if (mufRatio in 0.85..1.15) {
+            adjusted *= 1.15
         }
         
-        return adjusted
+        return adjusted.coerceIn(0.0, 100.0)
     }
 
     private fun calculateSummaries(

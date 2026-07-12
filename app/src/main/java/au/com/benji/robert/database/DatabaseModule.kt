@@ -47,4 +47,12 @@ object DatabaseModule {
     fun netDao(context: Context): NetDao {
         return database(context).netDao()
     }
+
+    private var bandConditionsRepository: au.com.benji.robert.repository.propagation.BandConditionsRepository? = null
+
+    fun bandConditionsRepository(context: Context): au.com.benji.robert.repository.propagation.BandConditionsRepository {
+        return bandConditionsRepository ?: au.com.benji.robert.repository.propagation.BandConditionsRepository(
+            propagationDao(context)
+        ).also { bandConditionsRepository = it }
+    }
 }
