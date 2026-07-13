@@ -870,6 +870,116 @@ fun Paddle(modifier: Modifier, label: String, isActive: Boolean, onDown: () -> U
 
 @Composable
 fun TrainerScreen(viewModel: MorseViewModel) {
+    val trainerMode by viewModel.trainerMode.collectAsStateWithLifecycle()
+    
+    AnimatedContent(targetState = trainerMode, label = "TrainerModeTransition") { mode ->
+        if (mode == null) {
+            TrainerHome(viewModel)
+        } else {
+            TrainerExercise(viewModel, mode)
+        }
+    }
+}
+
+@Composable
+fun TrainerHome(viewModel: MorseViewModel) {
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
+    
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(Spacing.Medium),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+    ) {
+        item {
+            Text(
+                "LEARN MORSE",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Black,
+                color = RobertColors.Primary
+            )
+        }
+        
+        // Progress Overview
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(modifier = Modifier.padding(Spacing.Medium)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Current Mastery", style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
+                            Text("${progress.charactersMastered.size} / 40 Characters", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        }
+                        CircularProgressIndicator(
+                            progress = { progress.charactersMastered.size / 40f },
+                            modifier = Modifier.size(48.dp),
+                            color = RobertColors.Primary,
+                            trackColor = RobertColors.Surface
+                        )
+                    }
+                    
+                    Spacer(Modifier.height(Spacing.Medium))
+                    
+                    Button(
+                        onClick = { viewModel.setTrainerMode(TrainerMode.Koch) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("RESUME KOCH COURSE")
+                    }
+                }
+            }
+        }
+        
+        // Practice Modes Grid
+        item {
+            Text("Training Modes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        
+        val modes = listOf(
+            TrainerMenuItem("Koch Course", "The standard amateur radio path", Icons.Default.School, TrainerMode.Koch, RobertColors.Primary),
+            TrainerMenuItem("Callsigns", "Copy realistic world callsigns", Icons.Default.Public, TrainerMode.Callsigns, Color(0xFF00BCD4)),
+            TrainerMenuItem("Words", "Common English words", Icons.Default.TextFields, TrainerMode.Words, RobertColors.StatusGreen),
+            TrainerMenuItem("Amateur Radio", "CQ, signal reports, and shorthand", Icons.Default.Radio, TrainerMode.AmateurRadio, RobertColors.StatusOrange),
+            TrainerMenuItem("Weak Review", "Focus on your difficult letters", Icons.Default.Psychology, TrainerMode.WeakReview, Color(0xFF9C27B0))
+        )
+        
+        items(modes) { item ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.setTrainerMode(item.mode) },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+            ) {
+                Row(
+                    modifier = Modifier.padding(Spacing.Medium),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(item.icon, null, tint = item.color, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(Spacing.Medium))
+                    Column {
+                        Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        Text(item.subtitle, style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class TrainerMenuItem(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val mode: TrainerMode,
+    val color: Color
+)
+
+@Composable
+fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val trainerTarget by viewModel.trainerTarget.collectAsStateWithLifecycle()
     val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
@@ -879,28 +989,25 @@ fun TrainerScreen(viewModel: MorseViewModel) {
     val lastElementSent by viewModel.lastElementSent.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
-        // Progress Header
+        // Exercise Header
         Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { viewModel.setSection(MorseSection.Menu) }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+            }
             Column(modifier = Modifier.weight(1f)) {
-                Text("LESSON ${progress.currentLessonIndex + 1}", style = MaterialTheme.typography.labelLarge, color = RobertColors.Primary, fontWeight = FontWeight.Bold)
-                Text("Interactive Training", style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
+                Text(mode.name.uppercase(), style = MaterialTheme.typography.labelLarge, color = RobertColors.Primary, fontWeight = FontWeight.Bold)
+                if (mode == TrainerMode.Koch) {
+                    Text("Lesson ${progress.currentLessonIndex + 1}", style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
+                }
             }
             IconButton(onClick = { viewModel.resetTrainerExercise() }) {
-                Icon(Icons.Default.Refresh, "Reset Exercise", tint = RobertColors.Primary)
+                Icon(Icons.Default.Refresh, null, tint = RobertColors.Primary)
             }
-            Text("${(progress.totalAccuracy).toInt()}% ACCURACY", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black)
         }
-        
-        LinearProgressIndicator(
-            progress = { (progress.currentLessonIndex + 1) / 10f },
-            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.Small).height(6.dp).clip(CircleShape),
-            color = RobertColors.Primary,
-            trackColor = RobertColors.Surface
-        )
 
         Spacer(modifier = Modifier.height(Spacing.Medium))
 
-        // Target Card
+        // Target Card (Hidden initially for some modes, but here as per requirement for "Send this")
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
@@ -909,7 +1016,7 @@ fun TrainerScreen(viewModel: MorseViewModel) {
             Column(modifier = Modifier.padding(Spacing.Large), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("SEND THIS:", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
                 
-                Row(horizontalArrangement = Arrangement.Center) {
+                Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
                     trainerTarget.forEachIndexed { index, char ->
                         val isDecoded = decodedText.trim().length > index
                         val isCurrent = decodedText.trim().length == index
@@ -960,9 +1067,6 @@ fun TrainerScreen(viewModel: MorseViewModel) {
                             Spacer(modifier = Modifier.height(Spacing.Small))
                             Text("Received: ${fb.received}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text("Code: ${fb.receivedCode}", style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary, fontFamily = FontFamily.Monospace)
-                            
-                            Spacer(modifier = Modifier.height(Spacing.Small))
-                            Text("Mistake highlighted above. Focus on element timing.", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
                         }
                     }
                 }

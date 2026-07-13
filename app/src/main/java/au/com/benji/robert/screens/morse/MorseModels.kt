@@ -28,22 +28,6 @@ enum class PaddleOrientation {
 }
 
 @Serializable
-data class MorseProgress(
-    val charactersMastered: Set<Char> = emptySet(),
-    val lessonsCompleted: Int = 0,
-    val currentLessonIndex: Int = 0,
-    val totalAccuracy: Float = 0f,
-    val practiceStreak: Int = 0,
-    val totalPracticeTimeMinutes: Long = 0,
-    val averageWpm: Int = 20,
-    val lastPracticeTimestamp: Long = 0,
-    val attempts: Int = 0,
-    val bestWpm: Int = 0,
-    val timingAccuracy: Float = 0f,
-    val sessionStats: List<SessionStat> = emptyList()
-)
-
-@Serializable
 data class SessionStat(
     val timestamp: Long,
     val wpm: Int,
@@ -51,8 +35,32 @@ data class SessionStat(
     val type: String
 )
 
+@Serializable
+data class MorseProgress(
+    val charactersMastered: Set<Char> = emptySet(),
+    val lessonsCompleted: Int = 0,
+    val currentLessonIndex: Int = 0,
+    val totalAccuracy: Float = 0f,
+    val practiceStreak: Int = 0,
+    val totalPracticeTimeMinutes: Long = 0,
+    val totalCharactersCopied: Int = 0,
+    val characterStats: Map<Char, CharacterStat> = emptyMap(),
+    val achievements: Set<String> = emptySet(),
+    val sessionStats: List<SessionStat> = emptyList()
+)
+
+@Serializable
+data class CharacterStat(
+    val char: Char,
+    val correctCount: Int = 0,
+    val totalCount: Int = 0,
+    val lastPracticed: Long = 0
+) {
+    val accuracy: Float get() = if (totalCount > 0) (correctCount.toFloat() / totalCount) * 100f else 0f
+}
+
 enum class TrainerMode {
-    Koch, Farnsworth, Callsigns, Words, Contest, QSO
+    Koch, Character, Numbers, Punctuation, Prosigns, Callsigns, Words, AmateurRadio, WeakReview, Statistics
 }
 
 sealed class SimulatorState {

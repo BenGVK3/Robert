@@ -91,15 +91,18 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _isDecoding = MutableStateFlow(false)
     val isDecoding = _isDecoding.asStateFlow()
 
+    private val _trainerMode = MutableStateFlow<TrainerMode?>(null)
+    val trainerMode = _trainerMode.asStateFlow()
+
     private var decodeJob: Job? = null
     private val lastElementTime = AtomicLong(0)
 
-    private val lessons = listOf(
-        "K M", "K M R", "K M R S", "K M R S U", "K M R S U A", "K M R S U A P",
-        "K M R S U A P T", "K M R S U A P T L", "K M R S U A P T L O", "K M R S U A P T L O W"
-    )
+    private val kochOrder = "KMRSUAPTLOWI.NJEF0Y,VG5/Q9ZH38B?427C1D6XBT".toList()
 
     init {
+        // Initial settings propagation
+        keyer.updateSettings(_settings.value)
+        
         viewModelScope.launch {
             while (isActive) {
                 _isPlaying.value = keyer.isPlaybackActive()
@@ -111,10 +114,15 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     fun setSection(section: MorseSection) {
         _currentSection.value = section
         stopAll()
-        if (section == MorseSection.Trainer) {
-            startLesson(_progress.value.currentLessonIndex)
-        } else if (section == MorseSection.Simulator) {
-            startSimulator()
+        _trainerMode.value = null
+    }
+
+    fun setTrainerMode(mode: TrainerMode) {
+        _trainerMode.value = mode
+        if (mode == TrainerMode.Koch) {
+            startKochLesson(_progress.value.currentLessonIndex)
+        } else {
+            generateTrainerExercise(mode)
         }
     }
 
@@ -133,6 +141,8 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         _settings.value = newSettings
         keyer.updateSettings(newSettings)
     }
+
+    // --- Receiving Trainer ---
 
     fun generateNewExercise(type: ExerciseType) {
         _currentExerciseType.value = type
@@ -158,141 +168,98 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         val isCorrect = expected == received
         _receiveFeedback.value = ReceiveFeedback(isCorrect, expected, received, comparison)
         
-        // Update Stats
+        updateReceiveStats(isCorrect, expected)
+    }
+
+    private fun updateReceiveStats(isCorrect: Boolean, expected: String) {
         val stats = _receiveStats.value
         val newCorrect = if (isCorrect) stats.correctCount + 1 else stats.correctCount
         val newTotal = stats.totalCount + 1
         val newStreak = if (isCorrect) stats.currentStreak + 1 else 0
         val newLongest = maxOf(stats.longestStreak, newStreak)
-        val newChars = stats.charactersPracticed + expected.length
         
+        // Update character-level stats in progress
+        val p = _progress.value
+        val newCharStats = p.characterStats.toMutableMap()
+        expected.forEach { char ->
+            val current = newCharStats[char] ?: CharacterStat(char)
+            newCharStats[char] = current.copy(
+                correctCount = if (isCorrect) current.correctCount + 1 else current.correctCount,
+                totalCount = current.totalCount + 1,
+                lastPracticed = System.currentTimeMillis()
+            )
+        }
+
         _receiveStats.value = stats.copy(
             correctCount = newCorrect,
             totalCount = newTotal,
             currentStreak = newStreak,
             longestStreak = newLongest,
-            charactersPracticed = newChars
+            charactersPracticed = stats.charactersPracticed + expected.length
+        )
+
+        _progress.value = p.copy(
+            characterStats = newCharStats,
+            totalAccuracy = (newCorrect.toFloat() / newTotal) * 100f,
+            totalCharactersCopied = p.totalCharactersCopied + expected.length
         )
     }
 
-    fun playText(text: String) {
-        keyer.playText(text)
-    }
-
-    fun stopPlayback() {
-        keyer.stopPlayback()
-    }
-
-    // --- Keyer Events ---
-
-    fun onKeyDown(isRightPaddle: Boolean) {
-        val config = _settings.value
-        val isDash = if (config.paddleOrientation == PaddleOrientation.LeftDitRightDah) isRightPaddle else !isRightPaddle
-
-        if (config.keyerMode == KeyerMode.Straight) {
-            keyer.onStraightKey(true)
-        } else {
-            if (isDash) keyer.onDashPaddle(true) else keyer.onDotPaddle(true)
-        }
-    }
-
-    fun onKeyUp(isRightPaddle: Boolean) {
-        val config = _settings.value
-        val isDash = if (config.paddleOrientation == PaddleOrientation.LeftDitRightDah) isRightPaddle else !isRightPaddle
-
-        if (config.keyerMode == KeyerMode.Straight) {
-            keyer.onStraightKey(false)
-        } else {
-            if (isDash) keyer.onDashPaddle(false) else keyer.onDotPaddle(false)
-        }
-    }
-
-    private fun handleElementSent(element: String) {
-        decodeJob?.cancel() // Immediate cancellation
-        _lastElementSent.value = element
-        _currentSymbolBuffer.value += element
-        lastElementTime.set(System.currentTimeMillis())
-    }
-
-    private fun startDecodingTimer() {
-        decodeJob?.cancel()
-        decodeJob = viewModelScope.launch {
-            val settings = _settings.value
-            val unitMs = 1200 / settings.farnsworthWpm
-            
-            // 1. Wait for Inter-Character Gap (3 units total)
-            // For Iambic: 1 unit is already consumed by the engine's mandatory gap. Wait 2 more.
-            // For Straight: Tone just ended. Wait 3 full units.
-            val remainingCharGap = if (settings.keyerMode == KeyerMode.Straight) {
-                3.0
-            } else {
-                2.0
-            }
-            delay((unitMs * remainingCharGap).toLong())
-            
-            val buffer = _currentSymbolBuffer.value
-            if (buffer.isNotEmpty()) {
-                val char = MorseCodeMap.entries.find { it.value == buffer }?.key
-                if (char != null) {
-                    _decodedText.value += char
-                    if (_currentSection.value == MorseSection.Trainer) checkTrainerProgress()
-                } else {
-                    _decodedText.value += "?"
-                }
-                _currentSymbolBuffer.value = ""
-            }
-            
-            // 2. Wait for Inter-Word Gap (7 units total, 4 more from character gap)
-            delay((unitMs * 4.0).toLong())
-            if (_decodedText.value.isNotEmpty() && !_decodedText.value.endsWith(" ")) {
-                _decodedText.value += " "
-            }
-        }
-    }
+    // --- Primary Practice Generator ---
 
     private fun generateExercise(type: ExerciseType): String {
         return when (type) {
             ExerciseType.Beginner -> listOf("E", "T", "A", "N", "I", "M", "S", "O").random()
-            ExerciseType.Intermediate -> {
-                val pool = ('A'..'Z') + ('0'..'9')
-                (1..3).map { pool.random() }.joinToString("")
-            }
-            ExerciseType.Advanced -> {
-                val words = listOf("THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "ANY", "CAN")
-                val abbreviations = listOf("CQ", "TEST", "BK", "AR", "SK", "KN", "73", "599")
-                (words + abbreviations).random()
-            }
+            ExerciseType.Intermediate -> (1..3).map { (('A'..'Z') + ('0'..'9')).random() }.joinToString("")
+            ExerciseType.Advanced -> listOf("THE", "AND", "CQ", "TEST", "BK", "AR", "SK", "KN", "73", "599").random()
             ExerciseType.Expert -> {
-                val prefixes = listOf("VK", "W", "G", "F", "JA", "PY", "DL", "I", "VE", "ZL")
-                val callsign = "${prefixes.random()}${(1..9).random()}${(1..3).map { ('A'..'Z').random() }.joinToString("")}"
-                if ((0..1).random() == 0) "CQ CQ DE $callsign K" else callsign
+                val call = generateCallsign()
+                if ((0..1).random() == 0) "CQ CQ DE $call K" else call
             }
-            ExerciseType.Characters -> (1..5).map { ('A'..'Z').random() }.joinToString("")
-            ExerciseType.Numbers -> (1..5).map { ('0'..'9').random() }.joinToString("")
-            ExerciseType.Punctuation -> (1..5).map { ".,/?=+-()!@".random() }.joinToString("")
-            ExerciseType.Mixed -> (1..5).map { (('A'..'Z') + ('0'..'9')).random() }.joinToString("")
-            ExerciseType.Callsigns -> {
-                val prefixes = listOf("VK", "W", "G", "F", "JA", "PY", "DL", "I", "VE", "ZL")
-                val suffix = (1..(2..3).random()).map { ('A'..'Z').random() }.joinToString("")
-                "${prefixes.random()}${(0..9).random()}$suffix"
-            }
-            ExerciseType.Words -> listOf("THE", "QUICK", "BROWN", "FOX", "JUMPS", "OVER", "LAZY", "DOG").random()
-            ExerciseType.Phrases -> listOf("UR RST 599", "QTH MELBOURNE", "NAME BEN", "HW CPY", "73 SK").random()
-            ExerciseType.CQ -> "CQ CQ DE VK2SIM K"
+            else -> "TEST"
         }
     }
 
-    // --- Trainer ---
+    private fun generateCallsign(): String {
+        val prefixes = listOf("VK", "W", "G", "F", "JA", "PY", "DL", "I", "VE", "ZL")
+        val suffix = (1..(2..3).random()).map { ('A'..'Z').random() }.joinToString("")
+        return "${prefixes.random()}${(1..9).random()}$suffix"
+    }
 
-    fun startLesson(index: Int) {
-        if (index in lessons.indices) {
-            val lessonContent = lessons[index]
-            _progress.value = _progress.value.copy(currentLessonIndex = index)
-            val chars = lessonContent.split(" ")
-            _trainerTarget.value = (1..3).map { chars.random() }.joinToString("")
-            _decodedText.value = ""
-            _trainerFeedback.value = null
+    // --- Advanced Trainer (Koch / Specialized) ---
+
+    fun startKochLesson(index: Int) {
+        val learnedChars = kochOrder.take(index + 2)
+        _trainerTarget.value = (1..5).map { learnedChars.random() }.joinToString("")
+        _decodedText.value = ""
+        _trainerFeedback.value = null
+        playText(_trainerTarget.value)
+    }
+
+    private fun generateTrainerExercise(mode: TrainerMode) {
+        val target = when (mode) {
+            TrainerMode.Numbers -> (1..5).map { ('0'..'9').random() }.joinToString("")
+            TrainerMode.Punctuation -> (1..5).map { ".,/?=".random() }.joinToString("")
+            TrainerMode.Callsigns -> generateCallsign()
+            TrainerMode.Words -> listOf("THE", "QUICK", "BROWN", "FOX", "JUMPS", "OVER").random()
+            TrainerMode.AmateurRadio -> listOf("CQ CQ DE VK3ESE", "UR RST 599", "73 SK").random()
+            TrainerMode.WeakReview -> generateWeakReviewExercise()
+            else -> "TEST"
         }
+        _trainerTarget.value = target
+        _decodedText.value = ""
+        _trainerFeedback.value = null
+        playText(target)
+    }
+
+    private fun generateWeakReviewExercise(): String {
+        val weakOnes = _progress.value.characterStats.values
+            .filter { it.totalCount > 5 && it.accuracy < 80f }
+            .sortedBy { it.accuracy }
+            .take(5)
+            .map { it.char }
+        
+        return if (weakOnes.isEmpty()) "PAR" else (1..5).map { weakOnes.random() }.joinToString("")
     }
 
     fun resetTrainerExercise() {
@@ -300,6 +267,39 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         _currentSymbolBuffer.value = ""
         _trainerFeedback.value = null
         decodeJob?.cancel()
+        playText(_trainerTarget.value)
+    }
+
+    fun clearSentText() {
+        _decodedText.value = ""
+        _currentSymbolBuffer.value = ""
+        decodeJob?.cancel()
+    }
+
+    fun submitSentText() {
+        val text = _decodedText.value.trim()
+        if (text.isNotEmpty()) {
+            if (_currentSection.value == MorseSection.Simulator) {
+                val currentMessages = _messages.value.toMutableList()
+                currentMessages.add("You" to text)
+                _messages.value = currentMessages
+
+                viewModelScope.launch {
+                    delay(1000)
+                    val responses = listOf("R R", "73", "GM", "GA", "UR RST 599", "TU", "FB")
+                    val responseMessages = _messages.value.toMutableList()
+                    responseMessages.add("Simulator" to responses.random())
+                    _messages.value = responseMessages
+                }
+            }
+            _decodedText.value = ""
+            _currentSymbolBuffer.value = ""
+            decodeJob?.cancel()
+        }
+    }
+
+    fun toggleDecoding() {
+        _isDecoding.value = !_isDecoding.value
     }
 
     private fun checkTrainerProgress() {
@@ -317,87 +317,83 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
                 message = if (isCorrect) "EXCELLENT!" else "ERROR DETECTED"
             )
 
-            if (isCorrect) {
-                updateProgress(true)
-                viewModelScope.launch {
-                    delay(1500)
-                    startLesson(_progress.value.currentLessonIndex)
-                }
-            } else {
-                updateProgress(false)
+            if (isCorrect && _trainerMode.value == TrainerMode.Koch) {
+                handleKochSuccess()
             }
         }
     }
 
-    private fun updateProgress(success: Boolean) {
+    private fun handleKochSuccess() {
         val p = _progress.value
-        val newAttempts = p.attempts + 1
-        val newMastered = p.charactersMastered.toMutableSet()
-        if (success) _trainerTarget.value.forEach { newMastered.add(it) }
+        val newCorrectCount = (p.characterStats['K']?.correctCount ?: 0) + 1 // Placeholder simplified logic
+        if (p.totalAccuracy > 90f && p.totalCharactersCopied > 50) {
+            _progress.value = p.copy(currentLessonIndex = p.currentLessonIndex + 1)
+        }
         
-        val newAccuracy = (p.totalAccuracy * (newAttempts - 1) + (if (success) 100f else 0f)) / newAttempts
-        var newLessonsCompleted = p.lessonsCompleted
-        if (newAccuracy > 90f && p.currentLessonIndex == p.lessonsCompleted && newAttempts % 5 == 0) {
-            newLessonsCompleted++
-        }
-
-        _progress.value = p.copy(
-            attempts = newAttempts,
-            charactersMastered = newMastered,
-            totalAccuracy = newAccuracy,
-            lessonsCompleted = newLessonsCompleted
-        )
-    }
-
-    // --- Simulator ---
-
-    private var simulatorOp: String? = null
-    private var simStage = 0
-
-    fun startSimulator() {
-        _messages.value = emptyList()
-        simStage = 1
-        simulatorOp = generateExercise(ExerciseType.Callsigns)
-        val initialMsg = "CQ CQ CQ DE $simulatorOp $simulatorOp K"
-        _messages.value += (simulatorOp!! to initialMsg)
-        playText(initialMsg)
-    }
-
-    fun submitSentText() {
-        if (_decodedText.value.isNotEmpty()) {
-            val userText = _decodedText.value.trim().uppercase()
-            _messages.value += ("You" to userText)
-            _decodedText.value = ""
-            processSimulatorResponse()
-        }
-    }
-
-    private fun processSimulatorResponse() {
-        val op = simulatorOp ?: return
         viewModelScope.launch {
             delay(1500)
-            val response = when (simStage) {
-                1 -> { simStage = 2; "TU UR 599 BK" }
-                2 -> { simStage = 3; "FB 73 SK" }
-                else -> "QRZ?"
-            }
-            _messages.value += (op to response)
-            playText(response)
+            startKochLesson(_progress.value.currentLessonIndex)
         }
     }
 
-    fun clearSentText() {
-        _decodedText.value = ""
-        _currentSymbolBuffer.value = ""
-        decodeJob?.cancel()
+    // --- Keyer & Playback ---
+
+    fun playText(text: String) {
+        keyer.playText(text)
     }
 
-    fun toggleDecoding() {
-        _isDecoding.value = !_isDecoding.value
+    fun stopPlayback() {
+        keyer.stopPlayback()
+    }
+
+    fun onKeyDown(isRightPaddle: Boolean) {
+        val config = _settings.value
+        val isDash = if (config.paddleOrientation == PaddleOrientation.LeftDitRightDah) isRightPaddle else !isRightPaddle
+        if (config.keyerMode == KeyerMode.Straight) keyer.onStraightKey(true) 
+        else if (isDash) keyer.onDashPaddle(true) else keyer.onDotPaddle(true)
+    }
+
+    fun onKeyUp(isRightPaddle: Boolean) {
+        val config = _settings.value
+        val isDash = if (config.paddleOrientation == PaddleOrientation.LeftDitRightDah) isRightPaddle else !isRightPaddle
+        if (config.keyerMode == KeyerMode.Straight) keyer.onStraightKey(false) 
+        else if (isDash) keyer.onDashPaddle(false) else keyer.onDotPaddle(false)
+    }
+
+    private fun handleElementSent(element: String) {
+        decodeJob?.cancel()
+        _lastElementSent.value = element
+        _currentSymbolBuffer.value += element
+    }
+
+    private fun startDecodingTimer() {
+        decodeJob?.cancel()
+        decodeJob = viewModelScope.launch {
+            val settings = _settings.value
+            val unitMs = 1200 / settings.farnsworthWpm
+            val remainingCharGap = if (settings.keyerMode == KeyerMode.Straight) 3.0 else 2.0
+            delay((unitMs * remainingCharGap).toLong())
+            
+            val buffer = _currentSymbolBuffer.value
+            if (buffer.isNotEmpty()) {
+                val char = MorseCodeMap.entries.find { it.value == buffer }?.key
+                if (char != null) {
+                    _decodedText.value += char
+                    if (_currentSection.value == MorseSection.Trainer) checkTrainerProgress()
+                } else {
+                    _decodedText.value += "?"
+                }
+                _currentSymbolBuffer.value = ""
+            }
+            
+            delay((unitMs * 4.0).toLong())
+            if (_decodedText.value.isNotEmpty() && !_decodedText.value.endsWith(" ")) {
+                _decodedText.value += " "
+            }
+        }
     }
 
     override fun onCleared() {
-        super.onCleared()
         keyer.release()
     }
 }
