@@ -79,6 +79,15 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _messages = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val messages = _messages.asStateFlow()
 
+    private val _receiveStats = MutableStateFlow(ReceiveStats())
+    val receiveStats = _receiveStats.asStateFlow()
+
+    private val _receiveFeedback = MutableStateFlow<ReceiveFeedback?>(null)
+    val receiveFeedback = _receiveFeedback.asStateFlow()
+
+    private val _currentExerciseType = MutableStateFlow(ExerciseType.Beginner)
+    val currentExerciseType = _currentExerciseType.asStateFlow()
+
     private val _isDecoding = MutableStateFlow(false)
     val isDecoding = _isDecoding.asStateFlow()
 
@@ -126,9 +135,44 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun generateNewExercise(type: ExerciseType) {
+        _currentExerciseType.value = type
         val text = generateExercise(type)
         _currentText.value = text
+        _receiveFeedback.value = null
         playText(text)
+    }
+
+    fun checkReceiveAnswer(answer: String) {
+        val expected = _currentText.value.trim().uppercase()
+        val received = answer.trim().uppercase()
+        
+        val comparison = mutableListOf<Pair<Char, Boolean>>()
+        val maxLen = maxOf(expected.length, received.length)
+        
+        for (i in 0 until maxLen) {
+            val e = expected.getOrNull(i)
+            val r = received.getOrNull(i)
+            comparison.add((e ?: ' ') to (e == r))
+        }
+        
+        val isCorrect = expected == received
+        _receiveFeedback.value = ReceiveFeedback(isCorrect, expected, received, comparison)
+        
+        // Update Stats
+        val stats = _receiveStats.value
+        val newCorrect = if (isCorrect) stats.correctCount + 1 else stats.correctCount
+        val newTotal = stats.totalCount + 1
+        val newStreak = if (isCorrect) stats.currentStreak + 1 else 0
+        val newLongest = maxOf(stats.longestStreak, newStreak)
+        val newChars = stats.charactersPracticed + expected.length
+        
+        _receiveStats.value = stats.copy(
+            correctCount = newCorrect,
+            totalCount = newTotal,
+            currentStreak = newStreak,
+            longestStreak = newLongest,
+            charactersPracticed = newChars
+        )
     }
 
     fun playText(text: String) {
@@ -179,7 +223,11 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             // 1. Wait for Inter-Character Gap (3 units total)
             // For Iambic: 1 unit is already consumed by the engine's mandatory gap. Wait 2 more.
             // For Straight: Tone just ended. Wait 3 full units.
-            val remainingCharGap = if (settings.keyerMode == KeyerMode.Straight) 3.0 else 2.0
+            val remainingCharGap = if (settings.keyerMode == KeyerMode.Straight) {
+                3.0
+            } else {
+                2.0
+            }
             delay((unitMs * remainingCharGap).toLong())
             
             val buffer = _currentSymbolBuffer.value
@@ -202,10 +250,23 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- Utility ---
-
     private fun generateExercise(type: ExerciseType): String {
         return when (type) {
+            ExerciseType.Beginner -> listOf("E", "T", "A", "N", "I", "M", "S", "O").random()
+            ExerciseType.Intermediate -> {
+                val pool = ('A'..'Z') + ('0'..'9')
+                (1..3).map { pool.random() }.joinToString("")
+            }
+            ExerciseType.Advanced -> {
+                val words = listOf("THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "ANY", "CAN")
+                val abbreviations = listOf("CQ", "TEST", "BK", "AR", "SK", "KN", "73", "599")
+                (words + abbreviations).random()
+            }
+            ExerciseType.Expert -> {
+                val prefixes = listOf("VK", "W", "G", "F", "JA", "PY", "DL", "I", "VE", "ZL")
+                val callsign = "${prefixes.random()}${(1..9).random()}${(1..3).map { ('A'..'Z').random() }.joinToString("")}"
+                if ((0..1).random() == 0) "CQ CQ DE $callsign K" else callsign
+            }
             ExerciseType.Characters -> (1..5).map { ('A'..'Z').random() }.joinToString("")
             ExerciseType.Numbers -> (1..5).map { ('0'..'9').random() }.joinToString("")
             ExerciseType.Punctuation -> (1..5).map { ".,/?=+-()!@".random() }.joinToString("")
@@ -217,7 +278,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             }
             ExerciseType.Words -> listOf("THE", "QUICK", "BROWN", "FOX", "JUMPS", "OVER", "LAZY", "DOG").random()
             ExerciseType.Phrases -> listOf("UR RST 599", "QTH MELBOURNE", "NAME BEN", "HW CPY", "73 SK").random()
-            ExerciseType.CQ -> "CQ CQ CQ DE VK2SIM K"
+            ExerciseType.CQ -> "CQ CQ DE VK2SIM K"
         }
     }
 

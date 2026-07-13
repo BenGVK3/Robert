@@ -68,8 +68,26 @@ enum class MorseSection {
 }
 
 enum class ExerciseType {
-    Characters, Numbers, Punctuation, Mixed, Callsigns, Words, Phrases, CQ
+    Characters, Numbers, Punctuation, Mixed, Callsigns, Words, Phrases, CQ,
+    Beginner, Intermediate, Advanced, Expert
 }
+
+@Serializable
+data class ReceiveStats(
+    val correctCount: Int = 0,
+    val totalCount: Int = 0,
+    val currentStreak: Int = 0,
+    val longestStreak: Int = 0,
+    val charactersPracticed: Int = 0,
+    val totalTimeSeconds: Long = 0
+)
+
+data class ReceiveFeedback(
+    val isCorrect: Boolean,
+    val expected: String,
+    val received: String,
+    val comparison: List<Pair<Char, Boolean>> // Char and whether it matched
+)
 
 enum class SimulatorDifficulty {
     Beginner, Intermediate, Advanced

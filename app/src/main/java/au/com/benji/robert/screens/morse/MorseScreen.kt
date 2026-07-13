@@ -13,8 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,7 +27,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -354,101 +352,284 @@ data class MorseMenuItem(
 fun ReceiveScreen(viewModel: MorseViewModel) {
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val currentText by viewModel.currentText.collectAsStateWithLifecycle()
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-    var revealed by remember { mutableStateOf(false) }
+    val stats by viewModel.receiveStats.collectAsStateWithLifecycle()
+    val feedback by viewModel.receiveFeedback.collectAsStateWithLifecycle()
+    val currentType by viewModel.currentExerciseType.collectAsStateWithLifecycle()
+    
+    var userAnswer by remember { mutableStateOf("") }
+    val hasStarted by remember { derivedStateOf { currentText.isNotEmpty() } }
 
-    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
-        // Stats Card
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(Spacing.Medium),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+    ) {
+        // 1. Horizontal Stats Strip
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            shape = RoundedCornerShape(24.dp)
+            shape = RoundedCornerShape(16.dp)
         ) {
             Row(
-                modifier = Modifier.padding(Spacing.Medium),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.Medium, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                StatItem("SPEED", "${settings.wpm}", "WPM")
-                VerticalDivider(modifier = Modifier.height(32.dp).width(1.dp), color = RobertColors.TextSecondary.copy(alpha = 0.2f))
-                StatItem("PITCH", "${settings.frequency}", "Hz")
+                StatItem("ACCURACY", "${if (stats.totalCount > 0) (stats.correctCount * 100 / stats.totalCount) else 0}%", "")
+                VerticalDivider(modifier = Modifier.height(24.dp).width(1.dp), color = RobertColors.TextSecondary.copy(alpha = 0.2f))
+                StatItem("STREAK", "${stats.currentStreak}", "")
+                VerticalDivider(modifier = Modifier.height(24.dp).width(1.dp), color = RobertColors.TextSecondary.copy(alpha = 0.2f))
+                StatItem("BEST", "${stats.longestStreak}", "")
             }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.Medium))
-
-        // Main Display
-        Card(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            border = BorderStroke(1.dp, RobertColors.Primary.copy(alpha = 0.2f))
+        // 2. Difficulty Chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                if (isPlaying) {
-                    PlaybackAnimation()
-                }
-                
-                Text(
-                    text = if (revealed || !settings.hideTextDuringPlayback) currentText else "•••••",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                    color = if (revealed) RobertColors.Primary else RobertColors.TextSecondary.copy(alpha = 0.3f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(Spacing.Medium)
+            listOf(ExerciseType.Beginner, ExerciseType.Intermediate, ExerciseType.Advanced, ExerciseType.Expert).forEach { type ->
+                FilterChip(
+                    selected = currentType == type,
+                    onClick = { 
+                        userAnswer = ""
+                        viewModel.generateNewExercise(type) 
+                    },
+                    label = { 
+                        Text(
+                            text = type.name, 
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        ) 
+                    },
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.Medium))
-
-        // Controls
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+        // 3. Main Feedback Area (Flexible Weight)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+            border = BorderStroke(1.dp, RobertColors.Primary.copy(alpha = 0.1f))
         ) {
-            Button(
-                onClick = { viewModel.playText(currentText) },
-                modifier = Modifier.weight(1f).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = !isPlaying && currentText.isNotEmpty()
-            ) {
-                Icon(Icons.Default.Replay, null)
-                Spacer(Modifier.width(8.dp))
-                Text("REPLAY")
-            }
-
-            Button(
-                onClick = { 
-                    revealed = false
-                    viewModel.generateNewExercise(ExerciseType.Mixed) 
-                },
-                modifier = Modifier.weight(1.5f).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = !isPlaying,
-                colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary)
-            ) {
-                Icon(Icons.Default.PlayArrow, null)
-                Spacer(Modifier.width(8.dp))
-                Text("NEXT")
-            }
-
-            IconButton(
-                onClick = { revealed = !revealed },
-                modifier = Modifier.size(56.dp).background(RobertColors.Surface, RoundedCornerShape(16.dp))
-            ) {
-                Icon(if (revealed) Icons.Default.VisibilityOff else Icons.Default.Visibility, null, tint = RobertColors.Primary)
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                if (isPlaying) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        PlaybackAnimation()
+                        Text("LISTENING...", style = MaterialTheme.typography.titleMedium, color = RobertColors.Primary, fontWeight = FontWeight.Bold)
+                    }
+                } else if (!hasStarted) {
+                    Text("READY", style = MaterialTheme.typography.headlineSmall, color = RobertColors.TextSecondary.copy(alpha = 0.3f), fontWeight = FontWeight.Black)
+                } else if (feedback == null) {
+                    Text("TYPE YOUR COPY", style = MaterialTheme.typography.titleMedium, color = RobertColors.TextSecondary.copy(alpha = 0.5f))
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(
+                            if (feedback!!.isCorrect) Icons.Default.CheckCircle else Icons.Default.Error,
+                            null,
+                            tint = if (feedback!!.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Text(
+                            if (feedback!!.isCorrect) "CORRECT" else "INCORRECT",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Black,
+                            color = if (feedback!!.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed
+                        )
+                        if (!feedback!!.isCorrect) {
+                            Text(
+                                "Expected: ${feedback!!.expected}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = RobertColors.TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
             }
         }
-        
-        if (isPlaying) {
-            TextButton(
-                onClick = { viewModel.stopPlayback() },
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                colors = ButtonDefaults.textButtonColors(contentColor = RobertColors.StatusRed)
+
+        // 4. Your Copy (Compact 1-line)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(Spacing.Medium),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("STOP PLAYBACK")
+                if (feedback == null) {
+                    Text(
+                        text = userAnswer.ifEmpty { "•••••" },
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = if (userAnswer.isEmpty()) RobertColors.TextSecondary.copy(alpha = 0.2f) else RobertColors.Primary,
+                        letterSpacing = 2.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                } else {
+                    feedback!!.comparison.forEachIndexed { index, (expectedChar, isMatch) ->
+                        val displayChar = if (isMatch) expectedChar else feedback!!.received.getOrNull(index) ?: expectedChar
+                        Text(
+                            text = displayChar.toString(),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Black,
+                            color = if (isMatch) RobertColors.StatusGreen else RobertColors.StatusRed,
+                            modifier = Modifier.padding(horizontal = 2.dp),
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
             }
+        }
+
+        // 5. Custom QWERTY Morse Keyboard
+        MorseKeyboard(
+            onKey = { char -> if (!isPlaying && feedback == null) userAnswer += char },
+            onBackspace = { if (userAnswer.isNotEmpty() && feedback == null) userAnswer = userAnswer.dropLast(1) },
+            enabled = !isPlaying && feedback == null
+        )
+
+        // 6. Primary Action Button
+        val (btnText, btnColor, btnIcon) = when {
+            isPlaying -> Triple("STOP", RobertColors.StatusRed, Icons.Default.Stop)
+            !hasStarted -> Triple("START PRACTICE", RobertColors.Primary, Icons.Default.PlayArrow)
+            feedback != null -> Triple("NEXT EXERCISE", RobertColors.StatusGreen, Icons.AutoMirrored.Filled.ArrowForward)
+            userAnswer.isEmpty() -> Triple("PLAY MORSE", RobertColors.Primary, Icons.Default.PlayArrow)
+            else -> Triple("CHECK ANSWER", RobertColors.Primary, Icons.Default.Check)
+        }
+
+        Button(
+            onClick = {
+                when {
+                    isPlaying -> viewModel.stopPlayback()
+                    feedback != null -> {
+                        userAnswer = ""
+                        viewModel.generateNewExercise(currentType)
+                    }
+                    userAnswer.isEmpty() -> viewModel.playText(currentText.ifEmpty { viewModel.generateNewExercise(currentType); "" })
+                    else -> viewModel.checkReceiveAnswer(userAnswer)
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(64.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = btnColor)
+        ) {
+            Icon(btnIcon, null)
+            Spacer(Modifier.width(8.dp))
+            Text(btnText, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        }
+
+        // 7. Secondary Controls
+        if (hasStarted && !isPlaying) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                TextButton(onClick = { viewModel.playText(currentText) }) {
+                    Icon(Icons.Default.Replay, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("REPLAY")
+                }
+                if (feedback == null && userAnswer.isNotEmpty()) {
+                    TextButton(onClick = { userAnswer = "" }) {
+                        Icon(Icons.Default.Clear, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("CLEAR")
+                    }
+                }
+            }
+        } else if (isPlaying) {
+            Spacer(Modifier.height(48.dp)) // Maintain layout height
+        }
+    }
+}
+
+@Composable
+fun MorseKeyboard(
+    onKey: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    enabled: Boolean = true
+) {
+    val rows = listOf(
+        "1234567890".toList(),
+        "QWERTYUIOP".toList(),
+        "ASDFGHJKL".toList(),
+        "ZXCVBNM".toList()
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        rows.forEachIndexed { index, row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(if (index == 2) 0.95f else 1f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)
+            ) {
+                row.forEach { char ->
+                    KeyButton(
+                        text = char.toString(),
+                        onClick = { onKey(char) },
+                        modifier = Modifier.weight(1f),
+                        enabled = enabled
+                    )
+                }
+                if (index == 3) {
+                    KeyButton(
+                        icon = Icons.AutoMirrored.Filled.Backspace,
+                        onClick = onBackspace,
+                        modifier = Modifier.weight(1.5f),
+                        containerColor = RobertColors.Surface,
+                        contentColor = RobertColors.TextSecondary,
+                        enabled = enabled
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun KeyButton(
+    modifier: Modifier = Modifier,
+    text: String? = null,
+    icon: ImageVector? = null,
+    onClick: () -> Unit,
+    containerColor: Color = RobertColors.Surface,
+    contentColor: Color = RobertColors.TextPrimary,
+    enabled: Boolean = true
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(44.dp),
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = contentColor,
+            disabledContainerColor = containerColor.copy(alpha = 0.5f),
+            disabledContentColor = contentColor.copy(alpha = 0.5f)
+        ),
+        enabled = enabled
+    ) {
+        if (icon != null) {
+            Icon(icon, null, modifier = Modifier.size(18.dp))
+        } else if (text != null) {
+            Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
     }
 }
