@@ -5,8 +5,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +24,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -102,7 +102,7 @@ fun MorseScreen(
                 label = "MorseSectionTransition"
             ) { section ->
                 when (section) {
-                    MorseSection.Menu -> MorseMenu(onSectionSelect = { viewModel.setSection(it) }, settings = settings)
+                    MorseSection.Menu -> MorseMenu(onSectionSelect = { viewModel.setSection(it) })
                     MorseSection.Receive -> ReceiveScreen(viewModel)
                     MorseSection.Send -> SendScreen(viewModel)
                     MorseSection.Decoder -> DecoderScreen(viewModel)
@@ -292,7 +292,7 @@ fun SettingSlider(label: String, value: Float, onValueChange: (Float) -> Unit, v
 }
 
 @Composable
-fun MorseMenu(onSectionSelect: (MorseSection) -> Unit, settings: MorseSettings) {
+fun MorseMenu(onSectionSelect: (MorseSection) -> Unit) {
     val menuItems = listOf(
         MorseMenuItem("Receive", "Improve your copying skills", Icons.Default.Hearing, MorseSection.Receive, RobertColors.Primary),
         MorseMenuItem("Send", "Master your keying technique", Icons.Default.Keyboard, MorseSection.Send, Color(0xFF00BCD4)),
@@ -547,7 +547,6 @@ fun SendScreen(viewModel: MorseViewModel) {
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (settings.keyerMode == KeyerMode.Straight) {
                 StraightKeyArea(
-                    isBusy = isKeyBusy,
                     onDown = { viewModel.onKeyDown(false) }, 
                     onUp = { viewModel.onKeyUp(false) }
                 )
@@ -578,19 +577,30 @@ fun SendScreen(viewModel: MorseViewModel) {
 }
 
 @Composable
-fun StraightKeyArea(isBusy: Boolean, onDown: () -> Unit, onUp: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    LaunchedEffect(isPressed) {
-        if (isPressed) onDown() else onUp()
-    }
+fun StraightKeyArea(onDown: () -> Unit, onUp: () -> Unit) {
+    var isPressed by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier
             .size(240.dp)
             .clip(CircleShape)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = {}),
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        when (event.type) {
+                            PointerEventType.Press -> {
+                                isPressed = true
+                                onDown()
+                            }
+                            PointerEventType.Release -> {
+                                isPressed = false
+                                onUp()
+                            }
+                        }
+                    }
+                }
+            },
         color = if (isPressed) RobertColors.Primary.copy(alpha = 0.3f) else RobertColors.Surface,
         border = BorderStroke(4.dp, if (isPressed) RobertColors.Primary else RobertColors.Surface)
     ) {
@@ -645,18 +655,29 @@ fun IambicPaddleArea(
 
 @Composable
 fun Paddle(modifier: Modifier, label: String, isActive: Boolean, onDown: () -> Unit, onUp: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    LaunchedEffect(isPressed) {
-        if (isPressed) onDown() else onUp()
-    }
+    var isPressed by remember { mutableStateOf(false) }
 
     Surface(
         modifier = modifier
             .fillMaxHeight()
             .clip(RoundedCornerShape(24.dp))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = {}),
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        when (event.type) {
+                            PointerEventType.Press -> {
+                                isPressed = true
+                                onDown()
+                            }
+                            PointerEventType.Release -> {
+                                isPressed = false
+                                onUp()
+                            }
+                        }
+                    }
+                }
+            },
         color = if (isPressed || isActive) RobertColors.Primary.copy(alpha = 0.3f) else RobertColors.Surface,
         border = BorderStroke(2.dp, if (isPressed || isActive) RobertColors.Primary else RobertColors.Surface)
     ) {
@@ -784,7 +805,6 @@ fun TrainerScreen(viewModel: MorseViewModel) {
         Box(modifier = Modifier.fillMaxWidth().height(240.dp)) {
             if (settings.keyerMode == KeyerMode.Straight) {
                 StraightKeyArea(
-                    isBusy = isKeyBusy,
                     onDown = { viewModel.onKeyDown(false) }, 
                     onUp = { viewModel.onKeyUp(false) }
                 )
@@ -908,7 +928,6 @@ fun SimulatorScreen(viewModel: MorseViewModel) {
             
             if (settings.keyerMode == KeyerMode.Straight) {
                 StraightKeyArea(
-                    isBusy = isKeyBusy,
                     onDown = { viewModel.onKeyDown(false) }, 
                     onUp = { viewModel.onKeyUp(false) }
                 )
