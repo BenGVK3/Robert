@@ -141,6 +141,7 @@ fun PremiumActionCard(
                                 icon == au.com.benji.robert.R.drawable.moon1 ||
                                 icon == au.com.benji.robert.R.drawable.repeaters1 ||
                                 icon == au.com.benji.robert.R.drawable.dxlook1 ||
+                                icon == au.com.benji.robert.R.drawable.morse1 ||
                                 icon == au.com.benji.robert.R.drawable.kiwisdr1) {
                                 Image(
                                     painter = painterResource(id = icon),

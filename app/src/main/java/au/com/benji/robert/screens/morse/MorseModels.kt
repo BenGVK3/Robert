@@ -36,17 +36,39 @@ data class SessionStat(
 )
 
 @Serializable
+data class TrainerFeedback(
+    val isCorrect: Boolean,
+    val expected: String,
+    val received: String,
+    val expectedCode: String,
+    val receivedCode: String,
+    val message: String
+)
+
+@Serializable
 data class MorseProgress(
     val charactersMastered: Set<Char> = emptySet(),
     val lessonsCompleted: Int = 0,
     val currentLessonIndex: Int = 0,
     val totalAccuracy: Float = 0f,
     val practiceStreak: Int = 0,
-    val totalPracticeTimeMinutes: Long = 0,
+    val longestStreak: Int = 0,
+    val totalPracticeTimeSeconds: Long = 0,
     val totalCharactersCopied: Int = 0,
     val characterStats: Map<Char, CharacterStat> = emptyMap(),
-    val achievements: Set<String> = emptySet(),
+    val dailyHistory: Map<String, Int> = emptyMap(), // Date string to chars copied
     val sessionStats: List<SessionStat> = emptyList()
+)
+
+@Serializable
+data class TrainerSessionProgress(
+    val lessonNumber: Int = 1,
+    val currentCorrect: Int = 0,
+    val currentTotal: Int = 0,
+    val targetCorrect: Int = 20, // Number of correct answers to finish lesson
+    val requiredAccuracy: Float = 90f,
+    val recentResults: List<Boolean> = emptyList(), // Last N results for accuracy check
+    val startTime: Long = System.currentTimeMillis()
 )
 
 @Serializable
@@ -54,6 +76,7 @@ data class CharacterStat(
     val char: Char,
     val correctCount: Int = 0,
     val totalCount: Int = 0,
+    val weight: Float = 1.0f, // For focusing on difficult characters
     val lastPracticed: Long = 0
 ) {
     val accuracy: Float get() = if (totalCount > 0) (correctCount.toFloat() / totalCount) * 100f else 0f

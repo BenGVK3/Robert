@@ -6,9 +6,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Precision Morse timing engine.
- * Handles Iambic Mode A/B, Straight Key, and automatic spacing.
- * Operates on a dedicated high-priority thread for consistent timing.
+ * Precision Morse timing engine following ITU-R M.1677-1 standards.
+ * Dot = 1 unit, Dash = 3 units, Intra-character gap = 1 unit.
+ * Inter-character gap = 3 units, Inter-word gap = 7 units.
+ * Supports Farnsworth timing for character and word gaps.
  */
 class MorseTimingEngine(
     private val onToneAction: (Boolean) -> Unit,
@@ -27,7 +28,7 @@ class MorseTimingEngine(
     private val wpm = AtomicInteger(20)
     private val farnsworthWpm = AtomicInteger(20)
     private val weighting = AtomicReference(1.0f)
-    private val keyerMode = AtomicReference(KeyerMode.IambicB)
+    private val keyerMode = AtomicReference(KeyerMode.Straight)
     
     private val straightKeyActive = AtomicBoolean(false)
     
@@ -81,13 +82,11 @@ class MorseTimingEngine(
             }
             onToneAction(false)
             
-            // Logic to determine if it was a dot or dash for decoding
             val currentWpm = wpm.get()
             val unitMs = 1200L / currentWpm
             val duration = System.currentTimeMillis() - startTime
             val element = if (duration < unitMs * 2) "." else "-"
             onElementSent(element)
-
             onToneStateChanged(false)
         }
     }
@@ -97,7 +96,7 @@ class MorseTimingEngine(
         val hasDash = dashPaddle.get() || dashLatch.get()
         
         if (!hasDot && !hasDash) {
-            lastSentElement = "" // Reset toggle memory when idle for crisp character starts
+            lastSentElement = ""
             return
         }
 
@@ -107,9 +106,7 @@ class MorseTimingEngine(
             else -> if (lastSentElement == ".") "-" else "."
         }
 
-        // Consume the latch for the element we are sending
         if (nextElement == ".") dotLatch.set(false) else dashLatch.set(false)
-        
         sendElement(nextElement)
     }
 
@@ -125,69 +122,54 @@ class MorseTimingEngine(
         onElementSent(element)
         lastSentElement = element
         
-        val startTime = System.nanoTime()
-        val durationNano = durationMs * 1_000_000L
-        
-        while (System.nanoTime() - startTime < durationNano && isRunning.get()) {
-            // Iambic Crossover Memory: Latch the opposite paddle while the current one is playing.
-            // This ensures crisp transitions during squeeze keying without causing same-paddle repeats.
-            if (element == "." && dashPaddle.get()) dashLatch.set(true)
-            if (element == "-" && dotPaddle.get()) dotLatch.set(true)
-            Thread.yield()
-        }
-        
+        sleepNanos(durationMs * 1_000_000L, element)
         onToneAction(false)
         
-        val gapStartTime = System.nanoTime()
-        val gapDurationNano = unitMs * 1_000_000L
-        
-        while (System.nanoTime() - gapStartTime < gapDurationNano && isRunning.get()) {
-            Thread.yield()
-        }
-
-        // Notify that the full element cycle (tone + gap) is complete
+        // Intra-character gap (always 1 unit at current WPM)
+        sleepNanos(unitMs * 1_000_000L, element)
         onToneStateChanged(false)
     }
 
     private fun executeCommand(command: TimingCommand) {
+        val currentWpm = wpm.get()
+        val currentFarnsworthWpm = farnsworthWpm.get()
+        val unitMs = 1200L / currentWpm
+        val fUnitMs = 1200L / currentFarnsworthWpm
+
         when (command) {
             is TimingCommand.PlayElement -> {
-                val currentWpm = wpm.get()
-                val unitMs = 1200L / currentWpm
                 val durationMs = if (command.element == ".") unitMs else (unitMs * 3).toLong()
-                
                 onToneAction(true)
                 onToneStateChanged(true)
                 onElementSent(command.element)
-                
-                val startTime = System.nanoTime()
-                val durationNano = durationMs * 1_000_000L
-                while (System.nanoTime() - startTime < durationNano && isRunning.get()) {
-                    Thread.yield()
-                }
+                sleepNanos(durationMs * 1_000_000L)
                 onToneAction(false)
-                onToneStateChanged(false)
                 
-                val gapStartTime = System.nanoTime()
-                val gapDurationNano = unitMs * 1_000_000L
-                while (System.nanoTime() - gapStartTime < gapDurationNano && isRunning.get()) {
-                    Thread.yield()
-                }
+                // Every element is followed by 1 unit of silence (intra-character gap)
+                sleepNanos(unitMs * 1_000_000L)
+                onToneStateChanged(false)
             }
             is TimingCommand.Gap -> {
-                val fWpm = farnsworthWpm.get()
-                val unitMs = 1200L / fWpm
-                val durationMs = unitMs * command.units
-                
-                val startTime = System.nanoTime()
-                val durationNano = durationMs * 1_000_000L
-                while (System.nanoTime() - startTime < durationNano && isRunning.get()) {
-                    Thread.yield()
+                val actualUnits = (command.units - 1).coerceAtLeast(0)
+                if (actualUnits > 0) {
+                    sleepNanos(fUnitMs * actualUnits * 1_000_000L)
                 }
             }
             is TimingCommand.NotifyCharacterComplete -> {
                 onCharacterComplete()
             }
+        }
+    }
+
+    private fun sleepNanos(nanos: Long, elementBeingSent: String? = null) {
+        val startTime = System.nanoTime()
+        while (System.nanoTime() - startTime < nanos && isRunning.get()) {
+            // Iambic Crossover Memory: check paddles during tone/gap.
+            // ONLY latch the OPPOSITE paddle. Latching the same paddle causes duplicate elements
+            // because of human response time (we can't release faster than a dot finishes).
+            if (dotPaddle.get() && elementBeingSent != ".") dotLatch.set(true)
+            if (dashPaddle.get() && elementBeingSent != "-") dashLatch.set(true)
+            Thread.yield()
         }
     }
 
@@ -200,12 +182,21 @@ class MorseTimingEngine(
 
     fun setDotPaddle(pressed: Boolean) {
         dotPaddle.set(pressed)
-        if (pressed) dotLatch.set(true)
+        if (pressed) {
+            // Only latch if we are NOT currently sending a dit.
+            // If we ARE sending a dit, handleIambicKeyer will check dotPaddle.get() after the gap.
+            // If we ARE sending a DAH, then we WANT to latch the dit for later.
+            // However, it's simpler to just set the latch and let sleepNanos handle the "opposite only" rule.
+            // Actually, we need to set the latch here too for the FIRST element.
+            dotLatch.set(true)
+        }
     }
 
     fun setDashPaddle(pressed: Boolean) {
         dashPaddle.set(pressed)
-        if (pressed) dashLatch.set(true)
+        if (pressed) {
+            dashLatch.set(true)
+        }
     }
     
     fun setStraightKey(pressed: Boolean) {
@@ -231,6 +222,7 @@ class MorseTimingEngine(
     fun stopPlayback() {
         commandQueue.clear()
         onToneAction(false)
+        onToneStateChanged(false)
     }
 
     fun release() {

@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -47,7 +45,7 @@ fun CommandCenterSheet(
                 CommandAction("KiwiSDR", au.com.benji.robert.R.drawable.kiwisdr1, CommandActionType.Navigate(Screen.Sdr.route)),
                 CommandAction("APRS Map", au.com.benji.robert.R.drawable.aprs1, CommandActionType.Navigate(Screen.Aprs.route)),
                 CommandAction("DXLook", au.com.benji.robert.R.drawable.dxlook1, CommandActionType.Navigate(Screen.DxLook.route)),
-                CommandAction("Morse", Icons.Default.Keyboard, CommandActionType.Navigate(Screen.Morse.route)),
+                CommandAction("Morse", au.com.benji.robert.R.drawable.morse1, CommandActionType.Navigate(Screen.Morse.route)),
                 CommandAction("Satellites", au.com.benji.robert.R.drawable.satellites1, CommandActionType.Navigate(Screen.Satellites.route)),
                 CommandAction("Moon (EME/Moonbounce)", au.com.benji.robert.R.drawable.moon1, CommandActionType.Navigate(Screen.Moon.route)),
                 CommandAction("Repeaters", au.com.benji.robert.R.drawable.repeaters1, CommandActionType.Navigate(Screen.RepeaterList.route))

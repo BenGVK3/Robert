@@ -5,6 +5,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,15 +47,11 @@ fun MorseScreen(
 ) {
     val currentSection by viewModel.currentSection.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val diagnostics by viewModel.diagnostics.collectAsStateWithLifecycle()
-    val latencyLog by viewModel.latencyLog.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
 
     if (showSettings) {
         MorseSettingsDialog(
             settings = settings,
-            diagnostics = diagnostics,
-            latencyLog = latencyLog,
             onDismiss = { showSettings = false },
             onSave = { viewModel.updateSettings(it) }
         )
@@ -100,7 +99,7 @@ fun MorseScreen(
                 label = "MorseSectionTransition"
             ) { section ->
                 when (section) {
-                    MorseSection.Menu -> MorseMenu(onSectionSelect = { viewModel.setSection(it) })
+                    MorseSection.Menu -> MorseMenu(viewModel)
                     MorseSection.Receive -> ReceiveScreen(viewModel)
                     MorseSection.Send -> SendScreen(viewModel)
                     MorseSection.Decoder -> DecoderScreen(viewModel)
@@ -115,8 +114,6 @@ fun MorseScreen(
 @Composable
 fun MorseSettingsDialog(
     settings: MorseSettings,
-    diagnostics: List<KeyerDiagnosticEntry>,
-    latencyLog: List<String>,
     onDismiss: () -> Unit,
     onSave: (MorseSettings) -> Unit
 ) {
@@ -136,7 +133,6 @@ fun MorseSettingsDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
             ) {
-                // Keyer Section
                 PreferenceCard(title = "Keyer Configuration", icon = Icons.Default.Keyboard) {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                         Text("Keyer Type", style = MaterialTheme.typography.labelMedium)
@@ -149,102 +145,20 @@ fun MorseSettingsDialog(
                                 )
                             }
                         }
-                        
-                        if (settings.keyerMode != KeyerMode.Straight) {
-                            Text("Paddle Orientation", style = MaterialTheme.typography.labelMedium)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                PaddleOrientation.entries.forEach { orientation ->
-                                    FilterChip(
-                                        selected = settings.paddleOrientation == orientation,
-                                        onClick = { onSave(settings.copy(paddleOrientation = orientation)) },
-                                        label = { Text(if (orientation == PaddleOrientation.LeftDitRightDah) "L-Dit / R-Dah" else "L-Dah / R-Dit") }
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
 
-                // Audio Section
                 PreferenceCard(title = "Audio", icon = Icons.AutoMirrored.Filled.VolumeUp) {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                        SettingSlider(
-                            label = "Sidetone Volume",
-                            value = settings.sidetoneVolume,
-                            onValueChange = { onSave(settings.copy(sidetoneVolume = it)) },
-                            valueRange = 0f..1f
-                        )
-                        SettingSlider(
-                            label = "Playback Volume",
-                            value = settings.volume,
-                            onValueChange = { onSave(settings.copy(volume = it)) },
-                            valueRange = 0f..1f
-                        )
-                        SettingSlider(
-                            label = "Tone Frequency",
-                            value = settings.frequency.toFloat(),
-                            onValueChange = { onSave(settings.copy(frequency = it.toInt())) },
-                            valueRange = 300f..1000f,
-                            suffix = " Hz"
-                        )
+                        SettingSlider("Sidetone Volume", settings.sidetoneVolume, { onSave(settings.copy(sidetoneVolume = it)) }, 0f..1f)
+                        SettingSlider("Tone Frequency", settings.frequency.toFloat(), { onSave(settings.copy(frequency = it.toInt())) }, 300f..1000f, " Hz")
                     }
                 }
 
-                // Timing Section
                 PreferenceCard(title = "Timing", icon = Icons.Default.Timer) {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                        SettingSlider(
-                            label = "Overall Speed",
-                            value = settings.wpm.toFloat(),
-                            onValueChange = { onSave(settings.copy(wpm = it.toInt())) },
-                            valueRange = 5f..45f,
-                            suffix = " WPM"
-                        )
-                        SettingSlider(
-                            label = "Farnsworth Speed",
-                            value = settings.farnsworthWpm.toFloat(),
-                            onValueChange = { onSave(settings.copy(farnsworthWpm = it.toInt())) },
-                            valueRange = 5f..45f,
-                            suffix = " WPM"
-                        )
-                        SettingSlider(
-                            label = "Key Weighting",
-                            value = settings.weighting,
-                            onValueChange = { onSave(settings.copy(weighting = it)) },
-                            valueRange = 0.5f..2.0f
-                        )
-                    }
-                }
-
-                // Diagnostics Section
-                PreferenceCard(title = "Keyer Diagnostics", icon = Icons.Default.BarChart) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Live Timing (ms)", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
-                        diagnostics.forEach { diag ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    "${diag.type}: ${diag.durationMs}ms",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (diag.durationMs in (diag.expectedMs - 30)..(diag.expectedMs + 30)) RobertColors.StatusGreen else RobertColors.TextPrimary
-                                )
-                                Text(
-                                    "(Exp: ${diag.expectedMs}ms)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = RobertColors.TextSecondary
-                                )
-                            }
-                        }
-
-                        if (latencyLog.isNotEmpty()) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = RobertColors.TextSecondary.copy(alpha = 0.1f))
-                            Text("Latency Monitor (Touch -> Sidetone)", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
-                            latencyLog.forEach { log ->
-                                Text(log, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-                            }
-                        }
+                        SettingSlider("Overall Speed", settings.wpm.toFloat(), { onSave(settings.copy(wpm = it.toInt())) }, 5f..45f, " WPM")
+                        SettingSlider("Farnsworth Speed", settings.farnsworthWpm.toFloat(), { onSave(settings.copy(farnsworthWpm = it.toInt())) }, 5f..45f, " WPM")
                     }
                 }
             }
@@ -263,7 +177,7 @@ fun PreferenceCard(title: String, icon: ImageVector, content: @Composable () -> 
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(modifier = Modifier.padding(Spacing.Medium)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = Spacing.Small)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, tint = RobertColors.Primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -279,22 +193,20 @@ fun SettingSlider(label: String, value: Float, onValueChange: (Float) -> Unit, v
     Column {
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
-            Text(
-                if (suffix.isNotEmpty()) "${value.toInt()}$suffix" else String.format(Locale.getDefault(), "%.2f", value),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Text(if (suffix.isNotEmpty()) "${value.toInt()}$suffix" else String.format(Locale.getDefault(), "%.2f", value), fontWeight = FontWeight.Bold)
         }
         Slider(value = value, onValueChange = onValueChange, valueRange = valueRange)
     }
 }
 
 @Composable
-fun MorseMenu(onSectionSelect: (MorseSection) -> Unit) {
+fun MorseMenu(viewModel: MorseViewModel) {
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
+    
     val menuItems = listOf(
-        MorseMenuItem("Receive", "Improve your copying skills", Icons.Default.Hearing, MorseSection.Receive, RobertColors.Primary),
-        MorseMenuItem("Send", "Master your keying technique", Icons.Default.Keyboard, MorseSection.Send, Color(0xFF00BCD4)),
-        MorseMenuItem("Trainer", "Interactive Morse Tutor", Icons.Default.School, MorseSection.Trainer, RobertColors.StatusGreen),
+        MorseMenuItem("Trainer", "Structured Koch Course", Icons.Default.School, MorseSection.Trainer, RobertColors.Primary),
+        MorseMenuItem("Receive", "Improve your copying skills", Icons.Default.Hearing, MorseSection.Receive, Color(0xFF00BCD4)),
+        MorseMenuItem("Send", "Master your keying technique", Icons.Default.Keyboard, MorseSection.Send, RobertColors.StatusGreen),
         MorseMenuItem("Decoder", "Live audio transcription", Icons.Default.GraphicEq, MorseSection.Decoder, RobertColors.StatusOrange),
         MorseMenuItem("Simulator", "Virtual Radio Operator", Icons.Default.RecordVoiceOver, MorseSection.Simulator, Color(0xFF9C27B0))
     )
@@ -304,35 +216,57 @@ fun MorseMenu(onSectionSelect: (MorseSection) -> Unit) {
         contentPadding = PaddingValues(Spacing.Medium),
         verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
     ) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(modifier = Modifier.padding(Spacing.Medium)) {
+                    Text("Overall Mastery", style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${progress.currentLessonIndex + 1} / 40", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black)
+                        Spacer(Modifier.weight(1f))
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                progress = { (progress.currentLessonIndex + 1) / 40f },
+                                modifier = Modifier.size(64.dp),
+                                strokeWidth = 8.dp,
+                                color = RobertColors.Primary,
+                                trackColor = RobertColors.Surface
+                            )
+                            Text("${((progress.currentLessonIndex + 1) * 100 / 40)}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    
+                    Spacer(Modifier.height(Spacing.Medium))
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Large)) {
+                        StatItemSmall("Accuracy", "${progress.totalAccuracy.toInt()}%")
+                        StatItemSmall("Streak", "${progress.practiceStreak}")
+                        StatItemSmall("Best", "${progress.longestStreak}")
+                        StatItemSmall("Total Chars", "${progress.totalCharactersCopied}")
+                    }
+                }
+            }
+        }
+
         items(menuItems) { item ->
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSectionSelect(item.section) },
+                modifier = Modifier.fillMaxWidth().clickable { viewModel.setSection(item.section) },
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
             ) {
-                Row(
-                    modifier = Modifier.padding(Spacing.Medium),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(item.color.copy(alpha = 0.15f)),
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(item.color.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
-                    ) {
-                        Icon(item.icon, null, tint = item.color, modifier = Modifier.size(32.dp))
-                    }
-                    
+                    ) { Icon(item.icon, null, tint = item.color, modifier = Modifier.size(28.dp)) }
                     Spacer(Modifier.width(Spacing.Medium))
-                    
                     Column(modifier = Modifier.weight(1f)) {
                         Text(item.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text(item.subtitle, style = MaterialTheme.typography.bodyMedium, color = RobertColors.TextSecondary)
+                        Text(item.subtitle, style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
                     }
-                    
                     Icon(Icons.Default.ChevronRight, null, tint = RobertColors.TextSecondary.copy(alpha = 0.5f))
                 }
             }
@@ -340,115 +274,253 @@ fun MorseMenu(onSectionSelect: (MorseSection) -> Unit) {
     }
 }
 
-data class MorseMenuItem(
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val section: MorseSection,
-    val color: Color
-)
+@Composable
+fun StatItemSmall(label: String, value: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Black)
+    }
+}
+
+data class MorseMenuItem(val title: String, val subtitle: String, val icon: ImageVector, val section: MorseSection, val color: Color)
 
 @Composable
 fun ReceiveScreen(viewModel: MorseViewModel) {
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val currentText by viewModel.currentText.collectAsStateWithLifecycle()
-    val stats by viewModel.receiveStats.collectAsStateWithLifecycle()
     val feedback by viewModel.receiveFeedback.collectAsStateWithLifecycle()
     val currentType by viewModel.currentExerciseType.collectAsStateWithLifecycle()
-    
     var userAnswer by remember { mutableStateOf("") }
-    val hasStarted by remember { derivedStateOf { currentText.isNotEmpty() } }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Spacing.Medium),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Small)
-    ) {
-        // 1. Horizontal Stats Strip
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.Medium, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StatItem("ACCURACY", "${if (stats.totalCount > 0) (stats.correctCount * 100 / stats.totalCount) else 0}%", "")
-                VerticalDivider(modifier = Modifier.height(24.dp).width(1.dp), color = RobertColors.TextSecondary.copy(alpha = 0.2f))
-                StatItem("STREAK", "${stats.currentStreak}", "")
-                VerticalDivider(modifier = Modifier.height(24.dp).width(1.dp), color = RobertColors.TextSecondary.copy(alpha = 0.2f))
-                StatItem("BEST", "${stats.longestStreak}", "")
-            }
-        }
-
-        // 2. Difficulty Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            listOf(ExerciseType.Beginner, ExerciseType.Intermediate, ExerciseType.Advanced, ExerciseType.Expert).forEach { type ->
+    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ExerciseType.entries.take(4).forEach { type ->
                 FilterChip(
                     selected = currentType == type,
-                    onClick = { 
-                        userAnswer = ""
-                        viewModel.generateNewExercise(type) 
-                    },
-                    label = { 
-                        Text(
-                            text = type.name, 
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        ) 
-                    },
+                    onClick = { viewModel.generateNewExercise(type); userAnswer = "" },
+                    label = { Text(type.name, fontSize = 10.sp) },
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        // 3. Main Feedback Area (Flexible Weight)
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            border = BorderStroke(1.dp, RobertColors.Primary.copy(alpha = 0.1f))
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 if (isPlaying) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        PlaybackAnimation()
-                        Text("LISTENING...", style = MaterialTheme.typography.titleMedium, color = RobertColors.Primary, fontWeight = FontWeight.Bold)
-                    }
-                } else if (!hasStarted) {
-                    Text("READY", style = MaterialTheme.typography.headlineSmall, color = RobertColors.TextSecondary.copy(alpha = 0.3f), fontWeight = FontWeight.Black)
-                } else if (feedback == null) {
-                    Text("TYPE YOUR COPY", style = MaterialTheme.typography.titleMedium, color = RobertColors.TextSecondary.copy(alpha = 0.5f))
+                    PlaybackAnimation()
+                } else if (feedback != null) {
+                    FeedbackDisplay(feedback!!)
                 } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(
-                            if (feedback!!.isCorrect) Icons.Default.CheckCircle else Icons.Default.Error,
-                            null,
-                            tint = if (feedback!!.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Text(
-                            if (feedback!!.isCorrect) "CORRECT" else "INCORRECT",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black,
-                            color = if (feedback!!.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed
-                        )
-                        if (!feedback!!.isCorrect) {
+                    Text(
+                        userAnswer.ifEmpty { "READY" },
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Black,
+                        color = if (userAnswer.isEmpty()) RobertColors.TextSecondary.copy(alpha = 0.2f) else RobertColors.Primary,
+                        letterSpacing = 4.sp
+                    )
+                }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+            Button(
+                onClick = { viewModel.playCurrentText() },
+                modifier = Modifier.weight(1f).height(64.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary)
+            ) {
+                Icon(Icons.Default.PlayArrow, null)
+                Spacer(Modifier.width(8.dp))
+                Text("PLAY")
+            }
+
+            if (feedback == null) {
+                Button(
+                    onClick = { viewModel.checkReceiveAnswer(userAnswer) },
+                    modifier = Modifier.weight(1f).height(64.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = userAnswer.isNotEmpty()
+                ) {
+                    Icon(Icons.Default.Check, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("CHECK")
+                }
+            } else {
+                Button(
+                    onClick = { viewModel.generateNewExercise(currentType); userAnswer = "" },
+                    modifier = Modifier.weight(1f).height(64.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusGreen)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("NEXT")
+                }
+            }
+        }
+        
+        MorseKeyboard(
+            onKey = { if (feedback == null) userAnswer += it },
+            onBackspace = { if (userAnswer.isNotEmpty()) userAnswer = userAnswer.dropLast(1) },
+            enabled = feedback == null
+        )
+    }
+}
+
+@Composable
+fun FeedbackDisplay(feedback: ReceiveFeedback) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            if (feedback.isCorrect) Icons.Default.CheckCircle else Icons.Default.Error,
+            null,
+            tint = if (feedback.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed,
+            modifier = Modifier.size(64.dp)
+        )
+        Text(
+            if (feedback.isCorrect) "✓ Correct!" else "✗ Incorrect",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Black,
+            color = if (feedback.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed
+        )
+        if (!feedback.isCorrect) {
+            Text("Correct: ${feedback.expected}", style = MaterialTheme.typography.titleMedium, color = RobertColors.TextSecondary)
+        }
+    }
+}
+
+@Composable
+fun TrainerScreen(viewModel: MorseViewModel) {
+    val trainerMode by viewModel.trainerMode.collectAsStateWithLifecycle()
+    
+    AnimatedContent(targetState = trainerMode, label = "TrainerMode") { mode ->
+        if (mode == null) {
+            TrainerHome(viewModel)
+        } else {
+            TrainerExercise(viewModel, mode)
+        }
+    }
+}
+
+@Composable
+fun TrainerHome(viewModel: MorseViewModel) {
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
+    
+    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+        Text("LEARN MORSE", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = RobertColors.Primary)
+        
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable { viewModel.setTrainerMode(TrainerMode.Koch) },
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+        ) {
+            Row(modifier = Modifier.padding(Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Koch Course", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Lesson ${progress.currentLessonIndex + 1} / 40", color = RobertColors.TextSecondary)
+                    LinearProgressIndicator(
+                        progress = { (progress.currentLessonIndex + 1) / 40f },
+                        modifier = Modifier.padding(top = 12.dp).fillMaxWidth().height(8.dp).clip(CircleShape),
+                        color = RobertColors.Primary
+                    )
+                }
+                Spacer(Modifier.width(Spacing.Medium))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = RobertColors.Primary)
+            }
+        }
+        
+        Text("Other Modes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        
+        val otherModes = listOf(
+            TrainerMenuItemDef("Callsigns", "Copy realistic world callsigns", Icons.Default.Public, TrainerMode.Callsigns, Color(0xFF00BCD4)),
+            TrainerMenuItemDef("Words", "Common English words", Icons.Default.TextFields, TrainerMode.Words, RobertColors.StatusGreen),
+            TrainerMenuItemDef("Numbers", "Focus on digits", Icons.Default.Numbers, TrainerMode.Numbers, RobertColors.StatusOrange)
+        )
+        
+        otherModes.forEach { item ->
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { viewModel.setTrainerMode(item.mode) },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+            ) {
+                Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(item.icon, null, tint = item.color)
+                    Spacer(Modifier.width(Spacing.Medium))
+                    Text(item.title, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+data class TrainerMenuItemDef(val title: String, val subtitle: String, val icon: ImageVector, val mode: TrainerMode, val color: Color)
+
+@Composable
+fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
+    val session by viewModel.trainerSession.collectAsStateWithLifecycle()
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
+    val target by viewModel.trainerTarget.collectAsStateWithLifecycle()
+    val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
+    val feedback by viewModel.trainerFeedback.collectAsStateWithLifecycle()
+    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+
+    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(if (mode == TrainerMode.Koch) "Lesson ${session.lessonNumber}" else mode.name, fontWeight = FontWeight.Black)
+                LinearProgressIndicator(
+                    progress = { session.currentCorrect.toFloat() / session.targetCorrect },
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                    color = RobertColors.StatusGreen
+                )
+            }
+            Text("${session.currentCorrect}/${session.targetCorrect}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp))
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            StatItemSmall("Accuracy", "${if (session.recentResults.isEmpty()) 0 else (session.recentResults.count { it } * 100 / session.recentResults.size)}%")
+            StatItemSmall("Global Best", "${progress.longestStreak}")
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                if (isPlaying) {
+                    PlaybackAnimation()
+                } else if (feedback != null) {
+                    TrainerFeedbackDisplay(feedback!!)
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.Large)) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("TARGET", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
                             Text(
-                                "Expected: ${feedback!!.expected}",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = RobertColors.TextSecondary,
+                                target,
+                                style = MaterialTheme.typography.displayMedium,
+                                fontWeight = FontWeight.Black,
+                                color = RobertColors.Primary,
+                                letterSpacing = 8.sp
+                            )
+                        }
+                        
+                        HorizontalDivider(modifier = Modifier.width(100.dp).padding(vertical = 8.dp), color = RobertColors.TextSecondary.copy(alpha = 0.2f))
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("YOU SENT", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+                            Text(
+                                decodedText.ifEmpty { "...." },
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (decodedText.isEmpty()) RobertColors.TextSecondary.copy(alpha = 0.1f) else RobertColors.TextPrimary,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
@@ -457,213 +529,66 @@ fun ReceiveScreen(viewModel: MorseViewModel) {
             }
         }
 
-        // 4. Your Copy (Compact 1-line)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(Spacing.Medium),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+            Button(
+                onClick = { viewModel.playCurrentText() },
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                if (feedback == null) {
-                    Text(
-                        text = userAnswer.ifEmpty { "•••••" },
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Black,
-                        color = if (userAnswer.isEmpty()) RobertColors.TextSecondary.copy(alpha = 0.2f) else RobertColors.Primary,
-                        letterSpacing = 2.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                } else {
-                    feedback!!.comparison.forEachIndexed { index, (expectedChar, isMatch) ->
-                        val displayChar = if (isMatch) expectedChar else feedback!!.received.getOrNull(index) ?: expectedChar
-                        Text(
-                            text = displayChar.toString(),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black,
-                            color = if (isMatch) RobertColors.StatusGreen else RobertColors.StatusRed,
-                            modifier = Modifier.padding(horizontal = 2.dp),
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                Icon(Icons.Default.Hearing, null)
+                Spacer(Modifier.width(8.dp))
+                Text("REPLAY")
+            }
+            
+            if (feedback == null) {
+                Button(
+                    onClick = { viewModel.submitTrainerAnswer() },
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary),
+                    enabled = decodedText.isNotEmpty()
+                ) {
+                    Text("SUBMIT")
+                }
+            } else {
+                Button(
+                    onClick = { viewModel.nextTrainerExercise() },
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusGreen)
+                ) {
+                    Text("NEXT")
                 }
             }
         }
 
-        // 5. Custom QWERTY Morse Keyboard
-        MorseKeyboard(
-            onKey = { char -> if (!isPlaying && feedback == null) userAnswer += char },
-            onBackspace = { if (userAnswer.isNotEmpty() && feedback == null) userAnswer = userAnswer.dropLast(1) },
-            enabled = !isPlaying && feedback == null
-        )
-
-        // 6. Primary Action Button
-        val (btnText, btnColor, btnIcon) = when {
-            isPlaying -> Triple("STOP", RobertColors.StatusRed, Icons.Default.Stop)
-            !hasStarted -> Triple("START PRACTICE", RobertColors.Primary, Icons.Default.PlayArrow)
-            feedback != null -> Triple("NEXT EXERCISE", RobertColors.StatusGreen, Icons.AutoMirrored.Filled.ArrowForward)
-            userAnswer.isEmpty() -> Triple("PLAY MORSE", RobertColors.Primary, Icons.Default.PlayArrow)
-            else -> Triple("CHECK ANSWER", RobertColors.Primary, Icons.Default.Check)
-        }
-
-        Button(
-            onClick = {
-                when {
-                    isPlaying -> viewModel.stopPlayback()
-                    feedback != null -> {
-                        userAnswer = ""
-                        viewModel.generateNewExercise(currentType)
-                    }
-                    userAnswer.isEmpty() -> viewModel.playText(currentText.ifEmpty { viewModel.generateNewExercise(currentType); "" })
-                    else -> viewModel.checkReceiveAnswer(userAnswer)
-                }
-            },
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = btnColor)
-        ) {
-            Icon(btnIcon, null)
-            Spacer(Modifier.width(8.dp))
-            Text(btnText, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        }
-
-        // 7. Secondary Controls
-        if (hasStarted && !isPlaying) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                TextButton(onClick = { viewModel.playText(currentText) }) {
-                    Icon(Icons.Default.Replay, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("REPLAY")
-                }
-                if (feedback == null && userAnswer.isNotEmpty()) {
-                    TextButton(onClick = { userAnswer = "" }) {
-                        Icon(Icons.Default.Clear, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("CLEAR")
-                    }
-                }
-            }
-        } else if (isPlaying) {
-            Spacer(Modifier.height(48.dp)) // Maintain layout height
-        }
-    }
-}
-
-@Composable
-fun MorseKeyboard(
-    onKey: (Char) -> Unit,
-    onBackspace: () -> Unit,
-    enabled: Boolean = true
-) {
-    val rows = listOf(
-        "1234567890".toList(),
-        "QWERTYUIOP".toList(),
-        "ASDFGHJKL".toList(),
-        "ZXCVBNM".toList()
-    )
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        rows.forEachIndexed { index, row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(if (index == 2) 0.95f else 1f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)
-            ) {
-                row.forEach { char ->
-                    KeyButton(
-                        text = char.toString(),
-                        onClick = { onKey(char) },
-                        modifier = Modifier.weight(1f),
-                        enabled = enabled
-                    )
-                }
-                if (index == 3) {
-                    KeyButton(
-                        icon = Icons.AutoMirrored.Filled.Backspace,
-                        onClick = onBackspace,
-                        modifier = Modifier.weight(1.5f),
-                        containerColor = RobertColors.Surface,
-                        contentColor = RobertColors.TextSecondary,
-                        enabled = enabled
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun KeyButton(
-    modifier: Modifier = Modifier,
-    text: String? = null,
-    icon: ImageVector? = null,
-    onClick: () -> Unit,
-    containerColor: Color = RobertColors.Surface,
-    contentColor: Color = RobertColors.TextPrimary,
-    enabled: Boolean = true
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(44.dp),
-        shape = RoundedCornerShape(8.dp),
-        contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor,
-            disabledContainerColor = containerColor.copy(alpha = 0.5f),
-            disabledContentColor = contentColor.copy(alpha = 0.5f)
-        ),
-        enabled = enabled
-    ) {
-        if (icon != null) {
-            Icon(icon, null, modifier = Modifier.size(18.dp))
-        } else if (text != null) {
-            Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun PlaybackAnimation() {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(tween(500, easing = LinearEasing), RepeatMode.Reverse),
-        label = "scale"
-    )
-    
-    Box(
-        modifier = Modifier
-            .size(200.dp)
-            .clip(CircleShape)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(RobertColors.Primary.copy(alpha = 0.1f * scale), Color.Transparent)
+        Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+            val isKeyBusy by viewModel.isKeyBusy.collectAsStateWithLifecycle()
+            val lastElementSent by viewModel.lastElementSent.collectAsStateWithLifecycle()
+            if (settings.keyerMode == KeyerMode.Straight) {
+                StraightKeyArea({ viewModel.onKeyDown(false) }, { viewModel.onKeyUp(false) })
+            } else {
+                IambicPaddleArea(settings, isKeyBusy, lastElementSent, 
+                    { viewModel.onKeyDown(false) }, { viewModel.onKeyUp(false) },
+                    { viewModel.onKeyDown(true) }, { viewModel.onKeyUp(true) }
                 )
-            )
-    )
+            }
+        }
+    }
 }
 
 @Composable
-fun StatItem(label: String, value: String, unit: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-            Spacer(Modifier.width(2.dp))
-            Text(unit, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+fun TrainerFeedbackDisplay(feedback: TrainerFeedback) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            feedback.message,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Black,
+            color = if (feedback.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed
+        )
+        Text("You copied: \"${feedback.received}\"", color = RobertColors.TextPrimary)
+        if (!feedback.isCorrect) {
+            Text("Correct answer: \"${feedback.expected}\"", fontWeight = FontWeight.Bold, color = RobertColors.Primary)
         }
     }
 }
@@ -677,433 +602,30 @@ fun SendScreen(viewModel: MorseViewModel) {
     val isKeyBusy by viewModel.isKeyBusy.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Output Window
         Card(
             modifier = Modifier.fillMaxWidth().height(160.dp),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
         ) {
             Box(modifier = Modifier.padding(Spacing.Medium).fillMaxSize()) {
-                Text(
-                    text = decodedText,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = RobertColors.Primary,
-                    fontFamily = FontFamily.Monospace
-                )
-                
-                Row(modifier = Modifier.align(Alignment.BottomStart), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = currentSymbolBuffer,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = RobertColors.TextSecondary,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    
-                    if (lastElementSent.isNotEmpty()) {
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(if (lastElementSent == ".") 12.dp else 24.dp, 12.dp)
-                                .clip(CircleShape)
-                                .background(RobertColors.Primary)
-                        )
-                    }
-                }
-                
-                if (decodedText.isEmpty() && currentSymbolBuffer.isEmpty()) {
-                    Text(
-                        "START KEYING...",
-                        modifier = Modifier.align(Alignment.Center),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = RobertColors.TextSecondary.copy(alpha = 0.3f)
-                    )
-                }
+                Text(decodedText, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = RobertColors.Primary, fontFamily = FontFamily.Monospace)
+                Text(currentSymbolBuffer, modifier = Modifier.align(Alignment.BottomStart), style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
             }
         }
-
         Spacer(modifier = Modifier.height(Spacing.Large))
-
-        // Keying Area
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (settings.keyerMode == KeyerMode.Straight) {
-                StraightKeyArea(
-                    onDown = { viewModel.onKeyDown(false) }, 
-                    onUp = { viewModel.onKeyUp(false) }
-                )
+                StraightKeyArea({ viewModel.onKeyDown(false) }, { viewModel.onKeyUp(false) })
             } else {
-                IambicPaddleArea(
-                    settings = settings,
-                    isBusy = isKeyBusy,
-                    lastElement = lastElementSent,
-                    onLeftDown = { viewModel.onKeyDown(false) },
-                    onLeftUp = { viewModel.onKeyUp(false) },
-                    onRightDown = { viewModel.onKeyDown(true) },
-                    onRightUp = { viewModel.onKeyUp(true) }
+                IambicPaddleArea(settings, isKeyBusy, lastElementSent, 
+                    { viewModel.onKeyDown(false) }, { viewModel.onKeyUp(false) },
+                    { viewModel.onKeyDown(true) }, { viewModel.onKeyUp(true) }
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(Spacing.Medium))
-
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
-            OutlinedButton(onClick = { viewModel.clearSentText() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                Text("CLEAR")
-            }
-            Button(onClick = { viewModel.submitSentText() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                Text("SUBMIT")
-            }
-        }
-    }
-}
-
-@Composable
-fun StraightKeyArea(onDown: () -> Unit, onUp: () -> Unit) {
-    var isPressed by remember { mutableStateOf(false) }
-
-    Surface(
-        modifier = Modifier
-            .size(240.dp)
-            .clip(CircleShape)
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        when (event.type) {
-                            PointerEventType.Press -> {
-                                isPressed = true
-                                onDown()
-                            }
-                            PointerEventType.Release -> {
-                                isPressed = false
-                                onUp()
-                            }
-                        }
-                    }
-                }
-            },
-        color = if (isPressed) RobertColors.Primary.copy(alpha = 0.3f) else RobertColors.Surface,
-        border = BorderStroke(4.dp, if (isPressed) RobertColors.Primary else RobertColors.Surface)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.TouchApp, 
-                    null, 
-                    modifier = Modifier.size(48.dp), 
-                    tint = if (isPressed) RobertColors.Primary else RobertColors.TextSecondary
-                )
-                Text(
-                    if (isPressed) "DOWN" else "TAP", 
-                    fontWeight = FontWeight.Black, 
-                    color = if (isPressed) RobertColors.Primary else RobertColors.TextSecondary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun IambicPaddleArea(
-    settings: MorseSettings,
-    isBusy: Boolean,
-    lastElement: String,
-    onLeftDown: () -> Unit,
-    onLeftUp: () -> Unit,
-    onRightDown: () -> Unit,
-    onRightUp: () -> Unit
-) {
-    val leftLabel = if (settings.paddleOrientation == PaddleOrientation.LeftDitRightDah) "DIT" else "DAH"
-    val rightLabel = if (settings.paddleOrientation == PaddleOrientation.LeftDitRightDah) "DAH" else "DIT"
-
-    Row(modifier = Modifier.fillMaxWidth().height(280.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
-        Paddle(
-            modifier = Modifier.weight(1f), 
-            label = leftLabel, 
-            isActive = isBusy && ((leftLabel == "DIT" && lastElement == ".") || (leftLabel == "DAH" && lastElement == "-")),
-            onDown = onLeftDown, 
-            onUp = onLeftUp
-        )
-        Paddle(
-            modifier = Modifier.weight(1f), 
-            label = rightLabel, 
-            isActive = isBusy && ((rightLabel == "DIT" && lastElement == ".") || (rightLabel == "DAH" && lastElement == "-")),
-            onDown = onRightDown, 
-            onUp = onRightUp
-        )
-    }
-}
-
-@Composable
-fun Paddle(modifier: Modifier, label: String, isActive: Boolean, onDown: () -> Unit, onUp: () -> Unit) {
-    var isPressed by remember { mutableStateOf(false) }
-
-    Surface(
-        modifier = modifier
-            .fillMaxHeight()
-            .clip(RoundedCornerShape(24.dp))
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        when (event.type) {
-                            PointerEventType.Press -> {
-                                isPressed = true
-                                onDown()
-                            }
-                            PointerEventType.Release -> {
-                                isPressed = false
-                                onUp()
-                            }
-                        }
-                    }
-                }
-            },
-        color = if (isPressed || isActive) RobertColors.Primary.copy(alpha = 0.3f) else RobertColors.Surface,
-        border = BorderStroke(2.dp, if (isPressed || isActive) RobertColors.Primary else RobertColors.Surface)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(label, fontWeight = FontWeight.Black, color = if (isPressed || isActive) RobertColors.Primary else RobertColors.TextSecondary)
-        }
-    }
-}
-
-@Composable
-fun TrainerScreen(viewModel: MorseViewModel) {
-    val trainerMode by viewModel.trainerMode.collectAsStateWithLifecycle()
-    
-    AnimatedContent(targetState = trainerMode, label = "TrainerModeTransition") { mode ->
-        if (mode == null) {
-            TrainerHome(viewModel)
-        } else {
-            TrainerExercise(viewModel, mode)
-        }
-    }
-}
-
-@Composable
-fun TrainerHome(viewModel: MorseViewModel) {
-    val progress by viewModel.progress.collectAsStateWithLifecycle()
-    
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(Spacing.Medium),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
-    ) {
-        item {
-            Text(
-                "LEARN MORSE",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Black,
-                color = RobertColors.Primary
-            )
-        }
-        
-        // Progress Overview
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Column(modifier = Modifier.padding(Spacing.Medium)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Current Mastery", style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
-                            Text("${progress.charactersMastered.size} / 40 Characters", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        }
-                        CircularProgressIndicator(
-                            progress = { progress.charactersMastered.size / 40f },
-                            modifier = Modifier.size(48.dp),
-                            color = RobertColors.Primary,
-                            trackColor = RobertColors.Surface
-                        )
-                    }
-                    
-                    Spacer(Modifier.height(Spacing.Medium))
-                    
-                    Button(
-                        onClick = { viewModel.setTrainerMode(TrainerMode.Koch) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("RESUME KOCH COURSE")
-                    }
-                }
-            }
-        }
-        
-        // Practice Modes Grid
-        item {
-            Text("Training Modes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        }
-        
-        val modes = listOf(
-            TrainerMenuItem("Koch Course", "The standard amateur radio path", Icons.Default.School, TrainerMode.Koch, RobertColors.Primary),
-            TrainerMenuItem("Callsigns", "Copy realistic world callsigns", Icons.Default.Public, TrainerMode.Callsigns, Color(0xFF00BCD4)),
-            TrainerMenuItem("Words", "Common English words", Icons.Default.TextFields, TrainerMode.Words, RobertColors.StatusGreen),
-            TrainerMenuItem("Amateur Radio", "CQ, signal reports, and shorthand", Icons.Default.Radio, TrainerMode.AmateurRadio, RobertColors.StatusOrange),
-            TrainerMenuItem("Weak Review", "Focus on your difficult letters", Icons.Default.Psychology, TrainerMode.WeakReview, Color(0xFF9C27B0))
-        )
-        
-        items(modes) { item ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { viewModel.setTrainerMode(item.mode) },
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
-            ) {
-                Row(
-                    modifier = Modifier.padding(Spacing.Medium),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(item.icon, null, tint = item.color, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(Spacing.Medium))
-                    Column {
-                        Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                        Text(item.subtitle, style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
-                    }
-                }
-            }
-        }
-    }
-}
-
-data class TrainerMenuItem(
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val mode: TrainerMode,
-    val color: Color
-)
-
-@Composable
-fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
-    val progress by viewModel.progress.collectAsStateWithLifecycle()
-    val trainerTarget by viewModel.trainerTarget.collectAsStateWithLifecycle()
-    val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
-    val feedback by viewModel.trainerFeedback.collectAsStateWithLifecycle()
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val isKeyBusy by viewModel.isKeyBusy.collectAsStateWithLifecycle()
-    val lastElementSent by viewModel.lastElementSent.collectAsStateWithLifecycle()
-
-    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
-        // Exercise Header
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { viewModel.setSection(MorseSection.Menu) }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(mode.name.uppercase(), style = MaterialTheme.typography.labelLarge, color = RobertColors.Primary, fontWeight = FontWeight.Bold)
-                if (mode == TrainerMode.Koch) {
-                    Text("Lesson ${progress.currentLessonIndex + 1}", style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
-                }
-            }
-            IconButton(onClick = { viewModel.resetTrainerExercise() }) {
-                Icon(Icons.Default.Refresh, null, tint = RobertColors.Primary)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(Spacing.Medium))
-
-        // Target Card (Hidden initially for some modes, but here as per requirement for "Send this")
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            shape = RoundedCornerShape(24.dp)
-        ) {
-            Column(modifier = Modifier.padding(Spacing.Large), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("SEND THIS:", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
-                
-                Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-                    trainerTarget.forEachIndexed { index, char ->
-                        val isDecoded = decodedText.trim().length > index
-                        val isCurrent = decodedText.trim().length == index
-                        val color = when {
-                            isDecoded -> RobertColors.StatusGreen
-                            isCurrent -> RobertColors.Primary
-                            else -> RobertColors.TextSecondary.copy(alpha = 0.3f)
-                        }
-                        
-                        Text(
-                            char.toString(),
-                            style = MaterialTheme.typography.displayMedium,
-                            fontWeight = FontWeight.Black,
-                            color = color,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
-                    }
-                }
-                
-                val targetCode = trainerTarget.map { MorseCodeMap[it] ?: "" }.joinToString("   ")
-                Text(targetCode, style = MaterialTheme.typography.titleMedium, color = RobertColors.TextSecondary.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(Spacing.Medium))
-
-        // Feedback Section
-        AnimatedVisibility(visible = feedback != null) {
-            feedback?.let { fb ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = if (fb.isCorrect) RobertColors.StatusGreen.copy(alpha = 0.1f) else RobertColors.StatusRed.copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, if (fb.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed)
-                ) {
-                    Column(modifier = Modifier.padding(Spacing.Medium)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                if (fb.isCorrect) Icons.Default.CheckCircle else Icons.Default.Error,
-                                null,
-                                tint = if (fb.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(fb.message, fontWeight = FontWeight.Bold, color = if (fb.isCorrect) RobertColors.StatusGreen else RobertColors.StatusRed)
-                        }
-                        
-                        if (!fb.isCorrect) {
-                            Spacer(modifier = Modifier.height(Spacing.Small))
-                            Text("Received: ${fb.received}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                            Text("Code: ${fb.receivedCode}", style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary, fontFamily = FontFamily.Monospace)
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Input Display Overlay
-        Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-            Text(
-                decodedText,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-                color = RobertColors.Primary,
-                letterSpacing = 4.sp
-            )
-        }
-
-        // Keying Area
-        Box(modifier = Modifier.fillMaxWidth().height(240.dp)) {
-            if (settings.keyerMode == KeyerMode.Straight) {
-                StraightKeyArea(
-                    onDown = { viewModel.onKeyDown(false) }, 
-                    onUp = { viewModel.onKeyUp(false) }
-                )
-            } else {
-                IambicPaddleArea(
-                    settings = settings,
-                    isBusy = isKeyBusy,
-                    lastElement = lastElementSent,
-                    onLeftDown = { viewModel.onKeyDown(false) },
-                    onLeftUp = { viewModel.onKeyUp(false) },
-                    onRightDown = { viewModel.onKeyDown(true) },
-                    onRightUp = { viewModel.onKeyUp(true) }
-                )
-            }
+            OutlinedButton(onClick = { viewModel.clearSentText() }, modifier = Modifier.weight(1f)) { Text("CLEAR") }
+            Button(onClick = { viewModel.submitSentText() }, modifier = Modifier.weight(1f)) { Text("SUBMIT") }
         }
     }
 }
@@ -1112,36 +634,17 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
 fun DecoderScreen(viewModel: MorseViewModel) {
     val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
     val isDecoding by viewModel.isDecoding.collectAsStateWithLifecycle()
-    
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
-        Card(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            shape = RoundedCornerShape(24.dp)
-        ) {
+        Card(modifier = Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface), shape = RoundedCornerShape(24.dp)) {
             Box(modifier = Modifier.padding(Spacing.Medium).fillMaxSize()) {
-                Text(
-                    text = decodedText.ifEmpty { if (isDecoding) "LISTENING..." else "START LISTENING..." },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (decodedText.isEmpty()) RobertColors.TextSecondary.copy(alpha = 0.3f) else RobertColors.TextPrimary,
-                    fontFamily = FontFamily.Monospace
-                )
+                Text(decodedText.ifEmpty { if (isDecoding) "LISTENING..." else "START LISTENING..." }, fontFamily = FontFamily.Monospace)
             }
         }
-        
         Spacer(modifier = Modifier.height(Spacing.Medium))
-        
-        Button(
-            onClick = { viewModel.toggleDecoding() },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isDecoding) RobertColors.StatusRed else RobertColors.Primary
-            )
-        ) {
+        Button(onClick = { viewModel.toggleDecoding() }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = if (isDecoding) RobertColors.StatusRed else RobertColors.Primary)) {
             Icon(if (isDecoding) Icons.Default.MicOff else Icons.Default.Mic, null)
             Spacer(Modifier.width(8.dp))
-            Text(if (isDecoding) "STOP LISTENING" else "START LISTENING")
+            Text(if (isDecoding) "STOP" else "START")
         }
     }
 }
@@ -1153,78 +656,28 @@ fun SimulatorScreen(viewModel: MorseViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
-        }
-    }
+    LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
 
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Small),
-            contentPadding = PaddingValues(bottom = Spacing.Medium)
-        ) {
-            items(messages) { (author, text) ->
-                ChatBubble(author = author, text = text)
-            }
+        LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+            items(messages) { (author, text) -> ChatBubble(author, text) }
         }
-        
-        // Live Decoded Text for Simulator
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.Small),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))
-        ) {
-            Text(
-                decodedText.ifEmpty { "KEY YOUR REPLY..." },
-                modifier = Modifier.padding(8.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (decodedText.isEmpty()) RobertColors.TextSecondary.copy(alpha = 0.3f) else RobertColors.Primary,
-                fontFamily = FontFamily.Monospace
-            )
+        Card(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.Small), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))) {
+            Text(decodedText.ifEmpty { "KEY YOUR REPLY..." }, modifier = Modifier.padding(8.dp), color = RobertColors.Primary, fontFamily = FontFamily.Monospace)
         }
-
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-            Button(
-                onClick = { viewModel.submitSentText() },
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                enabled = decodedText.isNotEmpty()
-            ) {
-                Text("SEND")
-            }
-            OutlinedButton(
-                onClick = { viewModel.clearSentText() },
-                modifier = Modifier.height(48.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Clear, null)
-            }
+            Button(onClick = { viewModel.submitSentText() }, modifier = Modifier.weight(1f), enabled = decodedText.isNotEmpty()) { Text("SEND") }
+            OutlinedButton(onClick = { viewModel.clearSentText() }) { Icon(Icons.Default.Clear, null) }
         }
-
-        Spacer(modifier = Modifier.height(Spacing.Medium))
-        
-        // Keying Area for Simulator
         Box(modifier = Modifier.fillMaxWidth().height(180.dp)) {
             val isKeyBusy by viewModel.isKeyBusy.collectAsStateWithLifecycle()
             val lastElementSent by viewModel.lastElementSent.collectAsStateWithLifecycle()
-            
             if (settings.keyerMode == KeyerMode.Straight) {
-                StraightKeyArea(
-                    onDown = { viewModel.onKeyDown(false) }, 
-                    onUp = { viewModel.onKeyUp(false) }
-                )
+                StraightKeyArea({ viewModel.onKeyDown(false) }, { viewModel.onKeyUp(false) })
             } else {
-                IambicPaddleArea(
-                    settings = settings,
-                    isBusy = isKeyBusy,
-                    lastElement = lastElementSent,
-                    onLeftDown = { viewModel.onKeyDown(false) },
-                    onLeftUp = { viewModel.onKeyUp(false) },
-                    onRightDown = { viewModel.onKeyDown(true) },
-                    onRightUp = { viewModel.onKeyUp(true) }
+                IambicPaddleArea(settings, isKeyBusy, lastElementSent, 
+                    { viewModel.onKeyDown(false) }, { viewModel.onKeyUp(false) },
+                    { viewModel.onKeyDown(true) }, { viewModel.onKeyUp(true) }
                 )
             }
         }
@@ -1235,17 +688,95 @@ fun SimulatorScreen(viewModel: MorseViewModel) {
 fun ChatBubble(author: String, text: String) {
     val isMe = author == "You"
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
-        Surface(
-            color = if (isMe) RobertColors.Primary else RobertColors.Surface,
-            shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (isMe) 16.dp else 0.dp,
-                bottomEnd = if (isMe) 0.dp else 16.dp
-            )
-        ) {
-            Text(text, modifier = Modifier.padding(Spacing.Medium), color = if (isMe) Color.White else RobertColors.TextPrimary, fontFamily = FontFamily.Monospace)
+        Surface(color = if (isMe) RobertColors.Primary else RobertColors.Surface, shape = RoundedCornerShape(12.dp)) {
+            Text(text, modifier = Modifier.padding(8.dp), color = if (isMe) Color.White else RobertColors.TextPrimary, fontFamily = FontFamily.Monospace)
         }
-        Text(author, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary, modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp))
+        Text(author, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+    }
+}
+
+@Composable
+fun MorseKeyboard(onKey: (Char) -> Unit, onBackspace: () -> Unit, enabled: Boolean = true) {
+    val rows = listOf("1234567890".toList(), "QWERTYUIOP".toList(), "ASDFGHJKL".toList(), "ZXCVBNM".toList())
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        rows.forEachIndexed { index, row ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)) {
+                row.forEach { char ->
+                    KeyButton(text = char.toString(), onClick = { onKey(char) }, modifier = Modifier.weight(1f), enabled = enabled)
+                }
+                if (index == 3) {
+                    KeyButton(icon = Icons.AutoMirrored.Filled.Backspace, onClick = onBackspace, modifier = Modifier.weight(1.5f), enabled = enabled)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun KeyButton(modifier: Modifier = Modifier, text: String? = null, icon: ImageVector? = null, onClick: () -> Unit, enabled: Boolean = true) {
+    Button(onClick = onClick, modifier = modifier.height(42.dp), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(0.dp), colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Surface, contentColor = RobertColors.TextPrimary), enabled = enabled) {
+        if (icon != null) Icon(icon, null, modifier = Modifier.size(18.dp))
+        else if (text != null) Text(text, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun PlaybackAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by infiniteTransition.animateFloat(0.8f, 1.2f, infiniteRepeatable(tween(500, easing = LinearEasing), RepeatMode.Reverse), label = "scale")
+    Box(modifier = Modifier.size(160.dp).clip(CircleShape).background(Brush.radialGradient(listOf(RobertColors.Primary.copy(alpha = 0.2f * scale), Color.Transparent))))
+}
+
+@Composable
+fun StraightKeyArea(onDown: () -> Unit, onUp: () -> Unit) {
+    var isPressed by remember { mutableStateOf(false) }
+    Surface(
+        modifier = Modifier.size(180.dp).clip(CircleShape).pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown()
+                isPressed = true
+                onDown()
+                waitForUpOrCancellation()
+                isPressed = false
+                onUp()
+            }
+        },
+        color = if (isPressed) RobertColors.Primary.copy(alpha = 0.3f) else RobertColors.Surface,
+        border = BorderStroke(4.dp, if (isPressed) RobertColors.Primary else RobertColors.Surface)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.TouchApp, null, modifier = Modifier.size(48.dp), tint = if (isPressed) RobertColors.Primary else RobertColors.TextSecondary)
+        }
+    }
+}
+
+@Composable
+fun IambicPaddleArea(settings: MorseSettings, isBusy: Boolean, lastElement: String, onLeftDown: () -> Unit, onLeftUp: () -> Unit, onRightDown: () -> Unit, onRightUp: () -> Unit) {
+    val leftLabel = if (settings.paddleOrientation == PaddleOrientation.LeftDitRightDah) "DIT" else "DAH"
+    val rightLabel = if (settings.paddleOrientation == PaddleOrientation.LeftDitRightDah) "DAH" else "DIT"
+    Row(modifier = Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+        Paddle(Modifier.weight(1f), leftLabel, isBusy && ((leftLabel == "DIT" && lastElement == ".") || (leftLabel == "DAH" && lastElement == "-")), onLeftDown, onLeftUp)
+        Paddle(Modifier.weight(1f), rightLabel, isBusy && ((rightLabel == "DIT" && lastElement == ".") || (rightLabel == "DAH" && lastElement == "-")), onRightDown, onRightUp)
+    }
+}
+
+@Composable
+fun Paddle(modifier: Modifier, label: String, isActive: Boolean, onDown: () -> Unit, onUp: () -> Unit) {
+    var isPressed by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier.fillMaxHeight().clip(RoundedCornerShape(24.dp)).pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown()
+                isPressed = true
+                onDown()
+                waitForUpOrCancellation()
+                isPressed = false
+                onUp()
+            }
+        },
+        color = if (isPressed || isActive) RobertColors.Primary.copy(alpha = 0.3f) else RobertColors.Surface,
+        border = BorderStroke(2.dp, if (isPressed || isActive) RobertColors.Primary else RobertColors.Surface)
+    ) {
+        Box(contentAlignment = Alignment.Center) { Text(label, fontWeight = FontWeight.Black, color = if (isPressed || isActive) RobertColors.Primary else RobertColors.TextSecondary) }
     }
 }
