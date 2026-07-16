@@ -46,6 +46,14 @@ data class TrainerFeedback(
 )
 
 @Serializable
+data class KochLesson(
+    val lessonNumber: Int,
+    val introducedCharacters: List<Char>,
+    val allCharacters: List<Char>,
+    val targetCorrect: Int = 20
+)
+
+@Serializable
 data class MorseProgress(
     val charactersMastered: Set<Char> = emptySet(),
     val lessonsCompleted: Int = 0,
@@ -56,7 +64,7 @@ data class MorseProgress(
     val totalPracticeTimeSeconds: Long = 0,
     val totalCharactersCopied: Int = 0,
     val characterStats: Map<Char, CharacterStat> = emptyMap(),
-    val dailyHistory: Map<String, Int> = emptyMap(), // Date string to chars copied
+    val dailyHistory: Map<String, Int> = emptyMap(),
     val sessionStats: List<SessionStat> = emptyList()
 )
 
@@ -65,18 +73,27 @@ data class TrainerSessionProgress(
     val lessonNumber: Int = 1,
     val currentCorrect: Int = 0,
     val currentTotal: Int = 0,
-    val targetCorrect: Int = 20, // Number of correct answers to finish lesson
+    val targetCorrect: Int = 20,
     val requiredAccuracy: Float = 90f,
-    val recentResults: List<Boolean> = emptyList(), // Last N results for accuracy check
-    val startTime: Long = System.currentTimeMillis()
+    val recentResults: List<Boolean> = emptyList(),
+    val startTime: Long = System.currentTimeMillis(),
+    val revealsUsed: Int = 0,
+    val lastDecodedChar: Char? = null,
+    val lastDecodedStatus: DecodeStatus = DecodeStatus.None,
+    val newCharAppearances: Map<Char, Int> = emptyMap(),
+    val introducedCharacters: List<Char> = emptyList()
 )
+
+enum class DecodeStatus {
+    None, Correct, Wrong, Invalid
+}
 
 @Serializable
 data class CharacterStat(
     val char: Char,
     val correctCount: Int = 0,
     val totalCount: Int = 0,
-    val weight: Float = 1.0f, // For focusing on difficult characters
+    val weight: Float = 1.0f,
     val lastPracticed: Long = 0
 ) {
     val accuracy: Float get() = if (totalCount > 0) (correctCount.toFloat() / totalCount) * 100f else 0f
@@ -95,7 +112,7 @@ sealed class SimulatorState {
 }
 
 enum class MorseSection {
-    Menu, Receive, Send, Decoder, Trainer, Simulator
+    Menu, Send, Decoder, Trainer, Simulator
 }
 
 enum class ExerciseType {
@@ -117,7 +134,7 @@ data class ReceiveFeedback(
     val isCorrect: Boolean,
     val expected: String,
     val received: String,
-    val comparison: List<Pair<Char, Boolean>> // Char and whether it matched
+    val comparison: List<Pair<Char, Boolean>>
 )
 
 enum class SimulatorDifficulty {
@@ -141,7 +158,7 @@ data class SimulatorOperator(
 
 @Serializable
 data class KeyerDiagnosticEntry(
-    val type: String, // "DIT", "DAH", "GAP", "CHAR_GAP", "WORD_GAP"
+    val type: String,
     val durationMs: Long,
     val expectedMs: Long,
     val decodedAs: String,

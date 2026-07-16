@@ -71,6 +71,9 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _trainerFeedback = MutableStateFlow<TrainerFeedback?>(null)
     val trainerFeedback = _trainerFeedback.asStateFlow()
 
+    private val _revealed = MutableStateFlow(false)
+    val revealed = _revealed.asStateFlow()
+
     private val _messages = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val messages = _messages.asStateFlow()
 
@@ -90,7 +93,24 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     val trainerMode = _trainerMode.asStateFlow()
 
     private var decodeJob: Job? = null
-    private val kochOrder = "KMRSUAPTLOWI.NJEF0Y,VG5/Q9ZH38B?427C1D6XBT".toList()
+    
+    // Data-driven Koch Lessons
+    private val kochSequence = listOf(
+        'K', 'M', 'R', 'S', 'U', 'A', 'P', 'T', 'L', 'O', 'W', 'I', 'N', 'J', 'E', 'F', 'V', 'G', 'Q', 'Z', 'H', 'B', 'C', 'Y', 'X', 'D',
+        '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+        '.', ',', '?', '\'', '/', '(', ')', '&', ':', ';', '=', '+', '-', '_', '\"', '$', '@'
+    )
+
+    private val lessons: List<KochLesson> by lazy {
+        List(kochSequence.size) { index ->
+            if (index == 0) {
+                KochLesson(1, listOf('K', 'M'), listOf('K', 'M'))
+            } else {
+                val char = kochSequence[index]
+                KochLesson(index + 1, listOf(char), kochSequence.take(index + 1))
+            }
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -102,7 +122,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.progress.collectLatest { 
                 _progress.value = it
-                _trainerSession.value = _trainerSession.value.copy(lessonNumber = it.currentLessonIndex + 1)
+                updateSessionFromProgress(it)
             }
         }
         
@@ -112,6 +132,15 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
                 delay(100)
             }
         }
+    }
+
+    private fun updateSessionFromProgress(progress: MorseProgress) {
+        val lessonIdx = progress.currentLessonIndex.coerceIn(0, lessons.size - 1)
+        val currentLesson = lessons[lessonIdx]
+        _trainerSession.value = _trainerSession.value.copy(
+            lessonNumber = currentLesson.lessonNumber,
+            targetCorrect = currentLesson.targetCorrect
+        )
     }
 
     fun setSection(section: MorseSection) {
@@ -124,9 +153,13 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         _trainerMode.value = mode
         _trainerFeedback.value = null
         _decodedText.value = ""
-        keyer.stopPlayback() // Ensure NO autoplay when switching modes
+        _currentSymbolBuffer.value = ""
+        _revealed.value = false
+        keyer.stopPlayback()
         if (mode == TrainerMode.Koch) {
             startKochLesson(_progress.value.currentLessonIndex)
+        } else if (mode == TrainerMode.Character) {
+             generateNewExercise(ExerciseType.Beginner)
         } else {
             generateTrainerExercise(mode)
         }
@@ -141,6 +174,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         _trainerFeedback.value = null
         _isKeyBusy.value = false
         _lastElementSent.value = ""
+        _revealed.value = false
     }
 
     fun updateSettings(newSettings: MorseSettings) {
@@ -149,20 +183,50 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.saveSettings(newSettings) }
     }
 
+    fun resetKochCourse() {
+        val newProgress = MorseProgress()
+        _progress.value = newProgress
+        viewModelScope.launch { repository.saveProgress(newProgress) }
+        startKochLesson(0)
+    }
+
     // --- Training Logic ---
 
     fun generateNewExercise(type: ExerciseType) {
         _currentExerciseType.value = type
         _currentText.value = generateExercise(type)
         _receiveFeedback.value = null
-        keyer.stopPlayback() // Never autoplay
+        keyer.stopPlayback()
     }
 
     fun playCurrentText() {
-        if (_currentSection.value == MorseSection.Receive) {
-            playText(_currentText.value)
+        val textToPlay = if (_trainerMode.value == TrainerMode.Character) _currentText.value else _trainerTarget.value
+        if (textToPlay.isNotEmpty()) {
+            keyer.playText(textToPlay)
+        }
+    }
+
+    fun revealCurrentTarget() {
+        _revealed.value = true
+        _trainerSession.value = _trainerSession.value.copy(
+            revealsUsed = _trainerSession.value.revealsUsed + 1
+        )
+    }
+
+    fun resetTrainerExercise() {
+        _decodedText.value = ""
+        _currentSymbolBuffer.value = ""
+        _trainerFeedback.value = null
+        _revealed.value = false
+        _trainerSession.value = _trainerSession.value.copy(
+            lastDecodedChar = null,
+            lastDecodedStatus = DecodeStatus.None
+        )
+        decodeJob?.cancel()
+        if (_trainerMode.value == TrainerMode.Koch) {
+            generateKochExercise(_progress.value.currentLessonIndex)
         } else {
-            playText(_trainerTarget.value)
+            generateTrainerExercise(_trainerMode.value ?: TrainerMode.Koch)
         }
     }
 
@@ -209,26 +273,48 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     // --- Koch Redesign ---
 
     fun startKochLesson(index: Int) {
+        val lessonIdx = index.coerceIn(0, lessons.size - 1)
+        val currentLesson = lessons[lessonIdx]
         _trainerSession.value = TrainerSessionProgress(
-            lessonNumber = index + 1,
-            startTime = System.currentTimeMillis()
+            lessonNumber = currentLesson.lessonNumber,
+            startTime = System.currentTimeMillis(),
+            currentCorrect = 0,
+            currentTotal = 0,
+            targetCorrect = currentLesson.targetCorrect,
+            newCharAppearances = emptyMap(),
+            introducedCharacters = currentLesson.introducedCharacters
         )
-        generateKochExercise(index)
+        generateKochExercise(lessonIdx)
     }
 
     private fun generateKochExercise(index: Int) {
-        val learnedChars = kochOrder.take(index + 2)
-        val newestChar = learnedChars.last()
+        val lessonIdx = index.coerceIn(0, lessons.size - 1)
+        val currentLesson = lessons[lessonIdx]
         
-        // Weighted selection: 40% chance for the newest character, others distributed
-        val exercise = (1..(1..3).random()).map {
-            if (Math.random() < 0.4) newestChar else learnedChars.random()
-        }.joinToString("")
+        val targetChar = if (Math.random() < 0.4) {
+            currentLesson.introducedCharacters.random()
+        } else {
+            currentLesson.allCharacters.random()
+        }
         
-        _trainerTarget.value = exercise
+        if (currentLesson.introducedCharacters.contains(targetChar)) {
+            val session = _trainerSession.value
+            val currentCount = session.newCharAppearances[targetChar] ?: 0
+            _trainerSession.value = session.copy(
+                newCharAppearances = session.newCharAppearances + (targetChar to (currentCount + 1))
+            )
+        }
+        
+        _trainerTarget.value = targetChar.toString()
         _decodedText.value = ""
+        _currentSymbolBuffer.value = ""
         _trainerFeedback.value = null
-        keyer.stopPlayback() // NO autoplay
+        _revealed.value = false
+        _trainerSession.value = _trainerSession.value.copy(
+            lastDecodedChar = null,
+            lastDecodedStatus = DecodeStatus.None
+        )
+        keyer.stopPlayback()
     }
 
     private fun generateTrainerExercise(mode: TrainerMode) {
@@ -237,26 +323,32 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             TrainerMode.Punctuation -> (1..3).map { ".,/?=".random() }.joinToString("")
             TrainerMode.Callsigns -> generateCallsign()
             TrainerMode.Words -> listOf("THE", "AND", "BK", "CQ", "DX", "73").random()
-            else -> (1..3).map { kochOrder.random() }.joinToString("")
+            else -> (1..3).map { kochSequence.random() }.joinToString("")
         }
         _trainerTarget.value = target
         _decodedText.value = ""
+        _currentSymbolBuffer.value = ""
         _trainerFeedback.value = null
-        keyer.stopPlayback() // NO autoplay
+        _revealed.value = false
+        _trainerSession.value = _trainerSession.value.copy(
+            lastDecodedChar = null,
+            lastDecodedStatus = DecodeStatus.None
+        )
+        keyer.stopPlayback()
     }
 
     fun submitTrainerAnswer() {
-        val current = _decodedText.value.trim().uppercase()
-        val target = _trainerTarget.value.uppercase()
+        val current = _decodedText.value.replace(" ", "").trim().uppercase()
+        val target = _trainerTarget.value.replace(" ", "").trim().uppercase()
         val isCorrect = current == target
         
         _trainerFeedback.value = TrainerFeedback(
             isCorrect = isCorrect,
-            expected = target,
-            received = current,
-            expectedCode = target.map { MorseCodeMap[it] ?: "" }.joinToString(" "),
-            receivedCode = current.map { MorseCodeMap[it] ?: "" }.joinToString(" "),
-            message = if (isCorrect) "✓ Correct!" else "✗ Incorrect"
+            expected = _trainerTarget.value,
+            received = _decodedText.value,
+            expectedCode = _trainerTarget.value.map { MorseCodeMap[it] ?: "" }.joinToString(" "),
+            receivedCode = _decodedText.value.map { MorseCodeMap[it] ?: "" }.joinToString(" "),
+            message = if (isCorrect) "EXCELLENT!" else "ERROR DETECTED"
         )
 
         if (_trainerMode.value == TrainerMode.Koch) {
@@ -267,23 +359,36 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateKochProgress(isCorrect: Boolean) {
         val session = _trainerSession.value
+        val newCorrect = (if (isCorrect) session.currentCorrect + 1 else session.currentCorrect).coerceAtMost(session.targetCorrect)
+        val newTotal = session.currentTotal + 1
+        
         val newRecent = (session.recentResults + isCorrect).takeLast(20)
         val currentAccuracy = if (newRecent.isNotEmpty()) (newRecent.count { it } * 100f / newRecent.size) else 0f
         
         val newSession = session.copy(
-            currentCorrect = if (isCorrect) session.currentCorrect + 1 else session.currentCorrect,
-            currentTotal = session.currentTotal + 1,
+            currentCorrect = newCorrect,
+            currentTotal = newTotal,
             recentResults = newRecent
         )
         _trainerSession.value = newSession
 
         if (newSession.currentCorrect >= session.targetCorrect && currentAccuracy >= session.requiredAccuracy) {
-            // Unlock next lesson
-            val nextIndex = _progress.value.currentLessonIndex + 1
-            if (nextIndex < kochOrder.size - 1) {
-                val newProgress = _progress.value.copy(currentLessonIndex = nextIndex)
-                _progress.value = newProgress
-                viewModelScope.launch { repository.saveProgress(newProgress) }
+            viewModelScope.launch {
+                delay(1000)
+                val nextIndex = _progress.value.currentLessonIndex + 1
+                if (nextIndex < lessons.size) {
+                    val newProgress = _progress.value.copy(currentLessonIndex = nextIndex)
+                    _progress.value = newProgress
+                    repository.saveProgress(newProgress)
+                    startKochLesson(nextIndex)
+                }
+            }
+        } else if (isCorrect) {
+            viewModelScope.launch {
+                delay(1200)
+                if (_trainerMode.value == TrainerMode.Koch) {
+                    generateKochExercise(_progress.value.currentLessonIndex)
+                }
             }
         }
     }
@@ -291,6 +396,8 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     fun nextTrainerExercise() {
         if (_trainerMode.value == TrainerMode.Koch) {
             generateKochExercise(_progress.value.currentLessonIndex)
+        } else if (_trainerMode.value == TrainerMode.Character) {
+             generateNewExercise(_currentExerciseType.value)
         } else {
             generateTrainerExercise(_trainerMode.value ?: TrainerMode.Koch)
         }
@@ -311,14 +418,6 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         return "${prefixes.random()}${(1..9).random()}${('A'..'Z').random()}${('A'..'Z').random()}"
     }
 
-    fun playText(text: String) {
-        keyer.playText(text)
-    }
-
-    fun stopPlayback() {
-        keyer.stopPlayback()
-    }
-
     fun onKeyDown(isRightPaddle: Boolean) {
         val config = _settings.value
         val isDash = if (config.paddleOrientation == PaddleOrientation.LeftDitRightDah) isRightPaddle else !isRightPaddle
@@ -334,6 +433,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun handleElementSent(element: String) {
+        decodeJob?.cancel()
         _lastElementSent.value = element
         _currentSymbolBuffer.value += element
     }
@@ -343,38 +443,47 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         decodeJob = viewModelScope.launch {
             val settings = _settings.value
             val unitMs = 1200 / settings.farnsworthWpm
-            
-            // Standard ITU timing:
-            // Inter-character space = 3 units
-            // Inter-word space = 7 units
-            
-            // Wait for 3 units to complete a character
-            delay((unitMs * 3.0).toLong())
+            val gapMultiplier = if (_currentSection.value == MorseSection.Trainer) 5.0 else 3.0
+            delay((unitMs * gapMultiplier).toLong())
             
             val buffer = _currentSymbolBuffer.value
             if (buffer.isNotEmpty()) {
                 val char = MorseCodeMap.entries.find { it.value == buffer }?.key
+                
                 if (char != null) {
                     _decodedText.value += char
+                    
+                    if (_currentSection.value == MorseSection.Trainer && _trainerMode.value != TrainerMode.Character) {
+                        val target = _trainerTarget.value.replace(" ", "").trim().uppercase()
+                        val currentDecoded = _decodedText.value.replace(" ", "").trim().uppercase()
+                        
+                        val status = if (target.startsWith(currentDecoded)) {
+                            if (target == currentDecoded) DecodeStatus.Correct else DecodeStatus.None
+                        } else {
+                            DecodeStatus.Wrong
+                        }
+                        
+                        _trainerSession.value = _trainerSession.value.copy(
+                            lastDecodedChar = char,
+                            lastDecodedStatus = status
+                        )
+                        
+                        if (currentDecoded.length >= target.length) {
+                            submitTrainerAnswer()
+                        }
+                    }
                 } else {
                     _decodedText.value += "?"
+                    if (_currentSection.value == MorseSection.Trainer) {
+                        _trainerSession.value = _trainerSession.value.copy(
+                            lastDecodedChar = '?',
+                            lastDecodedStatus = DecodeStatus.Invalid
+                        )
+                    }
                 }
                 _currentSymbolBuffer.value = ""
             }
-            
-            // Wait for 4 more units (total 7) to complete a word
-            delay((unitMs * 4.0).toLong())
-            if (_decodedText.value.isNotEmpty() && !_decodedText.value.endsWith(" ")) {
-                _decodedText.value += " "
-            }
         }
-    }
-
-    fun resetTrainerExercise() {
-        _decodedText.value = ""
-        _currentSymbolBuffer.value = ""
-        _trainerFeedback.value = null
-        decodeJob?.cancel()
     }
 
     fun clearSentText() {

@@ -141,7 +141,7 @@ class MorseTimingEngine(
                 val durationMs = if (command.element == ".") unitMs else (unitMs * 3).toLong()
                 onToneAction(true)
                 onToneStateChanged(true)
-                onElementSent(command.element)
+                // Removed onElementSent(command.element) to prevent playback from simulating keypresses in the UI/Decoder
                 sleepNanos(durationMs * 1_000_000L)
                 onToneAction(false)
                 
