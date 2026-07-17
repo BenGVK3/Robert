@@ -57,7 +57,8 @@ fun MorseScreen(
             settings = settings,
             onDismiss = { showSettings = false },
             onSave = { viewModel.updateSettings(it) },
-            onResetCourse = { viewModel.resetKochCourse() }
+            onResetKoch = { viewModel.resetKochCourse() },
+            onResetReceive = { viewModel.resetReceiveCourse() }
         )
     }
 
@@ -108,6 +109,7 @@ fun MorseScreen(
                     MorseSection.Decoder -> DecoderScreen(viewModel)
                     MorseSection.Trainer -> TrainerScreen(viewModel)
                     MorseSection.Simulator -> SimulatorScreen(viewModel)
+                    MorseSection.Practice -> PracticeScreen(viewModel)
                 }
             }
         }
@@ -119,8 +121,52 @@ fun MorseSettingsDialog(
     settings: MorseSettings,
     onDismiss: () -> Unit,
     onSave: (MorseSettings) -> Unit,
-    onResetCourse: () -> Unit
+    onResetKoch: () -> Unit,
+    onResetReceive: () -> Unit
 ) {
+    var showKochConfirm by remember { mutableStateOf(false) }
+    var showReceiveConfirm by remember { mutableStateOf(false) }
+
+    if (showKochConfirm) {
+        AlertDialog(
+            onDismissRequest = { showKochConfirm = false },
+            title = { Text("Reset Koch Progress?") },
+            text = { Text("This will reset your progress in the Koch (Sending) course back to Lesson 1. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onResetKoch()
+                        showKochConfirm = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = RobertColors.StatusRed)
+                ) { Text("RESET") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showKochConfirm = false }) { Text("CANCEL") }
+            }
+        )
+    }
+
+    if (showReceiveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showReceiveConfirm = false },
+            title = { Text("Reset Receive Progress?") },
+            text = { Text("This will reset your progress in the Receive Practice (Listening) course back to Lesson 1. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onResetReceive()
+                        showReceiveConfirm = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = RobertColors.StatusRed)
+                ) { Text("RESET") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReceiveConfirm = false }) { Text("CANCEL") }
+            }
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
@@ -167,12 +213,22 @@ fun MorseSettingsDialog(
                 }
 
                 PreferenceCard(title = "Danger Zone", icon = Icons.Default.Warning) {
-                    Button(
-                        onClick = onResetCourse,
-                        colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusRed),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("RESET KOCH COURSE PROGRESS")
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                        Button(
+                            onClick = { showKochConfirm = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusRed),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("RESET KOCH COURSE PROGRESS")
+                        }
+                        
+                        Button(
+                            onClick = { showReceiveConfirm = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusRed),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("RESET RECEIVE COURSE PROGRESS")
+                        }
                     }
                 }
             }
@@ -218,8 +274,8 @@ fun MorseMenu(viewModel: MorseViewModel) {
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     
     val menuItems = listOf(
-        MorseMenuItem("Trainer", "Course & Practice Modes", Icons.Default.School, MorseSection.Trainer, RobertColors.Primary),
-        MorseMenuItem("Send", "Master your keying technique", Icons.Default.Keyboard, MorseSection.Send, RobertColors.StatusGreen),
+        MorseMenuItem("Training (Koch)", "Course & Practice Modes • 20+ WPM Recommended", Icons.Default.School, MorseSection.Trainer, RobertColors.Primary),
+        MorseMenuItem("Practice", "Callsigns, Words, Numbers & Sending", Icons.Default.Keyboard, MorseSection.Practice, RobertColors.StatusGreen),
         MorseMenuItem("Decoder", "Live audio transcription", Icons.Default.GraphicEq, MorseSection.Decoder, RobertColors.StatusOrange),
         MorseMenuItem("Simulator", "Virtual Radio Operator", Icons.Default.RecordVoiceOver, MorseSection.Simulator, Color(0xFF9C27B0))
     )
@@ -238,17 +294,17 @@ fun MorseMenu(viewModel: MorseViewModel) {
                 Column(modifier = Modifier.padding(Spacing.Medium)) {
                     Text("Overall Mastery", style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${progress.currentLessonIndex + 1} / 53", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black)
+                        Text("${progress.kochLessonIndex + 1} / 53", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black)
                         Spacer(Modifier.weight(1f))
                         Box(contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(
-                                progress = { (progress.currentLessonIndex + 1) / 53f },
+                                progress = { (progress.kochLessonIndex + 1) / 53f },
                                 modifier = Modifier.size(64.dp),
                                 strokeWidth = 8.dp,
                                 color = RobertColors.Primary,
                                 trackColor = RobertColors.Surface
                             )
-                            Text("${((progress.currentLessonIndex + 1) * 100 / 53)}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("${((progress.kochLessonIndex + 1) * 100 / 53)}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     }
                     
@@ -315,28 +371,32 @@ fun TrainerScreen(viewModel: MorseViewModel) {
 @Composable
 fun TrainerHome(viewModel: MorseViewModel) {
     val progress by viewModel.progress.collectAsStateWithLifecycle()
-    
-    val otherModes = listOf(
-        TrainerMenuItemDef("Receive Practice", "Listen and identify characters", Icons.Default.Hearing, TrainerMode.Character, Color(0xFF00BCD4)),
-        TrainerMenuItemDef("Callsigns", "Copy realistic world callsigns", Icons.Default.Public, TrainerMode.Callsigns, Color(0xFF00BCD4)),
-        TrainerMenuItemDef("Words", "Common English words", Icons.Default.TextFields, TrainerMode.Words, RobertColors.StatusGreen),
-        TrainerMenuItemDef("Numbers", "Focus on digits", Icons.Default.Numbers, TrainerMode.Numbers, RobertColors.StatusOrange)
-    )
+    var showCurriculum by remember { mutableStateOf(false) }
 
+    if (showCurriculum) {
+        CurriculumDialog(viewModel.kochSequence, progress.kochLessonIndex + 1) { showCurriculum = false }
+    }
+    
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
-        Text("LEARN MORSE", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = RobertColors.Primary)
+        Text("STRUCTURED LEARNING", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = RobertColors.Primary)
         
+        // Sending Card (formerly Koch Course)
         Card(
             modifier = Modifier.fillMaxWidth().clickable { viewModel.setTrainerMode(TrainerMode.Koch) },
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
         ) {
             Row(modifier = Modifier.padding(Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(RobertColors.Primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.Keyboard, null, tint = RobertColors.Primary, modifier = Modifier.size(28.dp)) }
+                Spacer(Modifier.width(Spacing.Medium))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Koch Course", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Lesson ${progress.currentLessonIndex + 1} / 53", color = RobertColors.TextSecondary)
+                    Text("Sending", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Lesson ${progress.kochLessonIndex + 1} / 53", color = RobertColors.TextSecondary, style = MaterialTheme.typography.labelMedium)
                     LinearProgressIndicator(
-                        progress = { (progress.currentLessonIndex + 1) / 53f },
+                        progress = { (progress.kochLessonIndex + 1) / 53f },
                         modifier = Modifier.padding(top = 12.dp).fillMaxWidth().height(8.dp).clip(CircleShape),
                         color = RobertColors.Primary
                     )
@@ -345,26 +405,210 @@ fun TrainerHome(viewModel: MorseViewModel) {
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = RobertColors.Primary)
             }
         }
-        
-        Text("Other Modes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        
-        otherModes.forEach { item ->
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { viewModel.setTrainerMode(item.mode) },
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
-            ) {
-                Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(item.icon, null, tint = item.color)
-                    Spacer(Modifier.width(Spacing.Medium))
-                    Text(item.title, fontWeight = FontWeight.Bold)
+
+        // Receive Card (formerly Receive Practice)
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable { viewModel.setTrainerMode(TrainerMode.Character) },
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+        ) {
+            Row(modifier = Modifier.padding(Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF00BCD4).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.AutoMirrored.Filled.VolumeUp, null, tint = Color(0xFF00BCD4), modifier = Modifier.size(28.dp)) }
+                Spacer(Modifier.width(Spacing.Medium))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Receive", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Lesson ${progress.receiveLessonIndex + 1} / 53", color = RobertColors.TextSecondary, style = MaterialTheme.typography.labelMedium)
+                    LinearProgressIndicator(
+                        progress = { (progress.receiveLessonIndex + 1) / 53f },
+                        modifier = Modifier.padding(top = 12.dp).fillMaxWidth().height(8.dp).clip(CircleShape),
+                        color = Color(0xFF00BCD4)
+                    )
                 }
+                Spacer(Modifier.width(Spacing.Medium))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color(0xFF00BCD4))
+            }
+        }
+
+        // Curriculum Card
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable { showCurriculum = true },
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+        ) {
+            Row(modifier = Modifier.padding(Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(RobertColors.StatusOrange.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.List, null, tint = RobertColors.StatusOrange, modifier = Modifier.size(28.dp)) }
+                Spacer(Modifier.width(Spacing.Medium))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Curriculum", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Full 53-Lesson Sequence", color = RobertColors.TextSecondary, style = MaterialTheme.typography.labelMedium)
+                }
+                Spacer(Modifier.width(Spacing.Medium))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = RobertColors.StatusOrange)
             }
         }
     }
 }
 
 data class TrainerMenuItemDef(val title: String, val subtitle: String, val icon: ImageVector, val mode: TrainerMode, val color: Color)
+
+@Composable
+fun PracticeScreen(viewModel: MorseViewModel) {
+    val trainerMode by viewModel.trainerMode.collectAsStateWithLifecycle()
+    
+    AnimatedContent(targetState = trainerMode, label = "PracticeMode") { mode ->
+        if (mode == null) {
+            PracticeHome(viewModel)
+        } else {
+            TrainerExercise(viewModel, mode)
+        }
+    }
+}
+
+@Composable
+fun PracticeHome(viewModel: MorseViewModel) {
+    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+        Text("FREE PRACTICE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = RobertColors.Primary)
+        
+        // Free-form Send Card
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable { viewModel.setSection(MorseSection.Send) },
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+        ) {
+            Row(modifier = Modifier.padding(Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(RobertColors.StatusGreen.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.Keyboard, null, tint = RobertColors.StatusGreen, modifier = Modifier.size(28.dp)) }
+                Spacer(Modifier.width(Spacing.Medium))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Send", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Free-form sending practice", color = RobertColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = RobertColors.TextSecondary.copy(alpha = 0.5f))
+            }
+        }
+
+        val practiceModes = listOf(
+            TrainerMenuItemDef("Callsigns", "Copy realistic world callsigns", Icons.Default.Public, TrainerMode.Callsigns, Color(0xFF00BCD4)),
+            TrainerMenuItemDef("Words", "Common English words", Icons.Default.TextFields, TrainerMode.Words, RobertColors.Primary),
+            TrainerMenuItemDef("Numbers", "Focus on digits", Icons.Default.Numbers, TrainerMode.Numbers, RobertColors.StatusOrange)
+        )
+
+        practiceModes.forEach { item ->
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { viewModel.setTrainerMode(item.mode) },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+            ) {
+                Row(modifier = Modifier.padding(Spacing.Large), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(item.color.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(item.icon, null, tint = item.color, modifier = Modifier.size(28.dp)) }
+                    Spacer(Modifier.width(Spacing.Medium))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(item.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(item.subtitle, color = RobertColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = RobertColors.TextSecondary.copy(alpha = 0.5f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CurriculumDialog(sequence: List<Char>, currentLesson: Int, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxSize(),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Morse Curriculum", fontWeight = FontWeight.Black)
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Text(
+                        "The Koch Method introduces characters one by one. Master each lesson with 90% accuracy before moving on.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RobertColors.TextSecondary,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                }
+
+                items(sequence.size) { index ->
+                    val lessonNum = index + 1
+                    val char = sequence[index]
+                    val isUnlocked = lessonNum <= currentLesson + 1 // Lesson 1 has 2 chars
+                    
+                    val actualChar = if (index == 0) "K & M" else char.toString()
+                    val actualLesson = if (index == 0) 1 else index + 1
+                    
+                    if (index == 1) return@items // Skip index 1 since it's merged with 0
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isUnlocked) RobertColors.Surface else RobertColors.Surface.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = if (actualLesson == currentLesson) BorderStroke(1.dp, RobertColors.Primary) else null
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Lesson $actualLesson",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isUnlocked) RobertColors.Primary else RobertColors.TextSecondary
+                                )
+                                Text(
+                                    actualChar,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isUnlocked) RobertColors.TextPrimary else RobertColors.TextSecondary
+                                )
+                            }
+                            
+                            if (isUnlocked) {
+                                Text(
+                                    if (index == 0) "-.-  --" else MorseCodeMap[char] ?: "",
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RobertColors.Primary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Icon(Icons.Default.CheckCircle, null, tint = RobertColors.StatusGreen, modifier = Modifier.size(16.dp))
+                            } else {
+                                Icon(Icons.Default.Lock, null, tint = RobertColors.TextSecondary, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("GOT IT") }
+        }
+    )
+}
 
 @Composable
 fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
@@ -378,45 +622,54 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
     val currentSymbolBuffer by viewModel.currentSymbolBuffer.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-        // Lesson Progress Header
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
+        // Lesson Progress Header - Only for structured learning
+        if (mode == TrainerMode.Koch) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Lesson ${session.lessonNumber}",
+                                fontWeight = FontWeight.Black,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            LinearProgressIndicator(
+                                progress = { session.currentCorrect.toFloat() / session.targetCorrect },
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                                color = RobertColors.StatusGreen,
+                                trackColor = RobertColors.TextSecondary.copy(alpha = 0.1f)
+                            )
+                        }
                         Text(
-                            if (mode == TrainerMode.Koch) "Lesson ${session.lessonNumber}" else mode.name,
-                            fontWeight = FontWeight.Black,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        LinearProgressIndicator(
-                            progress = { session.currentCorrect.toFloat() / session.targetCorrect },
-                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
-                            color = RobertColors.StatusGreen,
-                            trackColor = RobertColors.TextSecondary.copy(alpha = 0.1f)
+                            "${session.currentCorrect}/${session.targetCorrect}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 12.dp)
                         )
                     }
-                    Text(
-                        "${session.currentCorrect}/${session.targetCorrect}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 12.dp)
-                    )
                 }
+            }
+            Spacer(Modifier.height(Spacing.Small))
+        } else {
+            // Simple header for endless modes
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                }
+                Text(mode.name, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
             }
         }
 
-        Spacer(Modifier.height(Spacing.Small))
-
         // Target Character Area - Smaller card
         Card(
-            modifier = Modifier.fillMaxWidth().height(100.dp),
+            modifier = Modifier.fillMaxWidth().height(80.dp),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
         ) {
@@ -439,8 +692,8 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
                     if (revealed || shouldShowAutoHint) {
                         Text(
                             target.map { MorseCodeMap[it] ?: "" }.joinToString("  "),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = RobertColors.StatusOrange,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = RobertColors.Primary,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 4.dp)
@@ -466,9 +719,9 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
                         Text("YOUR MORSE", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
                         Text(
                             currentSymbolBuffer,
-                            style = MaterialTheme.typography.displayLarge,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = RobertColors.TextSecondary.copy(alpha = 0.6f),
+                            color = RobertColors.Primary.copy(alpha = 0.7f),
                             fontFamily = FontFamily.Monospace,
                             letterSpacing = 4.sp
                         )
@@ -484,7 +737,7 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
                         }
                         Text(
                             decodedText,
-                            style = MaterialTheme.typography.displayLarge,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Black,
                             color = statusColor
                         )
@@ -522,21 +775,52 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
 
 @Composable
 fun ReceivePracticeInternal(viewModel: MorseViewModel) {
+    val session by viewModel.trainerSession.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val currentText by viewModel.currentText.collectAsStateWithLifecycle()
     val feedback by viewModel.receiveFeedback.collectAsStateWithLifecycle()
-    val currentType by viewModel.currentExerciseType.collectAsStateWithLifecycle()
+    val revealed by viewModel.revealed.collectAsStateWithLifecycle()
     var userAnswer by remember { mutableStateOf("") }
+    
+    // Clear answer when target changes or is revealed
+    LaunchedEffect(currentText, revealed, feedback) {
+        if (currentText.isEmpty() || revealed || feedback == null) {
+            userAnswer = ""
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ExerciseType.entries.take(4).forEach { type ->
-                FilterChip(
-                    selected = currentType == type,
-                    onClick = { viewModel.generateNewExercise(type); userAnswer = "" },
-                    label = { Text(type.name, fontSize = 10.sp) },
-                    modifier = Modifier.weight(1f)
-                )
+        // Lesson Progress Header
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Lesson ${session.lessonNumber}",
+                            fontWeight = FontWeight.Black,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        LinearProgressIndicator(
+                            progress = { session.currentCorrect.toFloat() / session.targetCorrect },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                            color = RobertColors.StatusGreen,
+                            trackColor = RobertColors.TextSecondary.copy(alpha = 0.1f)
+                        )
+                    }
+                    Text(
+                        "${session.currentCorrect}/${session.targetCorrect}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 12.dp)
+                    )
+                }
             }
         }
 
@@ -550,6 +834,21 @@ fun ReceivePracticeInternal(viewModel: MorseViewModel) {
                     PlaybackAnimation()
                 } else if (feedback != null) {
                     FeedbackDisplay(feedback!!)
+                } else if (revealed) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            currentText,
+                            style = MaterialTheme.typography.displayMedium,
+                            fontWeight = FontWeight.Black,
+                            color = RobertColors.StatusOrange
+                        )
+                        Text(
+                            currentText.map { MorseCodeMap[it] ?: "" }.joinToString(" "),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontFamily = FontFamily.Monospace,
+                            color = RobertColors.StatusOrange
+                        )
+                    }
                 } else {
                     Text(
                         userAnswer.ifEmpty { "READY" },
@@ -563,46 +862,61 @@ fun ReceivePracticeInternal(viewModel: MorseViewModel) {
         }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
-            Button(
-                onClick = { viewModel.playCurrentText() },
-                modifier = Modifier.weight(1f).height(64.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary)
-            ) {
-                Icon(Icons.Default.PlayArrow, null)
-                Spacer(Modifier.width(8.dp))
-                Text("PLAY")
-            }
+            if (feedback == null && !revealed) {
+                Button(
+                    onClick = { viewModel.playCurrentText() },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("PLAY", fontSize = 11.sp, maxLines = 1)
+                }
 
-            if (feedback == null) {
+                Button(
+                    onClick = { viewModel.revealCurrentTarget() },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusOrange),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
+                    Icon(Icons.Default.Visibility, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("REVEAL", fontSize = 11.sp, maxLines = 1)
+                }
+
                 Button(
                     onClick = { viewModel.checkReceiveAnswer(userAnswer) },
-                    modifier = Modifier.weight(1f).height(64.dp),
+                    modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(16.dp),
-                    enabled = userAnswer.isNotEmpty()
+                    enabled = userAnswer.isNotEmpty(),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    Icon(Icons.Default.Check, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("CHECK")
+                    Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("CHECK", fontSize = 11.sp, maxLines = 1)
                 }
-            } else {
+            } else if (feedback?.isCorrect != true) {
                 Button(
-                    onClick = { viewModel.generateNewExercise(currentType); userAnswer = "" },
-                    modifier = Modifier.weight(1f).height(64.dp),
+                    onClick = { viewModel.nextTrainerExercise() },
+                    modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusGreen)
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusGreen),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("NEXT")
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("NEXT", fontSize = 11.sp, maxLines = 1)
                 }
             }
         }
         
         MorseKeyboard(
-            onKey = { if (feedback == null) userAnswer += it },
-            onBackspace = { if (userAnswer.isNotEmpty()) userAnswer = userAnswer.dropLast(1) },
-            enabled = feedback == null
+            onKey = { if (feedback == null && !revealed) userAnswer += it },
+            onBackspace = { if (userAnswer.isNotEmpty() && feedback == null && !revealed) userAnswer = userAnswer.dropLast(1) },
+            enabled = feedback == null && !revealed
         )
     }
 }

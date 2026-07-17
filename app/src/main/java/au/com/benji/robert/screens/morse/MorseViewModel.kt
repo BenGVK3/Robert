@@ -93,9 +93,10 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     val trainerMode = _trainerMode.asStateFlow()
 
     private var decodeJob: Job? = null
+    private var autoplayJob: Job? = null
     
     // Data-driven Koch Lessons
-    private val kochSequence = listOf(
+    val kochSequence = listOf(
         'K', 'M', 'R', 'S', 'U', 'A', 'P', 'T', 'L', 'O', 'W', 'I', 'N', 'J', 'E', 'F', 'V', 'G', 'Q', 'Z', 'H', 'B', 'C', 'Y', 'X', 'D',
         '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
         '.', ',', '?', '\'', '/', '(', ')', '&', ':', ';', '=', '+', '-', '_', '\"', '$', '@'
@@ -135,8 +136,10 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun updateSessionFromProgress(progress: MorseProgress) {
-        val lessonIdx = progress.currentLessonIndex.coerceIn(0, lessons.size - 1)
-        val currentLesson = lessons[lessonIdx]
+        val mode = _trainerMode.value
+        val lessonIdx = if (mode == TrainerMode.Character) progress.receiveLessonIndex else progress.kochLessonIndex
+        val safeIdx = lessonIdx.coerceIn(0, lessons.size - 1)
+        val currentLesson = lessons[safeIdx]
         _trainerSession.value = _trainerSession.value.copy(
             lessonNumber = currentLesson.lessonNumber,
             targetCorrect = currentLesson.targetCorrect
@@ -152,16 +155,62 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     fun setTrainerMode(mode: TrainerMode) {
         _trainerMode.value = mode
         _trainerFeedback.value = null
+        _receiveFeedback.value = null
         _decodedText.value = ""
         _currentSymbolBuffer.value = ""
         _revealed.value = false
         keyer.stopPlayback()
-        if (mode == TrainerMode.Koch) {
-            startKochLesson(_progress.value.currentLessonIndex)
-        } else if (mode == TrainerMode.Character) {
-             generateNewExercise(ExerciseType.Beginner)
+        
+        if (mode == TrainerMode.Koch || mode == TrainerMode.Character) {
+            startLessonBasedMode(mode)
         } else {
             generateTrainerExercise(mode)
+        }
+    }
+
+    private fun startLessonBasedMode(mode: TrainerMode) {
+        val progress = _progress.value
+        val lessonIdx = if (mode == TrainerMode.Character) progress.receiveLessonIndex else progress.kochLessonIndex
+        val safeIdx = lessonIdx.coerceIn(0, lessons.size - 1)
+        val currentLesson = lessons[safeIdx]
+        
+        _trainerSession.value = TrainerSessionProgress(
+            lessonNumber = currentLesson.lessonNumber,
+            startTime = System.currentTimeMillis(),
+            currentCorrect = 0,
+            currentTotal = 0,
+            targetCorrect = currentLesson.targetCorrect,
+            newCharAppearances = emptyMap(),
+            introducedCharacters = currentLesson.introducedCharacters
+        )
+        if (mode == TrainerMode.Koch) {
+            generateKochExercise(safeIdx)
+        } else {
+            generateReceiveExercise(safeIdx)
+        }
+    }
+
+    private fun generateReceiveExercise(index: Int) {
+        val lessonIdx = index.coerceIn(0, lessons.size - 1)
+        val currentLesson = lessons[lessonIdx]
+        
+        val targetChar = if (Math.random() < 0.4) {
+            currentLesson.introducedCharacters.random()
+        } else {
+            currentLesson.allCharacters.random()
+        }
+        
+        _currentText.value = targetChar.toString()
+        _trainerTarget.value = targetChar.toString() // Needed for playCurrentText() logic
+        _receiveFeedback.value = null
+        _revealed.value = false // Reset revealed state for new exercise
+        keyer.stopPlayback()
+        autoplayJob?.cancel()
+        
+        // Autoplay the target for receive practice
+        autoplayJob = viewModelScope.launch {
+            delay(500)
+            playCurrentText()
         }
     }
 
@@ -184,10 +233,19 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resetKochCourse() {
-        val newProgress = MorseProgress()
+        val current = _progress.value
+        val newProgress = current.copy(kochLessonIndex = 0)
         _progress.value = newProgress
         viewModelScope.launch { repository.saveProgress(newProgress) }
-        startKochLesson(0)
+        startLessonBasedMode(TrainerMode.Koch)
+    }
+
+    fun resetReceiveCourse() {
+        val current = _progress.value
+        val newProgress = current.copy(receiveLessonIndex = 0)
+        _progress.value = newProgress
+        viewModelScope.launch { repository.saveProgress(newProgress) }
+        startLessonBasedMode(TrainerMode.Character)
     }
 
     // --- Training Logic ---
@@ -202,6 +260,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     fun playCurrentText() {
         val textToPlay = if (_trainerMode.value == TrainerMode.Character) _currentText.value else _trainerTarget.value
         if (textToPlay.isNotEmpty()) {
+            keyer.stopPlayback()
             keyer.playText(textToPlay)
         }
     }
@@ -223,10 +282,17 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             lastDecodedStatus = DecodeStatus.None
         )
         decodeJob?.cancel()
-        if (_trainerMode.value == TrainerMode.Koch) {
-            generateKochExercise(_progress.value.currentLessonIndex)
+        
+        val progress = _progress.value
+        val mode = _trainerMode.value
+        val lessonIdx = if (mode == TrainerMode.Character) progress.receiveLessonIndex else progress.kochLessonIndex
+        
+        if (mode == TrainerMode.Koch) {
+            generateKochExercise(lessonIdx)
+        } else if (mode == TrainerMode.Character) {
+            generateReceiveExercise(lessonIdx)
         } else {
-            generateTrainerExercise(_trainerMode.value ?: TrainerMode.Koch)
+            generateTrainerExercise(mode ?: TrainerMode.Koch)
         }
     }
 
@@ -243,6 +309,10 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         _receiveFeedback.value = ReceiveFeedback(isCorrect, expected, received, comparison)
+        
+        if (_trainerMode.value == TrainerMode.Character) {
+            updateStructuredProgress(isCorrect)
+        }
         updateGlobalStats(isCorrect, expected)
     }
 
@@ -272,20 +342,6 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Koch Redesign ---
 
-    fun startKochLesson(index: Int) {
-        val lessonIdx = index.coerceIn(0, lessons.size - 1)
-        val currentLesson = lessons[lessonIdx]
-        _trainerSession.value = TrainerSessionProgress(
-            lessonNumber = currentLesson.lessonNumber,
-            startTime = System.currentTimeMillis(),
-            currentCorrect = 0,
-            currentTotal = 0,
-            targetCorrect = currentLesson.targetCorrect,
-            newCharAppearances = emptyMap(),
-            introducedCharacters = currentLesson.introducedCharacters
-        )
-        generateKochExercise(lessonIdx)
-    }
 
     private fun generateKochExercise(index: Int) {
         val lessonIdx = index.coerceIn(0, lessons.size - 1)
@@ -352,18 +408,25 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         if (_trainerMode.value == TrainerMode.Koch) {
-            updateKochProgress(isCorrect)
+            updateStructuredProgress(isCorrect)
+        } else if (isCorrect) {
+            // Automatic load next target for endless modes
+            viewModelScope.launch {
+                delay(1200)
+                generateTrainerExercise(_trainerMode.value ?: TrainerMode.Koch)
+            }
         }
         updateGlobalStats(isCorrect, target)
     }
 
-    private fun updateKochProgress(isCorrect: Boolean) {
+    private fun updateStructuredProgress(isCorrect: Boolean) {
         val session = _trainerSession.value
+        val mode = _trainerMode.value
+        
         val newCorrect = (if (isCorrect) session.currentCorrect + 1 else session.currentCorrect).coerceAtMost(session.targetCorrect)
         val newTotal = session.currentTotal + 1
         
         val newRecent = (session.recentResults + isCorrect).takeLast(20)
-        val currentAccuracy = if (newRecent.isNotEmpty()) (newRecent.count { it } * 100f / newRecent.size) else 0f
         
         val newSession = session.copy(
             currentCorrect = newCorrect,
@@ -372,34 +435,53 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         )
         _trainerSession.value = newSession
 
-        if (newSession.currentCorrect >= session.targetCorrect && currentAccuracy >= session.requiredAccuracy) {
+        if (newSession.currentCorrect >= session.targetCorrect) {
             viewModelScope.launch {
                 delay(1000)
-                val nextIndex = _progress.value.currentLessonIndex + 1
+                val currentProgress = _progress.value
+                val currentIdx = if (mode == TrainerMode.Character) currentProgress.receiveLessonIndex else currentProgress.kochLessonIndex
+                val nextIndex = currentIdx + 1
+                
                 if (nextIndex < lessons.size) {
-                    val newProgress = _progress.value.copy(currentLessonIndex = nextIndex)
+                    val newProgress = if (mode == TrainerMode.Character) {
+                        currentProgress.copy(receiveLessonIndex = nextIndex)
+                    } else {
+                        currentProgress.copy(kochLessonIndex = nextIndex)
+                    }
                     _progress.value = newProgress
                     repository.saveProgress(newProgress)
-                    startKochLesson(nextIndex)
+                    startLessonBasedMode(mode ?: TrainerMode.Koch)
                 }
             }
         } else if (isCorrect) {
             viewModelScope.launch {
                 delay(1200)
-                if (_trainerMode.value == TrainerMode.Koch) {
-                    generateKochExercise(_progress.value.currentLessonIndex)
+                val currentProgress = _progress.value
+                if (mode == TrainerMode.Koch) {
+                    generateKochExercise(currentProgress.kochLessonIndex)
+                } else if (mode == TrainerMode.Character) {
+                    _currentText.value = "" // Clear current text to prevent replay
+                    generateReceiveExercise(currentProgress.receiveLessonIndex)
                 }
             }
         }
     }
 
     fun nextTrainerExercise() {
-        if (_trainerMode.value == TrainerMode.Koch) {
-            generateKochExercise(_progress.value.currentLessonIndex)
-        } else if (_trainerMode.value == TrainerMode.Character) {
-             generateNewExercise(_currentExerciseType.value)
+        val progress = _progress.value
+        val mode = _trainerMode.value
+        
+        // Clear states to trigger UI resets
+        _currentText.value = ""
+        _receiveFeedback.value = null
+        _revealed.value = false
+
+        if (mode == TrainerMode.Koch) {
+            generateKochExercise(progress.kochLessonIndex)
+        } else if (mode == TrainerMode.Character) {
+             generateReceiveExercise(progress.receiveLessonIndex)
         } else {
-            generateTrainerExercise(_trainerMode.value ?: TrainerMode.Koch)
+            generateTrainerExercise(mode ?: TrainerMode.Koch)
         }
     }
 

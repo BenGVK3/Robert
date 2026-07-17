@@ -57,7 +57,8 @@ data class KochLesson(
 data class MorseProgress(
     val charactersMastered: Set<Char> = emptySet(),
     val lessonsCompleted: Int = 0,
-    val currentLessonIndex: Int = 0,
+    val kochLessonIndex: Int = 0,
+    val receiveLessonIndex: Int = 0,
     val totalAccuracy: Float = 0f,
     val practiceStreak: Int = 0,
     val longestStreak: Int = 0,
@@ -112,7 +113,7 @@ sealed class SimulatorState {
 }
 
 enum class MorseSection {
-    Menu, Send, Decoder, Trainer, Simulator
+    Menu, Send, Decoder, Trainer, Simulator, Practice
 }
 
 enum class ExerciseType {
