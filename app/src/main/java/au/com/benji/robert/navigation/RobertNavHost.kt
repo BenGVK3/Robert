@@ -1,6 +1,9 @@
 package au.com.benji.robert.navigation
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -13,6 +16,17 @@ import au.com.benji.robert.screens.dashboard.DashboardScreen
 import au.com.benji.robert.screens.propagation.PropagationScreen
 import au.com.benji.robert.screens.moon.MoonScreen
 import au.com.benji.robert.screens.logbook.LogbookScreen
+import au.com.benji.robert.screens.logbook.LogbookEntryScreen
+import au.com.benji.robert.screens.logbook.LogbookRadiosScreen
+import au.com.benji.robert.screens.logbook.LogbookAntennasScreen
+import au.com.benji.robert.screens.logbook.LogbookOperatorsScreen
+import au.com.benji.robert.screens.logbook.LogbookStatsScreen
+import au.com.benji.robert.screens.logbook.LogbookUserProfilesScreen
+import au.com.benji.robert.screens.logbook.LogbookSyncScreen
+import au.com.benji.robert.screens.logbook.LogbookSettingsScreen
+import au.com.benji.robert.screens.logbook.LogbookActivationScreen
+import au.com.benji.robert.screens.logbook.PileUpLoggingScreen
+import au.com.benji.robert.screens.logbook.LogbookMapScreen
 import au.com.benji.robert.screens.settings.SettingsScreen
 import au.com.benji.robert.screens.tools.ToolsScreen
 import au.com.benji.robert.screens.sdr.SdrScreen
@@ -59,7 +73,89 @@ fun RobertNavHost(
         }
 
         composable(Screen.Logbook.route) {
-            LogbookScreen(paddingValues)
+            LogbookScreen(
+                paddingValues = paddingValues,
+                onNavigateToLogging = { navController.navigate(Screen.LogbookLogging.route) },
+                onNavigateToActivation = { navController.navigate(Screen.LogbookActivation.route) },
+                onNavigateToStats = { navController.navigate(Screen.LogbookStats.route) },
+                onNavigateToSettings = { navController.navigate(Screen.LogbookSettings.route) },
+                onNavigateToPileUp = { navController.navigate(Screen.LogbookPileUp.route) }
+            )
+        }
+
+        composable(Screen.LogbookPileUp.route) {
+            PileUpLoggingScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LogbookSettings.route) {
+            LogbookSettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToOperators = { navController.navigate(Screen.LogbookOperators.route) },
+                onNavigateToUserProfiles = { navController.navigate(Screen.LogbookUserProfiles.route) },
+                onNavigateToSync = { navController.navigate(Screen.LogbookSync.route) }
+            )
+        }
+
+        composable(Screen.LogbookSync.route) {
+            LogbookSyncScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LogbookUserProfiles.route) {
+            LogbookUserProfilesScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LogbookActivation.route) {
+            LogbookActivationScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LogbookLogging.route) {
+            LogbookEntryScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToMap = { grid: String -> navController.navigate(Screen.LogbookMap.createRoute(grid)) }
+            )
+        }
+
+        composable(Screen.LogbookRadios.route) {
+            LogbookRadiosScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LogbookAntennas.route) {
+            LogbookAntennasScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LogbookOperators.route) {
+            LogbookOperatorsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.LogbookStats.route) {
+            LogbookStatsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.LogbookMap.route,
+            arguments = listOf(navArgument("grid") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val grid = backStackEntry.arguments?.getString("grid") ?: ""
+            LogbookMapScreen(
+                onBack = { navController.popBackStack() },
+                grid = grid
+            )
         }
 
         composable(

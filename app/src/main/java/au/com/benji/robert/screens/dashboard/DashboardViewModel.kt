@@ -44,7 +44,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val locationService = LocationService(application)
     private val settingsRepository = SettingsRepository(cacheDao)
     private val shackRepository = ShackRepository(DatabaseModule.shackDao(application))
-    private val logRepository = LogRepository(DatabaseModule.logDao(application))
+    private val logbookRepository = DatabaseModule.logbookRepository(application)
     private val repeaterRepository = RepeaterRepository(DatabaseModule.repeaterDao(application))
     private val netRepository = NetRepository(DatabaseModule.netDao(application))
 
@@ -211,11 +211,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         initialValue = mapOf("Radio" to 0, "Antenna" to 0, "Total" to 0, "Other" to 0)
     )
 
-    val logs = logRepository.getAllLogs()
+    val logs = logbookRepository.allQsos
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
+            initialValue = emptyList<Qso>()
         )
     
     val latestLog = logs.map { it.firstOrNull() }
@@ -526,63 +526,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         QuickAction("🛠", "Tools", Screen.Tools.route),
         QuickAction("⚙", "Settings", Screen.Settings.route)
     )
-
-    // Logbook Actions
-    fun addLog(
-        callsign: String,
-        name: String = "",
-        qth: String = "",
-        frequency: String,
-        band: String,
-        mode: String,
-        rstSent: String = "59",
-        rstReceived: String = "59",
-        power: String = "",
-        timestamp: Long = System.currentTimeMillis(),
-        notes: String = "",
-        sotaRef: String = "",
-        potaRef: String = "",
-        wwffRef: String = "",
-        hemaRef: String = "",
-        siotaRef: String = "",
-        vkShireRef: String = ""
-    ) {
-        viewModelScope.launch {
-            logRepository.addLog(
-                LogEntryEntity(
-                    callsign = callsign.trim(),
-                    name = name.trim(),
-                    qth = qth.trim(),
-                    frequency = frequency.trim(),
-                    band = band.trim(),
-                    mode = mode.trim(),
-                    rstSent = rstSent,
-                    rstReceived = rstReceived,
-                    power = power.trim(),
-                    timestamp = timestamp,
-                    notes = notes.trim(),
-                    sotaRef = sotaRef.trim(),
-                    potaRef = potaRef.trim(),
-                    wwffRef = wwffRef.trim(),
-                    hemaRef = hemaRef.trim(),
-                    siotaRef = siotaRef.trim(),
-                    vkShireRef = vkShireRef.trim()
-                )
-            )
-        }
-    }
-
-    fun updateLog(entry: LogEntryEntity) {
-        viewModelScope.launch {
-            logRepository.updateLog(entry)
-        }
-    }
-
-    fun deleteLog(entry: LogEntryEntity) {
-        viewModelScope.launch {
-            logRepository.deleteLog(entry)
-        }
-    }
 
     // Shack Actions
     fun addEquipment(

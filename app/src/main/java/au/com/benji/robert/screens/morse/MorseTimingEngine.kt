@@ -83,9 +83,9 @@ class MorseTimingEngine(
             onToneAction(false)
             
             val currentWpm = wpm.get()
-            val unitMs = 1200L / currentWpm
+            val unitMs = 1200.0 / currentWpm
             val duration = System.currentTimeMillis() - startTime
-            val element = if (duration < unitMs * 2) "." else "-"
+            val element = if (duration < unitMs * 2.0) "." else "-"
             onElementSent(element)
             onToneStateChanged(false)
         }
@@ -114,45 +114,46 @@ class MorseTimingEngine(
 
     private fun sendElement(element: String) {
         val currentWpm = wpm.get()
-        val unitMs = 1200L / currentWpm
-        val durationMs = if (element == ".") unitMs else (unitMs * 3 * weighting.get()).toLong()
+        val unitMs = 1200.0 / currentWpm
+        val durationMs = if (element == ".") unitMs else (unitMs * 3.0 * weighting.get())
         
         onToneAction(true)
         onToneStateChanged(true)
         onElementSent(element)
         lastSentElement = element
         
-        sleepNanos(durationMs * 1_000_000L, element)
+        sleepNanos((durationMs * 1_000_000.0).toLong(), element)
         onToneAction(false)
+        onToneStateChanged(false)
         
         // Intra-character gap (always 1 unit at current WPM)
-        sleepNanos(unitMs * 1_000_000L, element)
-        onToneStateChanged(false)
+        sleepNanos((unitMs * 1_000_000.0).toLong(), element)
     }
 
     private fun executeCommand(command: TimingCommand) {
         val currentWpm = wpm.get()
         val currentFarnsworthWpm = farnsworthWpm.get()
-        val unitMs = 1200L / currentWpm
-        val fUnitMs = 1200L / currentFarnsworthWpm
+        val unitMs = 1200.0 / currentWpm
+        val fUnitMs = 1200.0 / currentFarnsworthWpm
 
         when (command) {
             is TimingCommand.PlayElement -> {
-                val durationMs = if (command.element == ".") unitMs else (unitMs * 3).toLong()
+                val durationMs = if (command.element == ".") unitMs else (unitMs * 3.0)
                 onToneAction(true)
                 onToneStateChanged(true)
-                // Removed onElementSent(command.element) to prevent playback from simulating keypresses in the UI/Decoder
-                sleepNanos(durationMs * 1_000_000L)
+                sleepNanos((durationMs * 1_000_000.0).toLong())
                 onToneAction(false)
-                
-                // Every element is followed by 1 unit of silence (intra-character gap)
-                sleepNanos(unitMs * 1_000_000L)
                 onToneStateChanged(false)
+                
+                // Intra-character gap (always 1 unit at current WPM speed)
+                sleepNanos((unitMs * 1_000_000.0).toLong())
             }
             is TimingCommand.Gap -> {
+                // For inter-character (3 units) and inter-word (7 units) gaps, 
+                // 1 unit is already spent in intra-character gap above.
                 val actualUnits = (command.units - 1).coerceAtLeast(0)
                 if (actualUnits > 0) {
-                    sleepNanos(fUnitMs * actualUnits * 1_000_000L)
+                    sleepNanos((fUnitMs * actualUnits * 1_000_000.0).toLong())
                 }
             }
             is TimingCommand.NotifyCharacterComplete -> {
@@ -205,17 +206,36 @@ class MorseTimingEngine(
 
     fun enqueueText(text: String) {
         commandQueue.clear()
-        for (char in text.uppercase()) {
-            if (char == ' ') {
+        val trimmedText = text.uppercase().trim()
+        if (trimmedText.isEmpty()) return
+
+        // Split by whitespace to identify words
+        val words = trimmedText.split(Regex("\\s+"))
+        
+        for (wIndex in words.indices) {
+            val word = words[wIndex]
+            
+            for (cIndex in word.indices) {
+                val char = word[cIndex]
+                val code = MorseCodeMap[char] ?: continue
+                
+                for (element in code) {
+                    commandQueue.add(TimingCommand.PlayElement(element.toString()))
+                }
+                
+                // After every character, we add a character gap (3 units).
+                // EXCEPT if it's the last character of a word and there's a word gap coming next.
+                if (cIndex < word.length - 1) {
+                    commandQueue.add(TimingCommand.Gap(3))
+                }
+                
+                commandQueue.add(TimingCommand.NotifyCharacterComplete)
+            }
+            
+            // After every word, we add a word gap (7 units).
+            if (wIndex < words.size - 1) {
                 commandQueue.add(TimingCommand.Gap(7))
-                continue
             }
-            val code = MorseCodeMap[char] ?: continue
-            for (element in code) {
-                commandQueue.add(TimingCommand.PlayElement(element.toString()))
-            }
-            commandQueue.add(TimingCommand.Gap(3))
-            commandQueue.add(TimingCommand.NotifyCharacterComplete)
         }
     }
 

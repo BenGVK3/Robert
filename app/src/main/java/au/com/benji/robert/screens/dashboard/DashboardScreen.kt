@@ -784,7 +784,7 @@ fun RecentDxSpotsCard(modifier: Modifier, spots: List<DxSpot>, onClick: () -> Un
 }
 
 @Composable
-fun LatestLogCard(modifier: Modifier, log: LogEntryEntity?, navController: NavHostController) {
+fun LatestLogCard(modifier: Modifier, log: Qso?, navController: NavHostController) {
     DashboardCard(
         modifier = modifier.clickable { navController.navigate(Screen.Logbook.route) },
         title = "LATEST LOG",
@@ -802,10 +802,10 @@ fun LatestLogCard(modifier: Modifier, log: LogEntryEntity?, navController: NavHo
         } else {
             Column(verticalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxHeight()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(log.callsign, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(log.callWorked, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.White)
                     Text(log.band, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
                 }
-                Text("${log.mode} • ${log.frequency}k • ${log.power}W", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                Text("${log.mode} • ${log.frequency}MHz • ${log.power}W", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
                 Text(if (log.name.isNotEmpty()) log.name else "---", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00B2FF), fontSize = 8.sp, maxLines = 1)
             }
         }

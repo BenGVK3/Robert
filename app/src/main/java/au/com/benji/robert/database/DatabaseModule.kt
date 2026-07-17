@@ -48,6 +48,19 @@ object DatabaseModule {
         return database(context).netDao()
     }
 
+    fun logbookDao(context: Context): LogbookDao {
+        return database(context).logbookDao()
+    }
+
+    private var logbookRepository: au.com.benji.robert.repository.LogbookRepository? = null
+
+    fun logbookRepository(context: Context): au.com.benji.robert.repository.LogbookRepository {
+        return logbookRepository ?: au.com.benji.robert.repository.LogbookRepository(
+            logbookDao(context),
+            context.applicationContext
+        ).also { logbookRepository = it }
+    }
+
     private var bandConditionsRepository: au.com.benji.robert.repository.propagation.BandConditionsRepository? = null
 
     fun bandConditionsRepository(context: Context): au.com.benji.robert.repository.propagation.BandConditionsRepository {

@@ -55,7 +55,16 @@ class Converters {
     }
 
     @TypeConverter
-    fun toIntList(value: String): List<Int> {
-        return if (value.isEmpty()) emptyList() else value.split(",").mapNotNull { it.toIntOrNull() }
+    fun fromQslStatus(value: au.com.benji.robert.models.QslStatus): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toQslStatus(value: String): au.com.benji.robert.models.QslStatus {
+        return try {
+            au.com.benji.robert.models.QslStatus.valueOf(value)
+        } catch (_: Exception) {
+            au.com.benji.robert.models.QslStatus.NONE
+        }
     }
 }

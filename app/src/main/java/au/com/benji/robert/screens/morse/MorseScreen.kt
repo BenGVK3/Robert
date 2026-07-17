@@ -39,9 +39,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.theme.RobertColors
 import au.com.benji.robert.theme.Spacing
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.isGranted
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun MorseScreen(
     paddingValues: PaddingValues,
@@ -67,7 +70,9 @@ fun MorseScreen(
             CenterAlignedTopAppBar(
                 title = { 
                     Text(
-                        if (currentSection == MorseSection.Menu) "MORSE SUITE" else currentSection.name.uppercase(),
+                        if (currentSection == MorseSection.Menu) "MORSE SUITE" 
+                        else if (currentSection == MorseSection.Trainer) "TRAINING"
+                        else currentSection.name.uppercase(),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 2.sp,
@@ -92,10 +97,12 @@ fun MorseScreen(
                 )
             )
         },
-        containerColor = RobertColors.Background,
-        modifier = Modifier.padding(bottom = paddingValues.calculateBottomPadding())
+        containerColor = RobertColors.Background
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier
+            .padding(top = innerPadding.calculateTopPadding(), bottom = paddingValues.calculateBottomPadding())
+            .fillMaxSize()
+        ) {
             AnimatedContent(
                 targetState = currentSection,
                 transitionSpec = {
@@ -130,8 +137,8 @@ fun MorseSettingsDialog(
     if (showKochConfirm) {
         AlertDialog(
             onDismissRequest = { showKochConfirm = false },
-            title = { Text("Reset Koch Progress?") },
-            text = { Text("This will reset your progress in the Koch (Sending) course back to Lesson 1. This action cannot be undone.") },
+            title = { Text("Reset Sending Progress?") },
+            text = { Text("This will reset your progress in the Sending course back to Lesson 1. This action cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -219,7 +226,7 @@ fun MorseSettingsDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusRed),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("RESET KOCH COURSE PROGRESS")
+                            Text("RESET SENDING COURSE PROGRESS")
                         }
                         
                         Button(
@@ -274,7 +281,7 @@ fun MorseMenu(viewModel: MorseViewModel) {
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     
     val menuItems = listOf(
-        MorseMenuItem("Training (Koch)", "Course & Practice Modes • 20+ WPM Recommended", Icons.Default.School, MorseSection.Trainer, RobertColors.Primary),
+        MorseMenuItem("Training", "Course & Practice Modes • 20+ WPM Recommended", Icons.Default.School, MorseSection.Trainer, RobertColors.Primary),
         MorseMenuItem("Practice", "Callsigns, Words, Numbers & Sending", Icons.Default.Keyboard, MorseSection.Practice, RobertColors.StatusGreen),
         MorseMenuItem("Decoder", "Live audio transcription", Icons.Default.GraphicEq, MorseSection.Decoder, RobertColors.StatusOrange),
         MorseMenuItem("Simulator", "Virtual Radio Operator", Icons.Default.RecordVoiceOver, MorseSection.Simulator, Color(0xFF9C27B0))
@@ -292,29 +299,55 @@ fun MorseMenu(viewModel: MorseViewModel) {
                 shape = RoundedCornerShape(24.dp)
             ) {
                 Column(modifier = Modifier.padding(Spacing.Medium)) {
-                    Text("Overall Mastery", style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${progress.kochLessonIndex + 1} / 53", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black)
-                        Spacer(Modifier.weight(1f))
-                        Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(
+                    Text("Training Progress", style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Keyboard, null, tint = RobertColors.Primary, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Sending: ${progress.kochLessonIndex + 1}/53", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            }
+                            LinearProgressIndicator(
                                 progress = { (progress.kochLessonIndex + 1) / 53f },
-                                modifier = Modifier.size(64.dp),
-                                strokeWidth = 8.dp,
+                                modifier = Modifier.padding(top = 4.dp).fillMaxWidth(0.9f).height(4.dp).clip(CircleShape),
+                                color = RobertColors.Primary
+                            )
+                            
+                            Spacer(Modifier.height(8.dp))
+                            
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, null, tint = Color(0xFF00BCD4), modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Receive: ${progress.receiveLessonIndex + 1}/53", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            }
+                            LinearProgressIndicator(
+                                progress = { (progress.receiveLessonIndex + 1) / 53f },
+                                modifier = Modifier.padding(top = 4.dp).fillMaxWidth(0.9f).height(4.dp).clip(CircleShape),
+                                color = Color(0xFF00BCD4)
+                            )
+                        }
+
+                        Box(contentAlignment = Alignment.Center) {
+                            val overallProgress = ((progress.kochLessonIndex + 1 + progress.receiveLessonIndex + 1) / 106f)
+                            CircularProgressIndicator(
+                                progress = { overallProgress },
+                                modifier = Modifier.size(56.dp),
+                                strokeWidth = 6.dp,
                                 color = RobertColors.Primary,
                                 trackColor = RobertColors.Surface
                             )
-                            Text("${((progress.kochLessonIndex + 1) * 100 / 53)}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("${(overallProgress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     }
                     
-                    Spacer(Modifier.height(Spacing.Medium))
+                    Spacer(Modifier.height(Spacing.Small))
                     
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Large)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         StatItemSmall("Accuracy", "${progress.totalAccuracy.toInt()}%")
                         StatItemSmall("Streak", "${progress.practiceStreak}")
                         StatItemSmall("Best", "${progress.longestStreak}")
-                        StatItemSmall("Total Chars", "${progress.totalCharactersCopied}")
+                        StatItemSmall("Chars", "${progress.totalCharactersCopied}")
                     }
                 }
             }
@@ -498,7 +531,8 @@ fun PracticeHome(viewModel: MorseViewModel) {
         val practiceModes = listOf(
             TrainerMenuItemDef("Callsigns", "Copy realistic world callsigns", Icons.Default.Public, TrainerMode.Callsigns, Color(0xFF00BCD4)),
             TrainerMenuItemDef("Words", "Common English words", Icons.Default.TextFields, TrainerMode.Words, RobertColors.Primary),
-            TrainerMenuItemDef("Numbers", "Focus on digits", Icons.Default.Numbers, TrainerMode.Numbers, RobertColors.StatusOrange)
+            TrainerMenuItemDef("Numbers", "Focus on digits", Icons.Default.Numbers, TrainerMode.Numbers, RobertColors.StatusOrange),
+            TrainerMenuItemDef("Q Codes Etc.", "Glossary & Radio Jargon", Icons.AutoMirrored.Filled.MenuBook, TrainerMode.Prosigns, Color(0xFF9C27B0))
         )
 
         practiceModes.forEach { item ->
@@ -544,7 +578,7 @@ fun CurriculumDialog(sequence: List<Char>, currentLesson: Int, onDismiss: () -> 
             ) {
                 item {
                     Text(
-                        "The Koch Method introduces characters one by one. Master each lesson with 90% accuracy before moving on.",
+                        "The curriculum introduces characters one by one. Master each lesson with 90% accuracy before moving on.",
                         style = MaterialTheme.typography.bodySmall,
                         color = RobertColors.TextSecondary,
                         modifier = Modifier.padding(bottom = 16.dp)
@@ -614,6 +648,7 @@ fun CurriculumDialog(sequence: List<Char>, currentLesson: Int, onDismiss: () -> 
 fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
     val session by viewModel.trainerSession.collectAsStateWithLifecycle()
     val target by viewModel.trainerTarget.collectAsStateWithLifecycle()
+    val targetMeaning by viewModel.trainerTargetMeaning.collectAsStateWithLifecycle()
     val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
     val feedback by viewModel.trainerFeedback.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
@@ -631,7 +666,7 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
+                        IconButton(onClick = { viewModel.setSection(MorseSection.Menu) }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                         }
                         Column(modifier = Modifier.weight(1f)) {
@@ -660,7 +695,7 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
         } else {
             // Simple header for endless modes
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
+                IconButton(onClick = { viewModel.setSection(MorseSection.Menu) }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                 }
                 Text(mode.name, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
@@ -669,19 +704,29 @@ fun TrainerExercise(viewModel: MorseViewModel, mode: TrainerMode) {
 
         // Target Character Area - Smaller card
         Card(
-            modifier = Modifier.fillMaxWidth().height(80.dp),
+            modifier = Modifier.fillMaxWidth().height(100.dp),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 16.dp)) {
                     Text("TARGET", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
                     Text(
                         target,
-                        style = MaterialTheme.typography.displayMedium,
+                        style = if (target.length > 5) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayMedium,
                         fontWeight = FontWeight.Black,
                         color = RobertColors.Primary
                     )
+                    
+                    if (targetMeaning != null) {
+                        Text(
+                            targetMeaning!!,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = RobertColors.TextSecondary,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                     
                     // Visual Hint Logic: Show hint for first 3 attempts of a new character
                     val targetChar = target.firstOrNull() ?: ' '
@@ -796,9 +841,9 @@ fun ReceivePracticeInternal(viewModel: MorseViewModel) {
             colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { viewModel.setSection(MorseSection.Trainer) }) {
+                    IconButton(onClick = { viewModel.setSection(MorseSection.Menu) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -865,50 +910,50 @@ fun ReceivePracticeInternal(viewModel: MorseViewModel) {
             if (feedback == null && !revealed) {
                 Button(
                     onClick = { viewModel.playCurrentText() },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(1f).height(42.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("PLAY", fontSize = 11.sp, maxLines = 1)
+                    Text("PLAY", fontSize = 10.sp, maxLines = 1)
                 }
 
                 Button(
                     onClick = { viewModel.revealCurrentTarget() },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(1f).height(42.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusOrange),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    Icon(Icons.Default.Visibility, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Visibility, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("REVEAL", fontSize = 11.sp, maxLines = 1)
+                    Text("REVEAL", fontSize = 10.sp, maxLines = 1)
                 }
 
                 Button(
                     onClick = { viewModel.checkReceiveAnswer(userAnswer) },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(1f).height(42.dp),
+                    shape = RoundedCornerShape(12.dp),
                     enabled = userAnswer.isNotEmpty(),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("CHECK", fontSize = 11.sp, maxLines = 1)
+                    Text("CHECK", fontSize = 10.sp, maxLines = 1)
                 }
             } else if (feedback?.isCorrect != true) {
                 Button(
                     onClick = { viewModel.nextTrainerExercise() },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(1f).height(42.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusGreen),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("NEXT", fontSize = 11.sp, maxLines = 1)
+                    Text("NEXT", fontSize = 10.sp, maxLines = 1)
                 }
             }
         }
@@ -1011,21 +1056,91 @@ fun SendScreen(viewModel: MorseViewModel) {
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun DecoderScreen(viewModel: MorseViewModel) {
     val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
     val isDecoding by viewModel.isDecoding.collectAsStateWithLifecycle()
+    val visualizerData by viewModel.visualizerData.collectAsStateWithLifecycle()
+    
+    val micPermissionState = rememberPermissionState(android.Manifest.permission.RECORD_AUDIO)
+
     Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
         Card(modifier = Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface), shape = RoundedCornerShape(24.dp)) {
             Box(modifier = Modifier.padding(Spacing.Medium).fillMaxSize()) {
-                Text(decodedText.ifEmpty { if (isDecoding) "LISTENING..." else "START LISTENING..." }, fontFamily = FontFamily.Monospace)
+                Text(
+                    decodedText.ifEmpty { if (isDecoding) "LISTENING..." else "START LISTENING..." }, 
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
+        
         Spacer(modifier = Modifier.height(Spacing.Medium))
-        Button(onClick = { viewModel.toggleDecoding() }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = if (isDecoding) RobertColors.StatusRed else RobertColors.Primary)) {
+
+        // Spectrum Visualizer
+        Card(
+            modifier = Modifier.fillMaxWidth().height(100.dp),
+            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                if (isDecoding) {
+                    SpectrumVisualizer(visualizerData)
+                } else {
+                    Text("AUDIO VISUALIZER", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary.copy(alpha = 0.3f))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.Medium))
+
+        Button(
+            onClick = { 
+                if (micPermissionState.status.isGranted) {
+                    viewModel.toggleDecoding() 
+                } else {
+                    micPermissionState.launchPermissionRequest()
+                }
+            }, 
+            modifier = Modifier.fillMaxWidth().height(56.dp), 
+            colors = ButtonDefaults.buttonColors(containerColor = if (isDecoding) RobertColors.StatusRed else RobertColors.Primary)
+        ) {
             Icon(if (isDecoding) Icons.Default.MicOff else Icons.Default.Mic, null)
             Spacer(Modifier.width(8.dp))
             Text(if (isDecoding) "STOP" else "START")
+        }
+    }
+}
+
+@Composable
+fun SpectrumVisualizer(data: FloatArray) {
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        data.forEach { magnitude ->
+            val heightFactor by animateFloatAsState(
+                targetValue = magnitude.coerceIn(0.02f, 1f),
+                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                label = "barHeight"
+            )
+            
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(heightFactor)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                RobertColors.Secondary,
+                                RobertColors.Primary.copy(alpha = 0.7f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
         }
     }
 }

@@ -165,6 +165,101 @@ object DatabaseProvider {
         }
     }
 
+    private val MIGRATION_18_19 = object : Migration(18, 19) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS radio_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    manufacturer TEXT NOT NULL,
+                    maxPower REAL NOT NULL,
+                    supportedModes TEXT NOT NULL,
+                    supportedBands TEXT NOT NULL,
+                    notes TEXT NOT NULL
+                )
+            """.trimIndent())
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS antenna_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    gain REAL NOT NULL,
+                    type TEXT NOT NULL,
+                    polarisation TEXT NOT NULL,
+                    notes TEXT NOT NULL
+                )
+            """.trimIndent())
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS operator_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    callsign TEXT NOT NULL,
+                    portableCallsign TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    defaultRadioId INTEGER,
+                    defaultAntennaId INTEGER,
+                    defaultPower REAL NOT NULL,
+                    preferredMode TEXT NOT NULL,
+                    preferredBands TEXT NOT NULL
+                )
+            """.trimIndent())
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS qsos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    operatorCallsign TEXT NOT NULL,
+                    onAirCallsign TEXT NOT NULL,
+                    callWorked TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    frequency REAL NOT NULL,
+                    band TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    rstSent TEXT NOT NULL,
+                    rstReceived TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    qth TEXT NOT NULL,
+                    gridsquare TEXT NOT NULL,
+                    power REAL NOT NULL,
+                    radioId INTEGER,
+                    antennaId INTEGER,
+                    notes TEXT NOT NULL,
+                    qslSent INTEGER NOT NULL,
+                    qslReceived INTEGER NOT NULL,
+                    lotwStatus TEXT NOT NULL,
+                    eqslStatus TEXT NOT NULL,
+                    clublogStatus TEXT NOT NULL,
+                    sotaRef TEXT NOT NULL,
+                    potaRef TEXT NOT NULL,
+                    wwffRef TEXT NOT NULL,
+                    hemaRef TEXT NOT NULL,
+                    siotaRef TEXT NOT NULL,
+                    vkShireRef TEXT NOT NULL,
+                    mySotaRef TEXT NOT NULL,
+                    myPotaRef TEXT NOT NULL,
+                    myWwffRef TEXT NOT NULL,
+                    myHemaRef TEXT NOT NULL,
+                    mySiotaRef TEXT NOT NULL,
+                    myVkShireRef TEXT NOT NULL,
+                    satelliteName TEXT NOT NULL DEFAULT '',
+                    satelliteMode TEXT NOT NULL DEFAULT '',
+                    contestId TEXT NOT NULL DEFAULT '',
+                    country TEXT NOT NULL DEFAULT '',
+                    dxcc TEXT NOT NULL DEFAULT '',
+                    cqZone INTEGER NOT NULL DEFAULT 0,
+                    ituZone INTEGER NOT NULL DEFAULT 0,
+                    continent TEXT NOT NULL DEFAULT '',
+                    stationLat REAL,
+                    stationLon REAL
+                )
+            """.trimIndent())
+            
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_qsos_callWorked ON qsos (callWorked)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_qsos_timestamp ON qsos (timestamp)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_qsos_band ON qsos (band)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_qsos_mode ON qsos (mode)")
+        }
+    }
+
     private fun addColumnIfNotExists(db: SupportSQLiteDatabase, tableName: String, columnName: String, columnDef: String) {
         val cursor = db.query("PRAGMA table_info($tableName)")
         var exists = false
@@ -193,7 +288,7 @@ object DatabaseProvider {
                 RobertDatabase::class.java,
                 "robert.db"
             )
-            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
+            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
             .build()
 
             INSTANCE = instance

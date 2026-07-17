@@ -30,6 +30,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 } else {
                     decodeJob?.cancel()
+                    wordGapJob?.cancel()
                 }
             }
         }
@@ -68,6 +69,9 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _trainerTarget = MutableStateFlow("")
     val trainerTarget = _trainerTarget.asStateFlow()
 
+    private val _trainerTargetMeaning = MutableStateFlow<String?>(null)
+    val trainerTargetMeaning = _trainerTargetMeaning.asStateFlow()
+
     private val _trainerFeedback = MutableStateFlow<TrainerFeedback?>(null)
     val trainerFeedback = _trainerFeedback.asStateFlow()
 
@@ -89,10 +93,26 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _isDecoding = MutableStateFlow(false)
     val isDecoding = _isDecoding.asStateFlow()
 
+    private val _visualizerData = MutableStateFlow(FloatArray(64))
+    val visualizerData = _visualizerData.asStateFlow()
+
+    private val decoder = MorseAudioDecoder(
+        onDecodedChar = { char ->
+            viewModelScope.launch(Dispatchers.Main) {
+                _decodedText.value += char
+            }
+        },
+        onVisualizerData = { data ->
+            _visualizerData.value = data
+        },
+        initialWpm = _settings.value.wpm
+    )
+
     private val _trainerMode = MutableStateFlow<TrainerMode?>(null)
     val trainerMode = _trainerMode.asStateFlow()
 
     private var decodeJob: Job? = null
+    private var wordGapJob: Job? = null
     private var autoplayJob: Job? = null
     
     // Data-driven Koch Lessons
@@ -118,6 +138,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             repository.settings.collectLatest { 
                 _settings.value = it
                 keyer.updateSettings(it)
+                decoder.updateWpm(it.wpm)
             }
         }
         viewModelScope.launch {
@@ -374,14 +395,31 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun generateTrainerExercise(mode: TrainerMode) {
+        var meaning: String? = null
         val target = when (mode) {
             TrainerMode.Numbers -> (1..5).map { ('0'..'9').random() }.joinToString("")
             TrainerMode.Punctuation -> (1..3).map { ".,/?=".random() }.joinToString("")
             TrainerMode.Callsigns -> generateCallsign()
-            TrainerMode.Words -> listOf("THE", "AND", "BK", "CQ", "DX", "73").random()
+            TrainerMode.Words -> listOf(
+                "THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "ANY", "CAN", "HAD", "HER", "WAS", "ONE", "OUR", "OUT", "DAY", "GET", "HAS", "HIM",
+                "HOW", "MAN", "NEW", "NOW", "OLD", "SEE", "TWO", "WAY", "WHO", "BOY", "DID", "ITS", "LET", "PUT", "SAY", "SHE", "TOO", "USE", "RADIO", "HAM",
+                "MORSE", "CW", "SIGNAL", "POWER", "FREQ", "DX", "BEST", "NAME", "CITY", "STATION", "ANTENNA", "GROUND", "CABLE", "WIRE", "TUNER", "AMP",
+                "VOLT", "WATTS", "OHMS", "KEYER", "SPEED", "FAST", "SLOW", "SOUND", "NOISE", "STATIC", "BAND", "METER", "WAVE", "SHORT", "LONG", "GOOD",
+                "FINE", "NICE", "COPIED", "HEARD", "WORKED", "THANKS", "PLEASE", "SORRY", "AGAIN", "LATER", "TOMORROW", "NIGHT", "WEATHER", "SUNNY", "RAINY",
+                "COLD", "HOT", "WINDY", "CLEAR", "CLOUDY", "TEMP", "DEGREE", "NORTH", "SOUTH", "EAST", "WEST", "HOME", "ROAD", "TRIP", "PORTABLE", "MOBILE"
+            ).random()
+            TrainerMode.Prosigns -> {
+                val item = au.com.benji.robert.repository.GlossaryRepository().getGlossaryItems()
+                    .filter { it.category == au.com.benji.robert.models.GlossaryCategory.Q_CODE || it.category == au.com.benji.robert.models.GlossaryCategory.JARGON || it.category == au.com.benji.robert.models.GlossaryCategory.NUMERIC_CODE }
+                    .filter { !it.term.startsWith("10-") } // Exclude 10 codes
+                    .random()
+                meaning = item.definition
+                item.term.uppercase()
+            }
             else -> (1..3).map { kochSequence.random() }.joinToString("")
         }
         _trainerTarget.value = target
+        _trainerTargetMeaning.value = meaning
         _decodedText.value = ""
         _currentSymbolBuffer.value = ""
         _trainerFeedback.value = null
@@ -412,7 +450,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         } else if (isCorrect) {
             // Automatic load next target for endless modes
             viewModelScope.launch {
-                delay(1200)
+                delay(1000)
                 generateTrainerExercise(_trainerMode.value ?: TrainerMode.Koch)
             }
         }
@@ -455,7 +493,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             }
         } else if (isCorrect) {
             viewModelScope.launch {
-                delay(1200)
+                delay(1000)
                 val currentProgress = _progress.value
                 if (mode == TrainerMode.Koch) {
                     generateKochExercise(currentProgress.kochLessonIndex)
@@ -516,17 +554,27 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun handleElementSent(element: String) {
         decodeJob?.cancel()
+        wordGapJob?.cancel()
         _lastElementSent.value = element
         _currentSymbolBuffer.value += element
     }
 
     private fun startDecodingTimer() {
         decodeJob?.cancel()
+        wordGapJob?.cancel()
         decodeJob = viewModelScope.launch {
             val settings = _settings.value
-            val unitMs = 1200 / settings.farnsworthWpm
-            val gapMultiplier = if (_currentSection.value == MorseSection.Trainer) 5.0 else 3.0
-            delay((unitMs * gapMultiplier).toLong())
+            val unitMs = 1200.0 / settings.farnsworthWpm
+            
+            // Standard Morse: 1 unit intra, 3 units char, 7 units word.
+            // We set the decoding thresholds between these values to be responsive but forgiving.
+            // Char gap = 2.2 units (Wait for 2.2 units of silence to end a character)
+            // Word gap = 6.0 units (Wait for 6.0 total units of silence to end a word)
+            val charGapMultiplier = if (_currentSection.value == MorseSection.Trainer) 5.0 else 2.2
+            val wordGapMultiplier = 6.0
+            
+            // Wait for character gap
+            delay((unitMs * charGapMultiplier).toLong())
             
             val buffer = _currentSymbolBuffer.value
             if (buffer.isNotEmpty()) {
@@ -535,7 +583,9 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
                 if (char != null) {
                     _decodedText.value += char
                     
-                    if (_currentSection.value == MorseSection.Trainer && _trainerMode.value != TrainerMode.Character) {
+                    val isInTrainerOrPractice = _currentSection.value == MorseSection.Trainer || _currentSection.value == MorseSection.Practice
+                    
+                    if (isInTrainerOrPractice && _trainerMode.value != TrainerMode.Character) {
                         val target = _trainerTarget.value.replace(" ", "").trim().uppercase()
                         val currentDecoded = _decodedText.value.replace(" ", "").trim().uppercase()
                         
@@ -564,6 +614,16 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 _currentSymbolBuffer.value = ""
+
+                // Start word gap timer ONLY after a character is finished and we've decoded it.
+                if (settings.autoWordSpacing && (_currentSection.value == MorseSection.Send || _currentSection.value == MorseSection.Simulator)) {
+                    wordGapJob = viewModelScope.launch {
+                        delay((unitMs * (wordGapMultiplier - charGapMultiplier)).toLong())
+                        if (_decodedText.value.isNotEmpty() && !_decodedText.value.endsWith(" ")) {
+                            _decodedText.value += " "
+                        }
+                    }
+                }
             }
         }
     }
@@ -586,10 +646,19 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleDecoding() {
-        _isDecoding.value = !_isDecoding.value
+        val newState = !_isDecoding.value
+        _isDecoding.value = newState
+        if (newState) {
+            _decodedText.value = ""
+            decoder.start()
+        } else {
+            decoder.stop()
+            _visualizerData.value = FloatArray(64)
+        }
     }
 
     override fun onCleared() {
         keyer.release()
+        decoder.stop()
     }
 }

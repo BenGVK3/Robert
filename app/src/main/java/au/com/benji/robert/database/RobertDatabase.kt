@@ -20,9 +20,13 @@ import androidx.room.TypeConverters
         FavoriteSdrEntity::class,
         UserSettingsEntity::class,
         CallsignCacheEntity::class,
-        NetEntity::class
+        NetEntity::class,
+        RadioProfileEntity::class,
+        AntennaProfileEntity::class,
+        OperatorProfileEntity::class,
+        QsoEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -30,6 +34,7 @@ abstract class RobertDatabase : RoomDatabase() {
 
     abstract fun shackDao(): ShackDao
     abstract fun logDao(): LogDao
+    abstract fun logbookDao(): LogbookDao
     abstract fun repeaterDao(): RepeaterDao
     abstract fun moonDao(): MoonDao
     abstract fun weatherDao(): WeatherDao
