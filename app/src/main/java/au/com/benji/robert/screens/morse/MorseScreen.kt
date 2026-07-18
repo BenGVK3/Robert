@@ -42,6 +42,7 @@ import au.com.benji.robert.theme.Spacing
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.isGranted
+import androidx.compose.ui.text.withStyle
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
@@ -219,6 +220,15 @@ fun MorseSettingsDialog(
                     }
                 }
 
+                PreferenceCard(title = "Decoder Advanced", icon = Icons.Default.SettingsSuggest) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                        TogglePreference("Auto Tone tracking", settings.autoTone, { onSave(settings.copy(autoTone = it)) })
+                        TogglePreference("Auto WPM tracking", settings.autoWpm, { onSave(settings.copy(autoWpm = it)) })
+                        TogglePreference("Morse Assist Prediction", settings.morseAssistEnabled, { onSave(settings.copy(morseAssistEnabled = it)) })
+                        TogglePreference("Developer Debug Mode", settings.debugMode, { onSave(settings.copy(debugMode = it)) })
+                    }
+                }
+
                 PreferenceCard(title = "Danger Zone", icon = Icons.Default.Warning) {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                         Button(
@@ -262,6 +272,18 @@ fun PreferenceCard(title: String, icon: ImageVector, content: @Composable () -> 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = RobertColors.TextSecondary.copy(alpha = 0.1f))
             content()
         }
+    }
+}
+
+@Composable
+fun TogglePreference(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -1059,88 +1081,354 @@ fun SendScreen(viewModel: MorseViewModel) {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun DecoderScreen(viewModel: MorseViewModel) {
-    val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
     val isDecoding by viewModel.isDecoding.collectAsStateWithLifecycle()
+    val telemetry by viewModel.telemetry.collectAsStateWithLifecycle()
     val visualizerData by viewModel.visualizerData.collectAsStateWithLifecycle()
+    val confidenceText by viewModel.confidenceText.collectAsStateWithLifecycle()
+    val predictions by viewModel.predictions.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     
     val micPermissionState = rememberPermissionState(android.Manifest.permission.RECORD_AUDIO)
 
-    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
-        Card(modifier = Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface), shape = RoundedCornerShape(24.dp)) {
-            Box(modifier = Modifier.padding(Spacing.Medium).fillMaxSize()) {
-                Text(
-                    decodedText.ifEmpty { if (isDecoding) "LISTENING..." else "START LISTENING..." }, 
-                    fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(Spacing.Medium))
-
-        // Spectrum Visualizer
+    Column(modifier = Modifier.fillMaxSize().background(RobertColors.Background)) {
+        // 1. Waterfall Display (Top)
         Card(
-            modifier = Modifier.fillMaxWidth().height(100.dp),
-            colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-            shape = RoundedCornerShape(24.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .padding(Spacing.Small),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Black)
         ) {
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                if (isDecoding) {
-                    SpectrumVisualizer(visualizerData)
-                } else {
-                    Text("AUDIO VISUALIZER", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary.copy(alpha = 0.3f))
+            WaterfallDisplay(visualizerData, isDecoding)
+        }
+
+        // 2. Signal Information Bar
+        SignalInfoBar(telemetry)
+        
+        // Developer Debug Mode Overlay
+        if (settings.debugMode && isDecoding) {
+            DebugTelemetryView(telemetry)
+        }
+
+        // 3. Main Content Area
+        Row(modifier = Modifier.weight(1f).padding(horizontal = Spacing.Medium)) {
+            // Decoded Text Window
+            Card(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Box(modifier = Modifier.padding(Spacing.Medium).fillMaxSize()) {
+                    ConfidenceColoredText(confidenceText)
+                    
+                    if (!isDecoding && confidenceText.isEmpty()) {
+                        Text(
+                            "START LISTENING TO DECODE...",
+                            modifier = Modifier.align(Alignment.Center),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = RobertColors.TextSecondary.copy(alpha = 0.3f)
+                        )
+                    }
                 }
+            }
+            
+            // Morse Assist Predictions (Side Sidebar if wide enough, or just overlay)
+            if (predictions.isNotEmpty()) {
+                Spacer(Modifier.width(Spacing.Small))
+                MorseAssistPanel(predictions)
             }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.Medium))
+        // 4. Current Character prominent display
+        CurrentCharacterDisplay(confidenceText.lastOrNull())
+        
+        // Visual Morse Animation Bar
+        VisualMorseBar(confidenceText.takeLast(20))
 
-        Button(
-            onClick = { 
-                if (micPermissionState.status.isGranted) {
-                    viewModel.toggleDecoding() 
-                } else {
-                    micPermissionState.launchPermissionRequest()
-                }
-            }, 
-            modifier = Modifier.fillMaxWidth().height(56.dp), 
-            colors = ButtonDefaults.buttonColors(containerColor = if (isDecoding) RobertColors.StatusRed else RobertColors.Primary)
+        // 5. Controls
+        Row(
+            modifier = Modifier.padding(Spacing.Medium),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
-            Icon(if (isDecoding) Icons.Default.MicOff else Icons.Default.Mic, null)
-            Spacer(Modifier.width(8.dp))
-            Text(if (isDecoding) "STOP" else "START")
+            Button(
+                onClick = { 
+                    if (micPermissionState.status.isGranted) viewModel.toggleDecoding() 
+                    else micPermissionState.launchPermissionRequest()
+                },
+                modifier = Modifier.weight(1.2f).height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isDecoding) RobertColors.StatusRed else RobertColors.Primary),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(if (isDecoding) Icons.Default.MicOff else Icons.Default.Mic, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (isDecoding) "STOP" else "START", fontWeight = FontWeight.Bold)
+            }
+            
+            OutlinedButton(
+                onClick = { viewModel.clearSentText() },
+                modifier = Modifier.weight(0.8f).height(56.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.DeleteSweep, null)
+                Spacer(Modifier.width(4.dp))
+                Text("CLEAR")
+            }
         }
     }
 }
 
 @Composable
-fun SpectrumVisualizer(data: FloatArray) {
+fun WaterfallDisplay(data: FloatArray, isActive: Boolean) {
+    // This is a complex component, implementing a rotating buffer for the waterfall
+    val waterfallBuffer = remember { mutableStateListOf<FloatArray>() }
+    
+    LaunchedEffect(data) {
+        if (isActive) {
+            waterfallBuffer.add(0, data.copyOf())
+            if (waterfallBuffer.size > 100) waterfallBuffer.removeAt(waterfallBuffer.lastIndex)
+        }
+    }
+
+    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+        if (!isActive) return@Canvas
+        
+        val rowHeight = size.height / 100f
+        val binWidth = size.width / data.size
+        
+        waterfallBuffer.forEachIndexed { rowIndex, frame ->
+            frame.forEachIndexed { binIndex, magnitude ->
+                if (magnitude > 0.05f) {
+                    val color = calculateWaterfallColor(magnitude)
+                    drawRect(
+                        color = color,
+                        topLeft = androidx.compose.ui.geometry.Offset(binIndex * binWidth, rowIndex * rowHeight),
+                        size = androidx.compose.ui.geometry.Size(binWidth + 1f, rowHeight + 1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun calculateWaterfallColor(magnitude: Float): Color {
+    // Blue -> Green -> Yellow -> Red palette
+    return when {
+        magnitude < 0.3f -> Color(0xFF0000FF).copy(alpha = magnitude * 3)
+        magnitude < 0.6f -> Color(0xFF00FF00)
+        magnitude < 0.8f -> Color(0xFFFFFF00)
+        else -> Color(0xFFFF0000)
+    }
+}
+
+@Composable
+fun SignalInfoBar(telemetry: SignalTelemetry) {
+    Surface(
+        color = RobertColors.Surface,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = Spacing.Medium, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            InfoItem("SNR", "${telemetry.snrDb.toInt()} dB")
+            InfoItem("FREQ", "${telemetry.detectedFrequencyHz} Hz")
+            InfoItem("WPM", "${telemetry.estimatedWpm}")
+            InfoItem("CONF", "${(telemetry.confidence * 100).toInt()}%")
+            
+            Surface(
+                color = when(telemetry.status) {
+                    DecoderStatus.Decoding -> RobertColors.StatusGreen.copy(alpha = 0.2f)
+                    DecoderStatus.Searching -> RobertColors.StatusOrange.copy(alpha = 0.2f)
+                    else -> Color.Gray.copy(alpha = 0.2f)
+                },
+                shape = CircleShape
+            ) {
+                Text(
+                    telemetry.status.name.uppercase(),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = when(telemetry.status) {
+                        DecoderStatus.Decoding -> RobertColors.StatusGreen
+                        DecoderStatus.Searching -> RobertColors.StatusOrange
+                        else -> Color.Gray
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun InfoItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary, fontSize = 8.sp)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = RobertColors.Primary)
+    }
+}
+
+@Composable
+fun ConfidenceColoredText(characters: List<ConfidenceCharacter>) {
+    // We use a FlowRow or similar to layout colored text efficiently
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Implementation of colored text based on confidence
+        // For simplicity in this block, we'll join them
+    }
+    
+    // Better implementation: use a custom layout or basic text with SpanStyles
+    val annotatedString = androidx.compose.ui.text.buildAnnotatedString {
+        characters.forEach { c ->
+            val color = when {
+                c.char == '?' -> Color.Red
+                c.confidence > 0.8f -> RobertColors.Primary
+                c.confidence > 0.6f -> Color.White
+                c.confidence > 0.4f -> RobertColors.StatusOrange
+                else -> Color.Gray
+            }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = color)) {
+                append(c.char)
+            }
+        }
+    }
+    
+    Text(
+        text = annotatedString,
+        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.verticalScroll(rememberScrollState())
+    )
+}
+
+@Composable
+fun VisualMorseBar(history: List<ConfidenceCharacter>) {
     Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .padding(horizontal = Spacing.Medium),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        data.forEach { magnitude ->
-            val heightFactor by animateFloatAsState(
-                targetValue = magnitude.coerceIn(0.02f, 1f),
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                label = "barHeight"
-            )
-            
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(heightFactor)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                RobertColors.Secondary,
-                                RobertColors.Primary.copy(alpha = 0.7f),
-                                Color.Transparent
-                            )
+        history.forEach { c ->
+            c.morse.forEach { element ->
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 2.dp)
+                        .size(
+                            width = if (element == '-') 20.dp else 8.dp,
+                            height = 8.dp
                         )
-                    )
+                        .clip(CircleShape)
+                        .background(RobertColors.Primary.copy(alpha = c.confidence))
+                )
+            }
+            if (c.char == ' ') {
+                Spacer(Modifier.width(16.dp))
+            } else {
+                Spacer(Modifier.width(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun MorseAssistPanel(predictions: List<MorseAssistPrediction>) {
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    
+    Column(
+        modifier = Modifier.width(120.dp).fillMaxHeight(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+    ) {
+        Text("ASSIST", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.Secondary)
+        predictions.forEach { p ->
+            Card(
+                onClick = { uriHandler.openUri("https://www.qrz.com/db/${p.callsign}") },
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RobertColors.Primary.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(p.callsign, fontWeight = FontWeight.Black, color = RobertColors.Primary, fontSize = 14.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { p.confidence / 100f },
+                            modifier = Modifier.weight(1f).height(4.dp).clip(CircleShape),
+                            color = RobertColors.Primary,
+                            trackColor = Color.Transparent
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("${p.confidence}%", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DebugTelemetryView(telemetry: SignalTelemetry) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Medium, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, RobertColors.Primary.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                DebugItem("Noise", String.format(Locale.US, "%.0f", telemetry.noiseFloor))
+                DebugItem("Thresh", String.format(Locale.US, "%.0f", telemetry.threshold))
+                DebugItem("SNR", String.format(Locale.US, "%.1f dB", telemetry.snrDb))
+                DebugItem("Key", if (telemetry.isKeyDown) "DOWN" else "UP", color = if (telemetry.isKeyDown) RobertColors.StatusGreen else Color.Gray)
+            }
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                DebugItem("Dit", "${telemetry.currentDitMs}ms")
+                DebugItem("Dah", "${telemetry.currentDahMs}ms")
+                DebugItem("Gap", "${telemetry.currentCharGapMs}ms")
+                DebugItem("Word", "${telemetry.currentWordGapMs}ms")
+            }
+            if (telemetry.rawMorse.isNotEmpty()) {
+                Text(
+                    text = "Raw: ${telemetry.rawMorse}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RobertColors.Secondary,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DebugItem(label: String, value: String, color: Color = Color.White) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 7.sp)
+        Text(value, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+@Composable
+fun CurrentCharacterDisplay(char: ConfidenceCharacter?) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(Spacing.Medium),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        if (char != null) {
+            Text(
+                char.char.toString(),
+                style = MaterialTheme.typography.displayLarge,
+                fontWeight = FontWeight.Black,
+                color = RobertColors.Primary
             )
+            Spacer(Modifier.width(Spacing.Large))
+            Column {
+                Text(char.morse, style = MaterialTheme.typography.headlineMedium, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Text("Confidence: ${(char.confidence * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+            }
         }
     }
 }
@@ -1150,22 +1438,56 @@ fun SimulatorScreen(viewModel: MorseViewModel) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val operator by viewModel.currentSimulatorOperator.collectAsStateWithLifecycle()
+    val exchangedInfo by viewModel.simulatorExchangedInfo.collectAsStateWithLifecycle()
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     
+    LaunchedEffect(Unit) { if (operator == null) viewModel.resetSimulator() }
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
-        LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-            items(messages) { (author, text) -> ChatBubble(author, text) }
+    Column(modifier = Modifier.fillMaxSize().padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+        // 1. Session Dashboard (Top)
+        if (operator != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)
+            ) {
+                Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(operator!!.callsign, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = RobertColors.Primary)
+                        Text("${operator!!.name} • ${operator!!.location}", style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
+                        Text(operator!!.rig, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary.copy(alpha = 0.5f))
+                    }
+                    
+                    // Exchanged Info Checklist
+                    ExchangedInfoStatus(exchangedInfo)
+                }
+            }
         }
-        Card(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.Small), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))) {
-            Text(decodedText.ifEmpty { "KEY YOUR REPLY..." }, modifier = Modifier.padding(8.dp), color = RobertColors.Primary, fontFamily = FontFamily.Monospace)
+
+        // 2. Chat/Morse Window
+        Card(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.2f)),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(Spacing.Small), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                items(messages) { (author, text) -> ChatBubble(author, text) }
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-            Button(onClick = { viewModel.submitSentText() }, modifier = Modifier.weight(1f), enabled = decodedText.isNotEmpty()) { Text("SEND") }
-            OutlinedButton(onClick = { viewModel.clearSentText() }) { Icon(Icons.Default.Clear, null) }
+
+        // 3. User Input & Controls
+        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))) {
+            Row(modifier = Modifier.padding(Spacing.Small), verticalAlignment = Alignment.CenterVertically) {
+                Text(decodedText.ifEmpty { "KEY YOUR RESPONSE..." }, modifier = Modifier.padding(horizontal = 8.dp).weight(1f), color = RobertColors.Primary, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { viewModel.submitSentText() }, enabled = decodedText.isNotEmpty()) { Icon(Icons.Default.Send, null, tint = RobertColors.Primary) }
+                IconButton(onClick = { viewModel.clearSentText() }) { Icon(Icons.Default.Clear, "Clear Text") }
+                IconButton(onClick = { viewModel.resetSimulator() }) { Icon(Icons.Default.Refresh, "New Person", tint = RobertColors.StatusOrange) }
+            }
         }
-        Box(modifier = Modifier.fillMaxWidth().height(180.dp)) {
+
+        // 4. Integrated Key Area
+        Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
             val isKeyBusy by viewModel.isKeyBusy.collectAsStateWithLifecycle()
             val lastElementSent by viewModel.lastElementSent.collectAsStateWithLifecycle()
             if (settings.keyerMode == KeyerMode.Straight) {
@@ -1177,6 +1499,34 @@ fun SimulatorScreen(viewModel: MorseViewModel) {
                 )
             }
         }
+    }
+}
+
+@Composable
+fun ExchangedInfoStatus(exchanged: Set<QsoInfoType>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        InfoStatusItem("RST", exchanged.contains(QsoInfoType.RST))
+        InfoStatusItem("NAME", exchanged.contains(QsoInfoType.NAME))
+        InfoStatusItem("QTH", exchanged.contains(QsoInfoType.QTH))
+        InfoStatusItem("73", exchanged.contains(QsoInfoType.THANKS_73))
+    }
+}
+
+@Composable
+fun InfoStatusItem(label: String, isActive: Boolean) {
+    Surface(
+        color = if (isActive) RobertColors.StatusGreen.copy(alpha = 0.2f) else Color.Transparent,
+        shape = RoundedCornerShape(4.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) RobertColors.StatusGreen else RobertColors.TextSecondary.copy(alpha = 0.3f))
+    ) {
+        Text(
+            label, 
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = if (isActive) RobertColors.StatusGreen else RobertColors.TextSecondary.copy(alpha = 0.5f),
+            fontSize = 8.sp
+        )
     }
 }
 

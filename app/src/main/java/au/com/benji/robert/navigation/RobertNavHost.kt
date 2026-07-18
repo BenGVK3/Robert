@@ -94,7 +94,7 @@ fun RobertNavHost(
                 onBack = { navController.popBackStack() },
                 onNavigateToOperators = { navController.navigate(Screen.LogbookOperators.route) },
                 onNavigateToUserProfiles = { navController.navigate(Screen.LogbookUserProfiles.route) },
-                onNavigateToSync = { navController.navigate(Screen.LogbookSync.route) }
+                onNavigateToStats = { navController.navigate(Screen.LogbookStats.route) }
             )
         }
 

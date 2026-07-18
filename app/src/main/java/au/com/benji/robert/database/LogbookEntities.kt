@@ -101,3 +101,11 @@ data class QsoEntity(
     val stationLat: Double? = null,
     val stationLon: Double? = null
 )
+
+data class CallsignHistorySummaryEntity(
+    val total: Int,
+    val lastWorked: Long,
+    val lastBand: String,
+    val lastMode: String,
+    val lastRst: String
+)

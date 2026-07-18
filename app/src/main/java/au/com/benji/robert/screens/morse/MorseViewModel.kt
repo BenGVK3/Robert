@@ -93,23 +93,46 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
     private val _isDecoding = MutableStateFlow(false)
     val isDecoding = _isDecoding.asStateFlow()
 
-    private val _visualizerData = MutableStateFlow(FloatArray(64))
+    private val _visualizerData = MutableStateFlow(FloatArray(512))
     val visualizerData = _visualizerData.asStateFlow()
+
+    private val _telemetry = MutableStateFlow(SignalTelemetry())
+    val telemetry = _telemetry.asStateFlow()
+
+    private val _confidenceText = MutableStateFlow<List<ConfidenceCharacter>>(emptyList())
+    val confidenceText = _confidenceText.asStateFlow()
+
+    private val _predictions = MutableStateFlow<List<MorseAssistPrediction>>(emptyList())
+    val predictions = _predictions.asStateFlow()
+
+    private val _decoderHistory = MutableStateFlow<List<DecoderHistoryEntry>>(emptyList())
+    val decoderHistory = _decoderHistory.asStateFlow()
+
+    private val simulatorEngine = MorseSimulatorEngine()
 
     private val decoder = MorseAudioDecoder(
         onDecodedChar = { char ->
             viewModelScope.launch(Dispatchers.Main) {
-                _decodedText.value += char
+                handleNewDecodedChar(char)
             }
         },
         onVisualizerData = { data ->
             _visualizerData.value = data
         },
-        initialWpm = _settings.value.wpm
+        onTelemetryUpdate = { data ->
+            _telemetry.value = data
+        },
+        initialSettings = _settings.value
     )
 
     private val _trainerMode = MutableStateFlow<TrainerMode?>(null)
     val trainerMode = _trainerMode.asStateFlow()
+
+    private val _currentSimulatorOperator = MutableStateFlow<SimulatorOperator?>(null)
+    val currentSimulatorOperator = _currentSimulatorOperator.asStateFlow()
+
+    private val _simulatorExchangedInfo = MutableStateFlow<Set<QsoInfoType>>(emptySet())
+    val simulatorExchangedInfo = _simulatorExchangedInfo.asStateFlow()
 
     private var decodeJob: Job? = null
     private var wordGapJob: Job? = null
@@ -138,7 +161,7 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             repository.settings.collectLatest { 
                 _settings.value = it
                 keyer.updateSettings(it)
-                decoder.updateWpm(it.wpm)
+                decoder.updateSettings(it)
             }
         }
         viewModelScope.launch {
@@ -642,6 +665,35 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
             _messages.value = currentMessages
             _decodedText.value = ""
             _currentSymbolBuffer.value = ""
+            
+            // Process with Simulator Engine
+            val intent = simulatorEngine.recognizeIntent(text)
+            val response = simulatorEngine.generateResponse(intent, text)
+            if (response.isNotEmpty()) {
+                viewModelScope.launch {
+                    delay(800) // Natural reaction delay
+                    val sender = simulatorEngine.currentOperator?.callsign ?: "OP"
+                    val updatedMessages = _messages.value.toMutableList()
+                    updatedMessages.add(Pair(sender, response))
+                    _messages.value = updatedMessages
+                    _simulatorExchangedInfo.value = simulatorEngine.context.exchangedInfo
+                    
+                    // Actually "Send" the morse back so user can hear it
+                    keyer.playText(response)
+                }
+            }
+        }
+    }
+
+    fun resetSimulator() {
+        viewModelScope.launch {
+            repository.settings.first().let { 
+                // We'd ideally use the user's callsign from settings
+                simulatorEngine.reset("VK3XYZ") 
+                _currentSimulatorOperator.value = simulatorEngine.currentOperator
+                _messages.value = emptyList()
+                _simulatorExchangedInfo.value = emptySet()
+            }
         }
     }
 
@@ -649,12 +701,60 @@ class MorseViewModel(application: Application) : AndroidViewModel(application) {
         val newState = !_isDecoding.value
         _isDecoding.value = newState
         if (newState) {
+            _confidenceText.value = emptyList()
             _decodedText.value = ""
             decoder.start()
         } else {
+            if (_decodedText.value.length > 5) {
+                _decoderHistory.value = (_decoderHistory.value + DecoderHistoryEntry(_decodedText.value)).takeLast(20)
+            }
             decoder.stop()
-            _visualizerData.value = FloatArray(64)
+            _visualizerData.value = FloatArray(512)
+            _telemetry.value = SignalTelemetry()
         }
+    }
+
+    private fun handleNewDecodedChar(c: ConfidenceCharacter) {
+        val newList = (_confidenceText.value + c).takeLast(1000)
+        _confidenceText.value = newList
+        _decodedText.value = newList.joinToString("") { it.char.toString() }
+        
+        if (_settings.value.morseAssistEnabled) {
+            updatePredictions(_decodedText.value)
+        }
+    }
+
+    private fun updatePredictions(text: String) {
+        val words = text.split(" ").filter { it.isNotEmpty() }
+        val lastWord = words.lastOrNull()?.uppercase() ?: ""
+        if (lastWord.length < 2) {
+            _predictions.value = emptyList()
+            return
+        }
+        
+        // Amateur Radio Callsign Regex (Simplified)
+        val callsignRegex = Regex("^[A-Z0-9]{1,3}[0-9][A-Z0-9]{1,3}$")
+        
+        val results = mutableListOf<MorseAssistPrediction>()
+        
+        // 1. Detect common phrases
+        val phrases = listOf("CQ", "DE", "TEST", "QRZ", "73", "SK", "AR", "KN", "BK", "RST")
+        if (phrases.contains(lastWord)) {
+             // These are usually not callsigns but good to know
+        }
+
+        // 2. Predict callsigns
+        if (lastWord.length >= 2) {
+            // Simulated predictions based on prefixes and common suffixes
+            if (lastWord.startsWith("VK")) {
+                results.add(MorseAssistPrediction(if (lastWord.length == 2) "VK3ESE" else lastWord, 85))
+                results.add(MorseAssistPrediction(if (lastWord.length == 2) "VK2ABC" else lastWord + "A", 70))
+            } else if (lastWord.startsWith("K") || lastWord.startsWith("N") || lastWord.startsWith("W")) {
+                 results.add(MorseAssistPrediction(lastWord + "JT", 90))
+            }
+        }
+        
+        _predictions.value = results.sortedByDescending { it.confidence }.take(5)
     }
 
     override fun onCleared() {

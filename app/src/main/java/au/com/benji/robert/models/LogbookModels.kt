@@ -134,5 +134,38 @@ data class ServiceCredential(
     val passwordEncrypted: String = "",
     val apiKeyEncrypted: String = "",
     val isConnected: Boolean = false,
-    val lastSync: Long = 0
+    val lastSync: Long = 0,
+    val isEnabled: Boolean = true,
+    val priority: Int = 0
 )
+
+@Serializable
+data class CallsignLookupResult(
+    val callsign: String,
+    val name: String = "",
+    val qth: String = "",
+    val gridsquare: String = "",
+    val state: String = "",
+    val country: String = "",
+    val dxcc: String = "",
+    val cqZone: Int = 0,
+    val ituZone: Int = 0,
+    val continent: String = "",
+    val flag: String = "",
+    val source: String = "", // e.g., "QRZ", "Cache", "History"
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Serializable
+data class CallsignHistorySummary(
+    val totalQsos: Int = 0,
+    val lastWorked: Long = 0,
+    val lastBand: String = "",
+    val lastMode: String = "",
+    val lastRst: String = "",
+    val lastNotes: String = ""
+)
+
+enum class LookupStatus {
+    IDLE, SEARCHING, MATCHED, CACHED, UPDATED, OFFLINE, NO_MATCH
+}

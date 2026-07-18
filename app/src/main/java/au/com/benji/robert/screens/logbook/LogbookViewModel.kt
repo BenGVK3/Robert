@@ -9,6 +9,7 @@ import au.com.benji.robert.repository.LogbookRepository
 import au.com.benji.robert.repository.DxRepository
 import au.com.benji.robert.repository.SolarDataRepository
 import au.com.benji.robert.repository.propagation.PropagationRepository
+import au.com.benji.robert.repository.lookup.CallsignLookupService
 import au.com.benji.robert.location.LocationService
 import au.com.benji.robert.utils.BandUtils
 import au.com.benji.robert.utils.calculateBearing
@@ -16,6 +17,7 @@ import au.com.benji.robert.utils.calculateDistance
 import au.com.benji.robert.utils.maidenheadToLatLng
 import au.com.benji.robert.utils.calculateMaidenhead
 import au.com.benji.robert.utils.getCompassDirection
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -28,6 +30,11 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     private val solarRepository = SolarDataRepository(DatabaseModule.cacheDao(application))
     private val propagationRepository = DatabaseModule.bandConditionsRepository(application)
     private val locationService = LocationService(application)
+    
+    private val lookupService = CallsignLookupService(
+        DatabaseModule.database(application).logbookDao(),
+        repository.serviceCredentials
+    )
 
     // --- Core State ---
     val settings = repository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogbookSettings())
@@ -67,11 +74,22 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     private val _currentQso = MutableStateFlow(Qso(frequency = 14.200, band = "20m", mode = "SSB", operatorCallsign = "", onAirCallsign = "", callWorked = ""))
     val currentQso = _currentQso.asStateFlow()
 
+    private val _lookupStatus = MutableStateFlow(LookupStatus.IDLE)
+    val lookupStatus = _lookupStatus.asStateFlow()
+
+    private val _lookupResult = MutableStateFlow<CallsignLookupResult?>(null)
+    val lookupResult = _lookupResult.asStateFlow()
+
+    private val _callHistory = MutableStateFlow<CallsignHistorySummary?>(null)
+    val callHistory = _callHistory.asStateFlow()
+
     private val _callsignInfo = MutableStateFlow<CallsignInfo?>(null)
     val callsignInfo = _callsignInfo.asStateFlow()
 
     val isOutsideBand = MutableStateFlow(false)
     val isDuplicate = MutableStateFlow(false)
+    
+    private var lookupJob: Job? = null
 
     // --- Profiles ---
     val operators = repository.allOperators.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -132,21 +150,51 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
         val upper = call.uppercase().trim()
         updateCurrentQso { it.copy(callWorked = upper) }
         
-        if (upper.length >= 3) {
-            viewModelScope.launch {
-                val dxcc = au.com.benji.robert.utils.HamUtils.getDxccInfo(upper)
-                _callsignInfo.value = CallsignInfo(
-                    callsign = upper,
-                    country = dxcc?.country ?: "Unknown",
-                    prefix = dxcc?.prefix ?: "",
-                    cqZone = dxcc?.cqZone ?: 0,
-                    flag = dxcc?.flagEmoji ?: ""
-                )
-                checkDuplicate(upper)
-            }
-        } else {
-            _callsignInfo.value = null
+        lookupJob?.cancel()
+        if (upper.length < 3) {
+            _lookupStatus.value = LookupStatus.IDLE
+            _lookupResult.value = null
+            _callHistory.value = null
             isDuplicate.value = false
+            return
+        }
+
+        lookupJob = viewModelScope.launch {
+            _lookupStatus.value = LookupStatus.SEARCHING
+            
+            // 1. Instant Local History
+            _callHistory.value = lookupService.getHistorySummary(upper)
+            checkDuplicate(upper)
+            
+            // 2. Wait for user to finish typing
+            delay(600)
+            
+            // 3. Sequential Online Lookup
+            val (result, status) = lookupService.lookup(upper)
+            
+            // Only show NO_MATCH if we truly found nothing and reached a minimum length
+            if (status == LookupStatus.NO_MATCH && upper.length < 5) {
+                _lookupStatus.value = LookupStatus.IDLE
+            } else {
+                _lookupStatus.value = status
+            }
+
+            _lookupResult.value = result
+            
+            result?.let { res ->
+                updateCurrentQso { q ->
+                    q.copy(
+                        name = if (q.name.isEmpty()) res.name else q.name,
+                        qth = if (q.qth.isEmpty()) res.qth else q.qth,
+                        gridsquare = if (q.gridsquare.isEmpty()) res.gridsquare else q.gridsquare,
+                        country = res.country,
+                        dxcc = res.dxcc,
+                        cqZone = res.cqZone,
+                        ituZone = res.ituZone,
+                        continent = res.continent
+                    )
+                }
+            }
         }
     }
 

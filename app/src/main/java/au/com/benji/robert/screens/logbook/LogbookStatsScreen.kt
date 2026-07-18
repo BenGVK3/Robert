@@ -105,21 +105,61 @@ fun LogbookStatsScreen(
             ExportBottomSheetContent(
                 onExportAdif = {
                     val adif = viewModel.exportLogs()
-                    shareFile(context, "logbook.adi", adif)
+                    exportDestinationSelection(context, "logbook_${System.currentTimeMillis()}.adi", adif)
                     showExportSheet = false
                 },
                 onExportCabrillo = {
                     val cab = viewModel.exportCabrillo()
-                    shareFile(context, "contest.log", cab)
+                    exportDestinationSelection(context, "contest_${System.currentTimeMillis()}.log", cab)
                     showExportSheet = false
                 },
                 onExportCsv = {
                     val csv = viewModel.exportCsv()
-                    shareFile(context, "logbook.csv", csv)
+                    exportDestinationSelection(context, "logbook_${System.currentTimeMillis()}.csv", csv)
                     showExportSheet = false
                 }
             )
         }
+    }
+}
+
+private fun exportDestinationSelection(context: android.content.Context, filename: String, content: String) {
+    val options = arrayOf("Save to Downloads", "Send via Email")
+    android.app.AlertDialog.Builder(context)
+        .setTitle("Export Destination")
+        .setItems(options) { _, which ->
+            when (which) {
+                0 -> saveFileToDownloads(context, filename, content)
+                1 -> shareFile(context, filename, content)
+            }
+        }
+        .show()
+}
+
+private fun saveFileToDownloads(context: android.content.Context, filename: String, content: String) {
+    try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val resolver = context.contentResolver
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            uri?.let {
+                resolver.openOutputStream(it)?.use { stream ->
+                    stream.write(content.toByteArray())
+                }
+                android.widget.Toast.makeText(context, "Saved to Downloads", android.widget.Toast.LENGTH_LONG).show()
+            }
+        } else {
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            val file = java.io.File(downloadsDir, filename)
+            file.writeText(content)
+            android.widget.Toast.makeText(context, "Saved to Downloads", android.widget.Toast.LENGTH_LONG).show()
+        }
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "Failed to save: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
     }
 }
 

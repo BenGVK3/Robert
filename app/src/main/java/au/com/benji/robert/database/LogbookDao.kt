@@ -27,6 +27,9 @@ interface LogbookDao {
     @Delete
     suspend fun deleteQso(qso: QsoEntity)
 
+    @Query("SELECT COUNT(*) as total, MAX(timestamp) as lastWorked, band as lastBand, mode as lastMode, rstReceived as lastRst FROM qsos WHERE callWorked = :call GROUP BY callWorked")
+    suspend fun getCallsignHistory(call: String): CallsignHistorySummaryEntity?
+
     // Radio Profiles
     @Query("SELECT * FROM radio_profiles")
     fun getAllRadios(): Flow<List<RadioProfileEntity>>

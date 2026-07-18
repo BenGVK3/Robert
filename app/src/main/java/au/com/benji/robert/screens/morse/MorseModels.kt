@@ -16,7 +16,65 @@ data class MorseSettings(
     val paddleOrientation: PaddleOrientation = PaddleOrientation.LeftDitRightDah,
     val weighting: Float = 1.0f,
     val autoCharacterSpacing: Boolean = true,
-    val autoWordSpacing: Boolean = true
+    val autoWordSpacing: Boolean = true,
+    
+    // Decoder Advanced Settings
+    val autoTone: Boolean = true,
+    val autoWpm: Boolean = true,
+    val noiseReductionLevel: Float = 0.5f,
+    val agcEnabled: Boolean = true,
+    val bandpassWidth: Int = 200,
+    val autoCallsignDetection: Boolean = true,
+    val morseAssistEnabled: Boolean = true,
+    val debugMode: Boolean = false
+)
+
+enum class DecoderStatus {
+    Idle, Searching, Locked, Decoding, SignalLost
+}
+
+@Serializable
+data class SignalTelemetry(
+    val signalStrengthDbfs: Float = -100f,
+    val detectedFrequencyHz: Int = 0,
+    val snrDb: Float = 0f,
+    val estimatedWpm: Int = 20,
+    val estimatedFarnsworthWpm: Int = 20,
+    val confidence: Float = 0f,
+    val sampleRate: Int = 44100,
+    val status: DecoderStatus = DecoderStatus.Idle,
+    
+    // Diagnostic Debug Fields
+    val noiseFloor: Float = 0f,
+    val threshold: Float = 0f,
+    val currentDitMs: Long = 0,
+    val currentDahMs: Long = 0,
+    val currentCharGapMs: Long = 0,
+    val currentWordGapMs: Long = 0,
+    val rawMorse: String = "",
+    val isKeyDown: Boolean = false
+)
+
+@Serializable
+data class ConfidenceCharacter(
+    val char: Char,
+    val confidence: Float, // 0.0 to 1.0
+    val morse: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Serializable
+data class MorseAssistPrediction(
+    val callsign: String,
+    val confidence: Int, // 0 to 100
+    val isVerified: Boolean = false // Verified against database
+)
+
+@Serializable
+data class DecoderHistoryEntry(
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val callsign: String? = null
 )
 
 enum class KeyerMode {
@@ -151,10 +209,44 @@ data class SimulatorOperator(
     val callsign: String,
     val name: String,
     val location: String,
-    val equipment: String,
-    val weather: String,
-    val personality: String,
-    val wpm: Int
+    val rig: String = "IC-7300",
+    val antenna: String = "Dipole",
+    val power: Int = 100,
+    val weather: String = "Sunny",
+    val personality: String = "Friendly",
+    val wpm: Int = 20,
+    val difficulty: SimulatorDifficulty = SimulatorDifficulty.Intermediate
+)
+
+@Serializable
+data class QsoContext(
+    var userCallsign: String? = null,
+    var userName: String? = null,
+    var userQth: String? = null,
+    var userRst: String? = null,
+    var userRig: String? = null,
+    var opName: String? = null,
+    var opCallsign: String? = null,
+    var exchangedInfo: Set<QsoInfoType> = emptySet()
+)
+
+enum class QsoInfoType {
+    CALLSIGN, RST, NAME, QTH, RIG, WEATHER, THANKS_73
+}
+
+enum class QsoIntent {
+    CQ, CALLING_ME, EXCHANGE_RST, EXCHANGE_NAME, EXCHANGE_QTH, EXCHANGE_RIG, EXCHANGE_WEATHER, ENDING, UNKNOWN
+}
+
+@Serializable
+data class SimulatorSessionFeedback(
+    val qsoCompleted: Boolean,
+    val callsignCorrect: Boolean,
+    val rstExchanged: Boolean,
+    val nameExchanged: Boolean,
+    val qthExchanged: Boolean,
+    val proceduralScore: Int, // 0-100
+    val totalScore: Int
 )
 
 @Serializable

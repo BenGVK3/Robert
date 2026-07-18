@@ -28,7 +28,7 @@ fun LogbookSettingsScreen(
     onBack: () -> Unit,
     onNavigateToOperators: () -> Unit = {},
     onNavigateToUserProfiles: () -> Unit = {},
-    onNavigateToSync: () -> Unit = {},
+    onNavigateToStats: () -> Unit = {},
     viewModel: LogbookViewModel = viewModel()
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -96,10 +96,11 @@ fun LogbookSettingsScreen(
                     icon = Icons.Default.VpnKey,
                     onClick = onNavigateToUserProfiles
                 )
-                ComingSoonPreference(
-                    title = "Cloud Synchronization",
-                    subtitle = "Google Drive & OneDrive Backup",
-                    icon = Icons.Default.CloudSync
+                ActionPreference(
+                    title = "Export Logbook",
+                    subtitle = "Save locally or Send via Email",
+                    icon = Icons.Default.FileUpload,
+                    onClick = onNavigateToStats
                 )
             }
             
