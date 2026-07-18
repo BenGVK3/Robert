@@ -30,7 +30,6 @@ fun RobertHeader(
     if (isHorizontal) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (isCentered) Arrangement.Center else Arrangement.Start,
             modifier = modifier.fillMaxWidth()
         ) {
             Surface(
@@ -48,21 +47,24 @@ fun RobertHeader(
                 }
             }
             
-            Spacer(Modifier.width(Spacing.Small))
-            
-            Column(horizontalAlignment = if (isCentered) Alignment.CenterHorizontally else Alignment.Start) {
+            Column(
+                horizontalAlignment = if (isCentered) Alignment.CenterHorizontally else Alignment.Start,
+                modifier = Modifier.weight(1f).padding(end = 40.dp) // Offset the icon width to truly center
+            ) {
                 Text(
                     text = title.uppercase(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.sp,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = if (isCentered) TextAlign.Center else TextAlign.Start
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF03DAC6)
+                    color = Color(0xFF03DAC6),
+                    textAlign = if (isCentered) TextAlign.Center else TextAlign.Start
                 )
             }
         }

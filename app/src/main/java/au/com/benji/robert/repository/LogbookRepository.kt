@@ -26,6 +26,11 @@ class LogbookRepository(private val dao: LogbookDao, private val context: Contex
     private val DRAFT_QSO = stringPreferencesKey("draft_qso")
     private val ACTIVE_ACTIVATION = stringPreferencesKey("active_activation")
     private val SERVICE_CREDENTIALS = stringPreferencesKey("service_credentials")
+    
+    private val LAST_FREQUENCY = androidx.datastore.preferences.core.doublePreferencesKey("last_frequency")
+    private val LAST_MODE = stringPreferencesKey("last_mode")
+    private val LAST_POWER = androidx.datastore.preferences.core.doublePreferencesKey("last_power")
+    private val LAST_FREQ_UNIT = stringPreferencesKey("last_freq_unit")
 
     val settings: Flow<LogbookSettings> = context.logbookDataStore.data.map { prefs ->
         LogbookSettings(
@@ -35,7 +40,11 @@ class LogbookRepository(private val dao: LogbookDao, private val context: Contex
             copyPreviousQth = prefs[COPY_PREVIOUS_QTH] ?: false,
             copyPreviousOperator = prefs[COPY_PREVIOUS_OPERATOR] ?: true,
             duplicateWarning = prefs[DUPLICATE_WARNING] ?: true,
-            preferredLoggingMode = prefs[PREFERRED_LOGGING_MODE] ?: "Normal"
+            preferredLoggingMode = prefs[PREFERRED_LOGGING_MODE] ?: "Normal",
+            lastFrequency = prefs[LAST_FREQUENCY] ?: 14.200,
+            lastMode = prefs[LAST_MODE] ?: "SSB",
+            lastPower = prefs[LAST_POWER] ?: 100.0,
+            lastFreqUnit = prefs[LAST_FREQ_UNIT] ?: "KHz"
         )
     }
 
@@ -48,6 +57,10 @@ class LogbookRepository(private val dao: LogbookDao, private val context: Contex
             prefs[COPY_PREVIOUS_OPERATOR] = newSettings.copyPreviousOperator
             prefs[DUPLICATE_WARNING] = newSettings.duplicateWarning
             prefs[PREFERRED_LOGGING_MODE] = newSettings.preferredLoggingMode
+            prefs[LAST_FREQUENCY] = newSettings.lastFrequency
+            prefs[LAST_MODE] = newSettings.lastMode
+            prefs[LAST_POWER] = newSettings.lastPower
+            prefs[LAST_FREQ_UNIT] = newSettings.lastFreqUnit
         }
     }
 

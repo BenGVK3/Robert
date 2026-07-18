@@ -124,7 +124,13 @@ data class LogbookSettings(
     val copyPreviousQth: Boolean = false,
     val copyPreviousOperator: Boolean = true,
     val duplicateWarning: Boolean = true,
-    val preferredLoggingMode: String = "Normal" // Normal, Contest, Portable
+    val preferredLoggingMode: String = "Normal", // Normal, Contest, Portable
+    
+    // Sticky field persistence
+    val lastFrequency: Double = 14.200,
+    val lastMode: String = "SSB",
+    val lastPower: Double = 100.0,
+    val lastFreqUnit: String = "KHz"
 )
 
 @Serializable

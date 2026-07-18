@@ -96,11 +96,22 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     val radios = repository.allRadios.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val antennas = repository.allAntennas.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _freqUnit = MutableStateFlow("KHz")
+    val freqUnit = _freqUnit.asStateFlow()
+
+    fun updateFreqUnit(unit: String) {
+        _freqUnit.value = unit
+        viewModelScope.launch {
+            repository.updateSettings(settings.value.copy(lastFreqUnit = unit))
+        }
+    }
+
     init {
         viewModelScope.launch {
             repository.draftQso.first()?.let { _currentQso.value = it }
             
             settings.collect { s ->
+                _freqUnit.value = s.lastFreqUnit
                 s.defaultOperatorId?.let { id ->
                     repository.getOperatorById(id)?.let { op ->
                         updateCurrentQso { it.copy(operatorCallsign = op.callsign, onAirCallsign = op.callsign) }
@@ -214,7 +225,27 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
 
     fun saveQso() {
         viewModelScope.launch {
-            repository.insertQso(_currentQso.value)
+            val q = _currentQso.value
+            val unit = _freqUnit.value
+            
+            // Convert to MHz for storage
+            val freqMhz = when (unit) {
+                "KHz" -> q.frequency / 1000.0
+                "Hz" -> q.frequency / 1000000.0
+                else -> q.frequency
+            }
+            
+            val qToSave = q.copy(frequency = freqMhz)
+            repository.insertQso(qToSave)
+            
+            // Save sticky settings (preserve user's entered value and unit)
+            repository.updateSettings(settings.value.copy(
+                lastFrequency = q.frequency,
+                lastMode = q.mode,
+                lastPower = q.power,
+                lastFreqUnit = unit
+            ))
+            
             resetCurrentQso()
         }
     }
@@ -243,23 +274,23 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun resetCurrentQso() {
         val s = settings.value
         val active = activeActivation.value
-        val prev = _currentQso.value
         
         _currentQso.value = Qso(
-            operatorCallsign = if (s.copyPreviousOperator) prev.operatorCallsign else "",
-            onAirCallsign = if (s.copyPreviousOperator) prev.onAirCallsign else "",
+            operatorCallsign = if (s.copyPreviousOperator) _currentQso.value.operatorCallsign else "",
+            onAirCallsign = if (s.copyPreviousOperator) _currentQso.value.onAirCallsign else "",
             callWorked = "",
-            frequency = prev.frequency,
-            band = prev.band,
-            mode = prev.mode,
-            power = prev.power,
-            radioId = prev.radioId,
-            antennaId = prev.antennaId,
-            qth = if (s.copyPreviousQth) prev.qth else "",
+            frequency = s.lastFrequency,
+            band = BandUtils.getBandFromFrequency(s.lastFrequency * (if (s.lastFreqUnit == "KHz") 1.0 else if (s.lastFreqUnit == "MHz") 1000.0 else 0.001)),
+            mode = s.lastMode,
+            power = s.lastPower,
+            radioId = _currentQso.value.radioId,
+            antennaId = _currentQso.value.antennaId,
+            qth = if (s.copyPreviousQth) _currentQso.value.qth else "",
             myPotaRef = if (active?.type == "POTA") active.reference else "",
             mySotaRef = if (active?.type == "SOTA") active.reference else "",
             myWwffRef = if (active?.type == "WWFF") active.reference else ""
         )
+        _freqUnit.value = s.lastFreqUnit
         _callsignInfo.value = null
         _lookupStatus.value = LookupStatus.IDLE
         _lookupResult.value = null

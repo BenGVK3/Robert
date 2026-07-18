@@ -75,46 +75,14 @@ fun SatellitesScreen(
                     .padding(top = Spacing.Medium)
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.satellites1),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(24.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
-                        }
-                        
-                        Spacer(Modifier.width(Spacing.Small))
-
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "SATELLITES",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            Text(
-                                text = "Track amateur and weather spacecraft",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF03DAC6)
-                            )
-                        }
-                    }
+                    RobertHeader(
+                        title = "Satellites",
+                        description = "Track amateur and weather spacecraft",
+                        iconRes = R.drawable.satellites1,
+                        isCentered = true,
+                        isHorizontal = true,
+                        modifier = Modifier.padding(bottom = 0.dp)
+                    )
                     IconButton(
                         onClick = { isSearchActive = !isSearchActive },
                         modifier = Modifier.align(Alignment.TopEnd)

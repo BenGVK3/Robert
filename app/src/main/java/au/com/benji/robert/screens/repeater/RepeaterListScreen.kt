@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.R
+import au.com.benji.robert.components.RobertHeader
 import au.com.benji.robert.models.Repeater
 import au.com.benji.robert.theme.Spacing
 
@@ -66,46 +67,14 @@ fun RepeaterListScreen(
                     .padding(top = Spacing.Medium)
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.repeaters1),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(24.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
-                        }
-                        
-                        Spacer(Modifier.width(Spacing.Small))
-
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "REPEATERS",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            Text(
-                                text = "Find nearby FM and Digital stations",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF03DAC6)
-                            )
-                        }
-                    }
+                    RobertHeader(
+                        title = "Repeaters",
+                        description = "Find nearby FM and Digital stations",
+                        iconRes = R.drawable.repeaters1,
+                        isCentered = true,
+                        isHorizontal = true,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                     Row(
                         modifier = Modifier.align(Alignment.TopEnd),
                         horizontalArrangement = Arrangement.End

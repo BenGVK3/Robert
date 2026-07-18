@@ -45,12 +45,14 @@ fun LogbookEntryScreen(
     val callHistory by viewModel.callHistory.collectAsStateWithLifecycle()
     val isDuplicate by viewModel.isDuplicate.collectAsStateWithLifecycle()
     val activeAct by viewModel.activeActivation.collectAsStateWithLifecycle()
+    val freqUnit by viewModel.freqUnit.collectAsStateWithLifecycle()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     
     var showAdvanced by remember { mutableStateOf(false) }
-    var freqUnit by remember { mutableStateOf(qso.notes.split("|").firstOrNull { it.startsWith("UNIT:") }?.removePrefix("UNIT:") ?: "MHz") }
     val modes = listOf("SSB", "CW", "FM", "AM", "DIGI", "FT8", "FT4", "RTTY")
     var modeExpanded by remember { mutableStateOf(false) }
+    var freqText by remember(qso.id) { mutableStateOf(if (qso.frequency == 0.0) "" else qso.frequency.toString()) }
+    var powerText by remember(qso.id) { mutableStateOf(qso.power.toString()) }
 
     Scaffold(
         topBar = {
@@ -173,9 +175,10 @@ fun LogbookEntryScreen(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                 // Frequency with Unit Dropdown
                 OutlinedTextField(
-                    value = qso.frequency.toString(),
+                    value = freqText,
                     onValueChange = { 
-                        val f = it.toDoubleOrNull() ?: qso.frequency
+                        freqText = it
+                        val f = it.toDoubleOrNull() ?: 0.0
                         viewModel.updateCurrentQso { q -> q.copy(frequency = f) }
                     },
                     label = { Text("FREQ", style = MaterialTheme.typography.labelSmall) },
@@ -190,8 +193,7 @@ fun LogbookEntryScreen(
                             DropdownMenu(expanded = unitExpanded, onDismissRequest = { unitExpanded = false }) {
                                 listOf("MHz", "KHz", "Hz").forEach { unit ->
                                     DropdownMenuItem(text = { Text(unit) }, onClick = { 
-                                        freqUnit = unit
-                                        viewModel.updateCurrentQso { q -> q.copy(notes = "UNIT:$unit|" + q.notes.replace(Regex("UNIT:[^|]+\\|"), "")) }
+                                        viewModel.updateFreqUnit(unit)
                                         unitExpanded = false 
                                     })
                                 }
@@ -237,10 +239,17 @@ fun LogbookEntryScreen(
                 RstSelectorField(label = "SENT", value = qso.rstSent, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(rstSent = it) } }, modifier = Modifier.weight(1f))
                 RstSelectorField(label = "RCVD", value = qso.rstReceived, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(rstReceived = it) } }, modifier = Modifier.weight(1f))
                 
-                CompactEntryField(label = "POWER (W)", value = qso.power.toInt().toString(), onValueChange = { 
-                    val p = it.toDoubleOrNull() ?: qso.power
-                    viewModel.updateCurrentQso { q -> q.copy(power = p) }
-                }, modifier = Modifier.weight(0.8f), type = KeyboardType.Number)
+                CompactEntryField(
+                    label = "POWER (W)", 
+                    value = powerText, 
+                    onValueChange = { 
+                        powerText = it
+                        val p = it.toDoubleOrNull() ?: 100.0
+                        viewModel.updateCurrentQso { q -> q.copy(power = p) }
+                    }, 
+                    modifier = Modifier.weight(0.8f), 
+                    type = KeyboardType.Number
+                )
             }
 
             // 4. Advanced Toggle & Section
