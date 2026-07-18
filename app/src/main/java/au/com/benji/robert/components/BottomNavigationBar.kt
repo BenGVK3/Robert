@@ -1,5 +1,6 @@
 package au.com.benji.robert.components
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -39,6 +41,17 @@ fun BottomNavigationBar(
     val firstHalf = BottomNavItems.take(2)
     val secondHalf = BottomNavItems.drop(2)
 
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
     NavigationBar(
         modifier = Modifier
             .navigationBarsPadding()
@@ -48,7 +61,8 @@ fun BottomNavigationBar(
     ) {
         // First two items
         firstHalf.forEach { item ->
-            val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true
+            val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true || 
+                             (item.route == Screen.Tools.route && currentDestination?.route?.startsWith("tools") == true)
             NavigationBarItem(
                 selected = isSelected,
                 onClick = {
@@ -99,6 +113,7 @@ fun BottomNavigationBar(
                 shape = CircleShape,
                 modifier = Modifier
                     .size(56.dp)
+                    .scale(scale)
                     .shadow(
                         elevation = 12.dp,
                         shape = CircleShape,
@@ -116,7 +131,8 @@ fun BottomNavigationBar(
 
         // Last two items
         secondHalf.forEach { item ->
-            val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true
+            val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true || 
+                             (item.route == Screen.Tools.route && currentDestination?.route?.startsWith("tools") == true)
             NavigationBarItem(
                 selected = isSelected,
                 onClick = {

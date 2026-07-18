@@ -74,10 +74,9 @@ fun PropagationScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             item(span = { GridItemSpan(2) }) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically, 
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
-                    modifier = Modifier.padding(bottom = 8.dp)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 ) {
                     Surface(
                         modifier = Modifier.size(56.dp),
@@ -93,17 +92,20 @@ fun PropagationScreen(
                             )
                         }
                     }
-                    Column {
+                    Spacer(Modifier.height(Spacing.Small))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "Propagation Center",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
                         )
                         Text(
                             text = "Real-time HF & Solar Analysis",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = Color(0xFF03DAC6),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }

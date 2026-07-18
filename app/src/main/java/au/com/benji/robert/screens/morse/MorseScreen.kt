@@ -3,6 +3,7 @@ package au.com.benji.robert.screens.morse
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,13 +31,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.R
 import au.com.benji.robert.theme.RobertColors
 import au.com.benji.robert.theme.Spacing
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -68,35 +72,86 @@ fun MorseScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { 
-                    Text(
-                        if (currentSection == MorseSection.Menu) "MORSE SUITE" 
-                        else if (currentSection == MorseSection.Trainer) "TRAINING"
-                        else currentSection.name.uppercase(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp,
-                        color = RobertColors.Primary
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (currentSection == MorseSection.Menu) onBack()
-                        else viewModel.setSection(MorseSection.Menu)
-                    }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.Medium)
+                    .padding(top = Spacing.Small)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().height(64.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(36.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.morse1),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                        
+                        Spacer(Modifier.width(Spacing.Small))
+
+                        val headerInfo = when (currentSection) {
+                            MorseSection.Menu -> "Morse Suite" to "Master the code"
+                            MorseSection.Send -> "Sending" to "Refine keying"
+                            MorseSection.Decoder -> "Decoder" to "Real-time"
+                            MorseSection.Trainer -> "Trainer" to "Lessons"
+                            MorseSection.Simulator -> "Simulator" to "Real contacts"
+                            MorseSection.Practice -> "Receive" to "Build speed"
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.offset(x = (-8).dp, y = 8.dp)
+                        ) {
+                            Text(
+                                text = headerInfo.first.uppercase(),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = headerInfo.second,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF03DAC6)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            if (currentSection == MorseSection.Menu) onBack()
+                            else viewModel.setSection(MorseSection.Menu)
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
-                },
-                actions = {
-                    IconButton(onClick = { showSettings = true }) {
+
+                    IconButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    ) {
                         Icon(Icons.Default.Settings, null, tint = RobertColors.Primary)
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                )
-            )
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(top = Spacing.Small))
+            }
         },
         containerColor = RobertColors.Background
     ) { innerPadding ->

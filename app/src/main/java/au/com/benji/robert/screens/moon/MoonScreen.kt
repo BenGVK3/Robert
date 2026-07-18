@@ -45,10 +45,10 @@ fun MoonScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = Spacing.Medium)
-                    .padding(top = Spacing.Small),
+                    .padding(horizontal = Spacing.Medium),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Spacer(Modifier.height(4.dp))
                 Surface(
                     modifier = Modifier.size(56.dp),
                     shape = CircleShape,
@@ -93,6 +93,9 @@ fun MoonScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            item {
+                Spacer(Modifier.height(Spacing.Small))
+            }
             item {
                 CurrentMoonCard(moonData)
             }

@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
@@ -74,64 +75,66 @@ fun RobertApp() {
         bottomBar = {
             BottomNavigationBar(
                 navController = navController,
-                onCommandCenterClick = { showCommandCenter = true }
+                onCommandCenterClick = { showCommandCenter = !showCommandCenter }
             )
         }
     ) { innerPadding ->
-        RobertNavHost(
-            navController = navController,
-            paddingValues = innerPadding,
-            onShowDxSpots = { showDxSpots = true },
-            onShowShack = { showShack = true }
-        )
-        
-        if (showCommandCenter) {
-            CommandCenterSheet(
-                onNavigate = { route -> 
-                    // If we are already on this route, just close the sheet
-                    if (navController.currentDestination?.route == route) {
-                        showCommandCenter = false
-                        return@CommandCenterSheet
-                    }
-                    
-                    // Try to pop back to the route if it already exists in the stack
-                    // This preserves the existing instance and its state (like WebView audio)
-                    val popped = navController.popBackStack(route, inclusive = false)
-                    
-                    if (!popped) {
-                        // If not in stack, navigate normally with state restoration support
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
+        Box(modifier = Modifier.fillMaxSize()) {
+            RobertNavHost(
+                navController = navController,
+                paddingValues = innerPadding,
+                onShowDxSpots = { showDxSpots = true },
+                onShowShack = { showShack = true }
+            )
+
+            if (showCommandCenter) {
+                CommandCenterSheet(
+                    onNavigate = { route ->
+                        // If we are already on this route, just close the sheet
+                        if (navController.currentDestination?.route == route) {
+                            showCommandCenter = false
+                            return@CommandCenterSheet
                         }
-                    }
-                },
-                onAction = { action ->
-                    when (action) {
-                        is CommandActionType.Dialog -> {
-                            when (action.type) {
-                                DialogType.DX_SPOTS -> showDxSpots = true
-                                DialogType.SHACK -> showShack = true
-                                else -> {}
+
+                        // Try to pop back to the route if it already exists in the stack
+                        // This preserves the existing instance and its state (like WebView audio)
+                        val popped = navController.popBackStack(route, inclusive = false)
+
+                        if (!popped) {
+                            // If not in stack, navigate normally with state restoration support
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
                         }
-                        else -> {}
-                    }
-                },
-                onDismiss = { showCommandCenter = false }
+                    },
+                    onAction = { action ->
+                        when (action) {
+                            is CommandActionType.Dialog -> {
+                                when (action.type) {
+                                    DialogType.DX_SPOTS -> showDxSpots = true
+                                    DialogType.SHACK -> showShack = true
+                                    else -> {}
+                                }
+                            }
+                            else -> {}
+                        }
+                    },
+                    onDismiss = { showCommandCenter = false }
+                )
+            }
+
+            GlobalDialogs(
+                viewModel = dashboardViewModel,
+                showDxSpots = showDxSpots,
+                onDismissDxSpots = { showDxSpots = false },
+                showShack = showShack,
+                onDismissShack = { showShack = false }
             )
         }
-
-        GlobalDialogs(
-            viewModel = dashboardViewModel,
-            showDxSpots = showDxSpots,
-            onDismissDxSpots = { showDxSpots = false },
-            showShack = showShack,
-            onDismissShack = { showShack = false }
-        )
     }
 }
 

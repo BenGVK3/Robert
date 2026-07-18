@@ -65,7 +65,7 @@ fun LogbookScreen(
                     .padding(horizontal = Spacing.Medium)
                     .padding(top = Spacing.Small)
             ) {
-                Box(modifier = Modifier.fillMaxWidth().height(64.dp)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     RobertHeader(
                         title = "Logbook",
                         description = "Track your contacts and activations",
@@ -74,14 +74,14 @@ fun LogbookScreen(
                         isHorizontal = true,
                         modifier = Modifier.align(Alignment.Center)
                     )
-                    Row(
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Default.FileUpload, "Export") }
-                        IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.BarChart, "Stats") }
-                        IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
-                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Default.FileUpload, "Export") }
+                    IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.BarChart, "Stats") }
+                    IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
                 }
                 HorizontalDivider(color = RobertColors.TextSecondary.copy(alpha = 0.1f), modifier = Modifier.padding(top = Spacing.Small))
             }

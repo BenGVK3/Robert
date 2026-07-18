@@ -48,7 +48,7 @@ fun LogbookEntryScreen(
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     
     var showAdvanced by remember { mutableStateOf(false) }
-    var freqUnit by remember { mutableStateOf("MHz") }
+    var freqUnit by remember { mutableStateOf(qso.notes.split("|").firstOrNull { it.startsWith("UNIT:") }?.removePrefix("UNIT:") ?: "MHz") }
     val modes = listOf("SSB", "CW", "FM", "AM", "DIGI", "FT8", "FT4", "RTTY")
     var modeExpanded by remember { mutableStateOf(false) }
 
@@ -189,7 +189,11 @@ fun LogbookEntryScreen(
                             }
                             DropdownMenu(expanded = unitExpanded, onDismissRequest = { unitExpanded = false }) {
                                 listOf("MHz", "KHz", "Hz").forEach { unit ->
-                                    DropdownMenuItem(text = { Text(unit) }, onClick = { freqUnit = unit; unitExpanded = false })
+                                    DropdownMenuItem(text = { Text(unit) }, onClick = { 
+                                        freqUnit = unit
+                                        viewModel.updateCurrentQso { q -> q.copy(notes = "UNIT:$unit|" + q.notes.replace(Regex("UNIT:[^|]+\\|"), "")) }
+                                        unitExpanded = false 
+                                    })
                                 }
                             }
                         }
