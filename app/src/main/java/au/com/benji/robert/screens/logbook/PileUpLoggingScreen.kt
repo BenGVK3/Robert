@@ -1,5 +1,7 @@
 package au.com.benji.robert.screens.logbook
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,26 +28,24 @@ import au.com.benji.robert.models.*
 import au.com.benji.robert.theme.RobertColors
 import au.com.benji.robert.theme.Spacing
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PileUpLoggingScreen(
     onBack: () -> Unit,
+    onNavigateToLogging: () -> Unit = {},
     viewModel: LogbookViewModel = viewModel()
 ) {
     val qso by viewModel.currentQso.collectAsStateWithLifecycle()
     val isDuplicate by viewModel.isDuplicate.collectAsStateWithLifecycle()
-    val sessionQsos by viewModel.sessionQsos.collectAsStateWithLifecycle()
+    val pileUpQueue by viewModel.pileUpQueue.collectAsStateWithLifecycle()
     val activeAct by viewModel.activeActivation.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("PILE-UP MODE", fontWeight = FontWeight.Black, letterSpacing = 2.sp) },
+                title = { Text("PILE-UP QUEUE", fontWeight = FontWeight.Black, letterSpacing = 2.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.resetCurrentQso() }) { Icon(Icons.Default.DeleteSweep, "Clear") }
                 }
             )
         }
@@ -54,72 +54,118 @@ fun PileUpLoggingScreen(
             modifier = Modifier.fillMaxSize().padding(padding).padding(Spacing.Medium),
             verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
-            // 1. Massive Entry Area
+            // 1. Queue Entry Area
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = RobertColors.Surface),
-                shape = RoundedCornerShape(28.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(Spacing.Large), horizontalAlignment = Alignment.CenterHorizontally) {
-                    OutlinedTextField(
-                        value = qso.callWorked,
-                        onValueChange = { viewModel.onCallsignChanged(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.displayMedium.copy(
-                            fontWeight = FontWeight.Black, 
-                            color = if (isDuplicate) RobertColors.StatusOrange else RobertColors.Primary,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        ),
-                        placeholder = { Text("CALLSIGN", modifier = Modifier.fillMaxWidth().alpha(0.2f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) },
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Characters,
-                            autoCorrectEnabled = false,
-                            imeAction = ImeAction.Done
-                        ),
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        isError = isDuplicate
-                    )
+                Column(modifier = Modifier.padding(Spacing.Medium), horizontalAlignment = Alignment.CenterHorizontally) {
+                            OutlinedTextField(
+                                value = qso.callWorked,
+                                onValueChange = { viewModel.onCallsignChanged(it) },
+                                modifier = Modifier.fillMaxWidth(),
+                                textStyle = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Black, 
+                                    color = if (isDuplicate) RobertColors.StatusRed else RobertColors.Primary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                ),
+                                placeholder = { Text("CALLSIGN", modifier = Modifier.fillMaxWidth().alpha(0.2f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) },
+                                keyboardOptions = KeyboardOptions(
+                                    capitalization = KeyboardCapitalization.Characters,
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.Done
+                                ),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                isError = isDuplicate
+                            )
+
+                            // Modifier buttons moved below
+                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small), modifier = Modifier.padding(top = 8.dp)) {
+                                TextButton(
+                                    onClick = { viewModel.onCallsignChanged("${qso.callWorked}/P") },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
+                                ) { 
+                                    Text("/P", fontSize = 12.sp, fontWeight = FontWeight.Black) 
+                                }
+                                TextButton(
+                                    onClick = { viewModel.onCallsignChanged("${qso.callWorked}/M") },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
+                                ) { 
+                                    Text("/M", fontSize = 12.sp, fontWeight = FontWeight.Black) 
+                                }
+                            }
                     
-                    if (isDuplicate) {
-                        Text("DUPE WARNING!", color = RobertColors.StatusOrange, fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                    Spacer(Modifier.height(Spacing.Small))
+                    
+                    Button(
+                        onClick = { viewModel.addToPileUp(qso.callWorked) },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = qso.callWorked.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("ADD TO QUEUE", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
             }
 
-            // 2. Big Log Button
-            Button(
-                onClick = { viewModel.saveQso() },
-                modifier = Modifier.fillMaxWidth().height(80.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Primary),
-                enabled = qso.callWorked.isNotEmpty()
-            ) {
-                Text("LOG CONTACT", fontWeight = FontWeight.Black, fontSize = 22.sp)
-            }
-
-            // 3. Quick Stats & Context
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                ContextBadge(activeAct?.currentBand ?: "---")
-                ContextBadge(activeAct?.currentMode ?: "---")
-                ContextBadge("${sessionQsos.size} QSOs")
-            }
-
-            // 4. Last 5 Contacts (Live list)
-            Text("RECENTLY LOGGED", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
+            // 2. Queue List
+            Text("WAITING IN QUEUE (${pileUpQueue.size})", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
             
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Small)
             ) {
-                items(sessionQsos.take(5)) { item ->
-                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))) {
+                items(pileUpQueue) { call ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = RobertColors.Surface.copy(alpha = 0.5f))
+                    ) {
                         Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
-                            Text(item.callWorked, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = RobertColors.Primary)
-                            Spacer(Modifier.width(Spacing.Small))
-                            Text("${item.band} • ${item.mode}", style = MaterialTheme.typography.bodySmall, color = RobertColors.TextSecondary)
+                            Text(call, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge, color = RobertColors.Primary)
                             Spacer(Modifier.weight(1f))
-                            Text("S:${item.rstSent} R:${item.rstReceived}", style = MaterialTheme.typography.labelSmall)
+                            
+                            Button(
+                                onClick = { 
+                                    viewModel.usePileUpCall(call)
+                                    onNavigateToLogging()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text("USE", fontWeight = FontWeight.Bold)
+                            }
+                            
+                            Spacer(Modifier.width(Spacing.Small))
+                            
+                            IconButton(onClick = { /* Need long press handle */ }) {
+                                // For simplicity using a clickable on the row or custom interaction
+                            }
+                            
+                            // Single-tap Clear button
+                            Surface(
+                                modifier = Modifier
+                                    .clickable { viewModel.clearPileUpCall(call) },
+                                color = RobertColors.StatusRed.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, RobertColors.StatusRed.copy(alpha = 0.3f))
+                            ) {
+                                Text(
+                                    "CLEAR", 
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = RobertColors.StatusRed,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
                         }
                     }
                 }

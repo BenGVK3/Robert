@@ -79,13 +79,21 @@ fun RobertNavHost(
                 onNavigateToActivation = { navController.navigate(Screen.LogbookActivation.route) },
                 onNavigateToStats = { navController.navigate(Screen.LogbookStats.route) },
                 onNavigateToSettings = { navController.navigate(Screen.LogbookSettings.route) },
-                onNavigateToPileUp = { navController.navigate(Screen.LogbookPileUp.route) }
+                onNavigateToPileUp = { navController.navigate(Screen.LogbookPileUp.route) },
+                onNavigateToAllLogs = { navController.navigate("logbook/all") }
+            )
+        }
+        
+        composable("logbook/all") {
+            au.com.benji.robert.screens.logbook.AllLogsScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 
         composable(Screen.LogbookPileUp.route) {
             PileUpLoggingScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToLogging = { navController.navigate(Screen.LogbookLogging.route) }
             )
         }
 

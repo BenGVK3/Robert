@@ -123,7 +123,7 @@ fun LogbookStatsScreen(
     }
 }
 
-private fun exportDestinationSelection(context: android.content.Context, filename: String, content: String) {
+fun exportDestinationSelection(context: android.content.Context, filename: String, content: String) {
     val options = arrayOf("Save to Downloads", "Send via Email")
     android.app.AlertDialog.Builder(context)
         .setTitle("Export Destination")
@@ -136,7 +136,7 @@ private fun exportDestinationSelection(context: android.content.Context, filenam
         .show()
 }
 
-private fun saveFileToDownloads(context: android.content.Context, filename: String, content: String) {
+fun saveFileToDownloads(context: android.content.Context, filename: String, content: String) {
     try {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val resolver = context.contentResolver

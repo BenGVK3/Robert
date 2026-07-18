@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,6 +38,7 @@ fun LogbookScreen(
     onNavigateToStats: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onNavigateToPileUp: () -> Unit = {},
+    onNavigateToAllLogs: () -> Unit = {},
     viewModel: LogbookViewModel = viewModel()
 ) {
     val qsos by viewModel.qsos.collectAsStateWithLifecycle()
@@ -44,6 +46,9 @@ fun LogbookScreen(
     val sessionQsoCount by viewModel.sessionQsos.collectAsStateWithLifecycle()
     val elapsedTime by viewModel.elapsedTime.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
+    val pileUpQueue by viewModel.pileUpQueue.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showExportSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.padding(paddingValues),
@@ -51,6 +56,7 @@ fun LogbookScreen(
             TopAppBar(
                 title = { Text("LOGBOOK", fontWeight = FontWeight.Black, letterSpacing = 1.sp) },
                 actions = {
+                    IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Default.FileUpload, "Export") }
                     IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.BarChart, "Stats") }
                     IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
                 }
@@ -77,6 +83,7 @@ fun LogbookScreen(
                         onPause = { viewModel.pauseActivation() },
                         onFinish = { viewModel.finishActivation() },
                         onPileUp = onNavigateToPileUp,
+                        pileUpCount = pileUpQueue.size,
                         onClick = onNavigateToActivation
                     )
                 }
@@ -110,7 +117,7 @@ fun LogbookScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text("RECENT CONTACTS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = {}) { 
+                    TextButton(onClick = onNavigateToAllLogs) { 
                         Text("VIEW ALL")
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
                     }
@@ -130,23 +137,49 @@ fun LogbookScreen(
                     QsoSwipeItem(
                         qso, 
                         onDuplicate = { viewModel.duplicateQso(qso) }, 
-                        onDelete = { viewModel.deleteQso(qso) }
+                        onDelete = { viewModel.deleteQso(qso) },
+                        onClick = {
+                            viewModel.editQso(qso)
+                            onNavigateToLogging()
+                        }
                     )
                 }
             }
+        }
+    }
+
+    if (showExportSheet) {
+        ModalBottomSheet(onDismissRequest = { showExportSheet = false }) {
+            ExportBottomSheetContent(
+                onExportAdif = {
+                    val adif = viewModel.exportLogs()
+                    exportDestinationSelection(context, "logbook_${System.currentTimeMillis()}.adi", adif)
+                    showExportSheet = false
+                },
+                onExportCabrillo = {
+                    val cab = viewModel.exportCabrillo()
+                    exportDestinationSelection(context, "contest_${System.currentTimeMillis()}.log", cab)
+                    showExportSheet = false
+                },
+                onExportCsv = {
+                    val csv = viewModel.exportCsv()
+                    exportDestinationSelection(context, "logbook_${System.currentTimeMillis()}.csv", csv)
+                    showExportSheet = false
+                }
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QsoSwipeItem(qso: Qso, onDuplicate: () -> Unit, onDelete: () -> Unit) {
+fun QsoSwipeItem(qso: Qso, onDuplicate: () -> Unit, onDelete: () -> Unit, onClick: () -> Unit) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             when (it) {
                 SwipeToDismissBoxValue.StartToEnd -> {
                     onDuplicate()
-                    false // Don't actually dismiss the row visually
+                    false 
                 }
                 SwipeToDismissBoxValue.EndToStart -> {
                     onDelete()
@@ -176,7 +209,57 @@ fun QsoSwipeItem(qso: Qso, onDuplicate: () -> Unit, onDelete: () -> Unit) {
             }
         }
     ) {
-        QsoRowItem(qso)
+        Box(modifier = Modifier.clickable { onClick() }) {
+            QsoRowItem(qso)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AllLogsScreen(
+    onBack: () -> Unit,
+    viewModel: LogbookViewModel = viewModel()
+) {
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val filteredQsos by viewModel.filteredQsos.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { viewModel.onSearchQueryChanged(it) },
+                        placeholder = { Text("Search logs...") },
+                        modifier = Modifier.fillMaxWidth().padding(end = 16.dp),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Search, null) }
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(Spacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+        ) {
+            items(filteredQsos, key = { it.id }) { qso ->
+                QsoSwipeItem(
+                    qso, 
+                    onDuplicate = { viewModel.duplicateQso(qso) }, 
+                    onDelete = { viewModel.deleteQso(qso) },
+                    onClick = {
+                        viewModel.editQso(qso)
+                        onBack() // Or navigate to logging - but edit typically goes to the entry screen
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -210,14 +293,15 @@ fun StatItem(label: String, value: String) {
 fun LargeActionButton(title: String, icon: ImageVector, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        modifier = modifier.height(100.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color)
+        modifier = modifier.height(80.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = if (color == RobertColors.Accent) Color.Black else Color.White),
+        contentPadding = PaddingValues(Spacing.Small)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, modifier = Modifier.size(32.dp))
-            Spacer(Modifier.height(4.dp))
-            Text(title, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+            Icon(icon, null, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.height(2.dp))
+            Text(title, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
     }
 }
@@ -230,6 +314,7 @@ fun ActivationBanner(
     onPause: () -> Unit,
     onFinish: () -> Unit,
     onPileUp: () -> Unit,
+    pileUpCount: Int,
     onClick: () -> Unit
 ) {
     val duration = String.format(Locale.US, "%02d:%02d:%02d", (timeMillis/3600000), (timeMillis/60000)%60, (timeMillis/1000)%60)
@@ -262,29 +347,32 @@ fun ActivationBanner(
                 Button(
                     onClick = onPause, 
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), contentColor = RobertColors.TextPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), contentColor = RobertColors.TextPrimary),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
                     Icon(if (active.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (active.isPaused) "RESUME" else "PAUSE", fontSize = 11.sp)
+                    Spacer(Modifier.width(2.dp))
+                    Text(if (active.isPaused) "RESUME" else "PAUSE", fontSize = 10.sp, maxLines = 1)
                 }
                 Button(
                     onClick = onPileUp, 
                     modifier = Modifier.weight(1.2f),
-                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Accent, contentColor = Color.Black)
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.Accent, contentColor = Color.Black),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
                     Icon(Icons.Default.FlashOn, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("PILE-UP", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                    Text("PILE-UP ($pileUpCount)", fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
                 }
                 Button(
                     onClick = onFinish, 
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = RobertColors.StatusRed),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
                     Icon(Icons.Default.Stop, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("FINISH", fontSize = 11.sp)
+                    Text("FINISH", fontSize = 10.sp, maxLines = 1)
                 }
             }
         }

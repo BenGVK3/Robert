@@ -28,6 +28,7 @@ fun LogbookSettingsScreen(
     onBack: () -> Unit,
     onNavigateToOperators: () -> Unit = {},
     onNavigateToUserProfiles: () -> Unit = {},
+    onNavigateToRadios: () -> Unit = {},
     onNavigateToStats: () -> Unit = {},
     viewModel: LogbookViewModel = viewModel()
 ) {
@@ -49,7 +50,7 @@ fun LogbookSettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(Spacing.Medium),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Large)
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
             SettingsGroup(title = "GENERAL LOGGING") {
                 TogglePreference(
@@ -62,45 +63,47 @@ fun LogbookSettingsScreen(
                     checked = settings.autoIncrementTime,
                     onCheckedChange = { viewModel.updateSettings(settings.copy(autoIncrementTime = it)) }
                 )
-                TogglePreference(
-                    title = "Copy previous Operator",
-                    checked = settings.copyPreviousOperator,
-                    onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousOperator = it)) }
-                )
-                TogglePreference(
-                    title = "Copy previous QTH",
-                    checked = settings.copyPreviousQth,
-                    onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousQth = it)) }
-                )
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Medium)) {
+                    TogglePreference(
+                        title = "Copy Prev Op",
+                        checked = settings.copyPreviousOperator,
+                        onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousOperator = it)) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TogglePreference(
+                        title = "Copy Prev QTH",
+                        checked = settings.copyPreviousQth,
+                        onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousQth = it)) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             SettingsGroup(title = "EQUIPMENT & OPERATORS") {
-                ActionPreference(
-                    title = "Operator Profiles",
-                    subtitle = "Manage callsigns and default stations",
-                    icon = Icons.Default.Person,
-                    onClick = onNavigateToOperators
-                )
-                ActionPreference(
-                    title = "Radio Profiles",
-                    subtitle = "Your transceiver inventory",
-                    icon = Icons.Default.Radio,
-                    onClick = {} // Could link back to logbook/radios if needed
-                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    ActionPreference(
+                        title = "Operators",
+                        subtitle = "Manage IDs",
+                        icon = Icons.Default.Person,
+                        onClick = onNavigateToOperators,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ActionPreference(
+                        title = "Radios",
+                        subtitle = "Inventory",
+                        icon = Icons.Default.Radio,
+                        onClick = onNavigateToRadios,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             SettingsGroup(title = "SERVICES & INTEGRATIONS") {
                 ActionPreference(
                     title = "Service Credentials",
-                    subtitle = "QRZ, LoTW, eQSL API Keys",
+                    subtitle = "QRZ, LoTW, API Keys",
                     icon = Icons.Default.VpnKey,
                     onClick = onNavigateToUserProfiles
-                )
-                ActionPreference(
-                    title = "Export Logbook",
-                    subtitle = "Save locally or Send via Email",
-                    icon = Icons.Default.FileUpload,
-                    onClick = onNavigateToStats
                 )
             }
             
@@ -120,9 +123,9 @@ fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-fun TogglePreference(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun TogglePreference(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(Spacing.Medium),
+        modifier = modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(Spacing.Medium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -132,9 +135,9 @@ fun TogglePreference(title: String, checked: Boolean, onCheckedChange: (Boolean)
 }
 
 @Composable
-fun ActionPreference(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
+fun ActionPreference(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(Spacing.Medium),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(Spacing.Medium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, null, tint = RobertColors.Primary)

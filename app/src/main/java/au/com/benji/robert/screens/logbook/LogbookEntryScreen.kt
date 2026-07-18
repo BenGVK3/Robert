@@ -36,6 +36,7 @@ import au.com.benji.robert.theme.Spacing
 fun LogbookEntryScreen(
     onBack: () -> Unit,
     onNavigateToMap: (String) -> Unit = {},
+    onNavigateToPileUp: () -> Unit = {},
     viewModel: LogbookViewModel = viewModel()
 ) {
     val qso by viewModel.currentQso.collectAsStateWithLifecycle()
@@ -60,7 +61,13 @@ fun LogbookEntryScreen(
                 },
                 actions = {
                     IconButton(onClick = { focusManager.clearFocus() }) { Icon(Icons.Default.KeyboardHide, "Hide Keyboard") }
-                    IconButton(onClick = { viewModel.resetCurrentQso() }) { Icon(Icons.Default.Refresh, "Clear") }
+                    val pileUpQueue by viewModel.pileUpQueue.collectAsStateWithLifecycle()
+                    if (pileUpQueue.isNotEmpty()) {
+                        TextButton(onClick = onNavigateToPileUp) {
+                            Text("Q(${pileUpQueue.size})", fontWeight = FontWeight.Bold, color = RobertColors.Primary)
+                        }
+                    }
+                    IconButton(onClick = { viewModel.clearCurrentQso() }) { Icon(Icons.Default.Refresh, "Clear") }
                 }
             )
         }
@@ -88,7 +95,10 @@ fun LogbookEntryScreen(
                                 onValueChange = { viewModel.onCallsignChanged(it) },
                                 label = { Text("WORKED CALLSIGN", fontWeight = FontWeight.Bold) },
                                 modifier = Modifier.weight(1f),
-                                textStyle = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Black, color = RobertColors.Primary),
+                                textStyle = MaterialTheme.typography.headlineLarge.copy(
+                                    fontWeight = FontWeight.Black, 
+                                    color = if (isDuplicate) RobertColors.StatusRed else RobertColors.Primary
+                                ),
                                 placeholder = { Text("EG: VK3ESE", modifier = Modifier.alpha(0.3f)) },
                                 keyboardOptions = KeyboardOptions(
                                     capitalization = KeyboardCapitalization.Characters,
@@ -104,11 +114,40 @@ fun LogbookEntryScreen(
                                 LookupStatusBadge(lookupStatus)
                             }
                         }
+
+                        // Modifier buttons below text field
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            TextButton(
+                                onClick = { viewModel.onCallsignChanged("${qso.callWorked}/P") },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
+                            ) { 
+                                Text("/P (PORTABLE)", fontSize = 11.sp, fontWeight = FontWeight.Bold) 
+                            }
+                            TextButton(
+                                onClick = { viewModel.onCallsignChanged("${qso.callWorked}/M") },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
+                            ) { 
+                                Text("/M (MOBILE)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                         
                         if (isDuplicate) {
-                            Text("POSSIBLE DUPLICATE (24H)", color = RobertColors.StatusOrange, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            Text("DUPLICATE QSO DETECTED", color = RobertColors.StatusRed, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                         }
                     }
+                    
+                    OutlinedTextField(
+                        value = qso.name,
+                        onValueChange = { viewModel.updateCurrentQso { q -> q.copy(name = it) } },
+                        label = { Text("NAME / OP") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("Station Operator Name") }
+                    )
                     
                     // 1a. Station Intelligence Strip (Flag & DXCC)
                     lookupResult?.let {
@@ -120,9 +159,6 @@ fun LogbookEntryScreen(
                             IconButton(onClick = { onNavigateToMap(qso.gridsquare) }, modifier = Modifier.size(24.dp)) {
                                 Icon(Icons.Default.Map, null, tint = RobertColors.Primary, modifier = Modifier.size(18.dp))
                             }
-                        }
-                        if (it.name.isNotEmpty()) {
-                            Text(it.name, fontWeight = FontWeight.Bold, color = RobertColors.Primary)
                         }
                     }
 
@@ -216,26 +252,57 @@ fun LogbookEntryScreen(
             if (showAdvanced) {
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)) {
                     Column(modifier = Modifier.padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                        Text("LOCATION & NOTES", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
+                        Text("EQUIPMENT", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            OutlinedTextField(
+                                value = qso.radioId?.toString() ?: "", 
+                                onValueChange = { viewModel.updateCurrentQso { q -> q.copy(radioId = it.toLongOrNull()) } }, 
+                                label = { Text("RADIO USED") }, 
+                                modifier = Modifier.weight(1f), 
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = qso.antennaId?.toString() ?: "", 
+                                onValueChange = { viewModel.updateCurrentQso { q -> q.copy(antennaId = it.toLongOrNull()) } }, 
+                                label = { Text("ANTENNA USED") }, 
+                                modifier = Modifier.weight(1f), 
+                                singleLine = true
+                            )
+                        }
+
+                        Text("LOCATION", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                             OutlinedTextField(value = qso.qth, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(qth = it) } }, label = { Text("QTH/CITY") }, modifier = Modifier.weight(1f), singleLine = true)
                             OutlinedTextField(value = qso.gridsquare, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(gridsquare = it.uppercase()) } }, label = { Text("GRID") }, modifier = Modifier.weight(0.6f), singleLine = true)
                         }
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            OutlinedTextField(value = qso.stationLat?.toString() ?: "", onValueChange = { viewModel.updateCurrentQso { q -> q.copy(stationLat = it.toDoubleOrNull()) } }, label = { Text("LAT") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(value = qso.stationLon?.toString() ?: "", onValueChange = { viewModel.updateCurrentQso { q -> q.copy(stationLon = it.toDoubleOrNull()) } }, label = { Text("LON") }, modifier = Modifier.weight(1f), singleLine = true)
+                        }
                         
-                        Text("PROGRAMS & ACTIVATIONS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
+                        Text("ACTIVATIONS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                             OutlinedTextField(value = qso.potaRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(potaRef = it.uppercase()) } }, label = { Text("POTA") }, modifier = Modifier.weight(1f), singleLine = true)
                             OutlinedTextField(value = qso.sotaRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(sotaRef = it.uppercase()) } }, label = { Text("SOTA") }, modifier = Modifier.weight(1f), singleLine = true)
                         }
-                        
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            OutlinedTextField(value = qso.wwffRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(wwffRef = it.uppercase()) } }, label = { Text("WWFF") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(value = qso.hemaRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(hemaRef = it.uppercase()) } }, label = { Text("HEMA") }, modifier = Modifier.weight(1f), singleLine = true)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            OutlinedTextField(value = qso.siotaRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(siotaRef = it.uppercase()) } }, label = { Text("SiOTA") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(value = qso.vkShireRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(vkShireRef = it.uppercase()) } }, label = { Text("VK SHIRE") }, modifier = Modifier.weight(1f), singleLine = true)
+                        }
+
+                        Text("YOUR REFS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                             OutlinedTextField(value = qso.myPotaRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(myPotaRef = it.uppercase()) } }, label = { Text("MY POTA") }, modifier = Modifier.weight(1f), singleLine = true)
                             OutlinedTextField(value = qso.mySotaRef, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(mySotaRef = it.uppercase()) } }, label = { Text("MY SOTA") }, modifier = Modifier.weight(1f), singleLine = true)
                         }
 
                         Text("OTHER", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
-                        OutlinedTextField(value = qso.contestId, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(contestId = it) } }, label = { Text("CONTEST ID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                        OutlinedTextField(value = qso.notes, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(notes = it) } }, label = { Text("GENERAL NOTES") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        OutlinedTextField(value = qso.contestId, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(contestId = it) } }, label = { Text("CONTEST EXCHANGE") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        OutlinedTextField(value = qso.notes, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(notes = it) } }, label = { Text("NOTES / QSL MSG") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     }
                 }
             }

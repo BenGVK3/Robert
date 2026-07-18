@@ -14,14 +14,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.models.*
 import au.com.benji.robert.theme.RobertColors
 import au.com.benji.robert.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogbookUserProfilesScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: LogbookViewModel = viewModel()
 ) {
+    val credentials by viewModel.repository.serviceCredentials.collectAsStateWithLifecycle(emptyList<ServiceCredential>())
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -53,20 +59,40 @@ fun LogbookUserProfilesScreen(
             }
 
             CredentialGroup(title = "CALLSIGN LOOKUPS", icon = Icons.Default.Public) {
-                CredentialField(label = "QRZ.com XML Key")
-                CredentialField(label = "HamQTH API Key")
+                val qrz = credentials.find { it.serviceName == "QRZ" } ?: ServiceCredential("QRZ")
+                CredentialField(
+                    label = "QRZ.com Username",
+                    value = qrz.username,
+                    onValueChange = { viewModel.updateCredential(qrz.copy(username = it)) }
+                )
+                CredentialField(
+                    label = "QRZ.com Password",
+                    value = qrz.passwordEncrypted,
+                    isPassword = true,
+                    onValueChange = { viewModel.updateCredential(qrz.copy(passwordEncrypted = it)) }
+                )
+                
+                val callook = credentials.find { it.serviceName == "Callook" } ?: ServiceCredential("Callook")
+                TogglePreference(
+                    title = "Enable Callook (US)",
+                    checked = callook.isEnabled,
+                    onCheckedChange = { viewModel.updateCredential(callook.copy(isEnabled = it)) }
+                )
             }
 
             CredentialGroup(title = "ELECTRONIC LOGS", icon = Icons.Default.CloudQueue) {
-                CredentialField(label = "eQSL Username")
-                CredentialField(label = "eQSL Password", isPassword = true)
-                CredentialField(label = "LoTW Username")
-                CredentialField(label = "ClubLog API Key")
-            }
-
-            CredentialGroup(title = "SPOTTING SERVICES", icon = Icons.Default.Language) {
-                CredentialField(label = "SOTAwatch API Key")
-                CredentialField(label = "POTA API Key")
+                val eqsl = credentials.find { it.serviceName == "eQSL" } ?: ServiceCredential("eQSL")
+                CredentialField(
+                    label = "eQSL Username",
+                    value = eqsl.username,
+                    onValueChange = { viewModel.updateCredential(eqsl.copy(username = it)) }
+                )
+                CredentialField(
+                    label = "eQSL Password",
+                    value = eqsl.passwordEncrypted,
+                    isPassword = true,
+                    onValueChange = { viewModel.updateCredential(eqsl.copy(passwordEncrypted = it)) }
+                )
             }
             
             Spacer(Modifier.height(Spacing.ExtraLarge))
@@ -89,8 +115,7 @@ fun CredentialGroup(title: String, icon: androidx.compose.ui.graphics.vector.Ima
 }
 
 @Composable
-fun CredentialField(label: String, isPassword: Boolean = false) {
-    var value by remember { mutableStateOf("") }
+fun CredentialField(label: String, value: String, onValueChange: (String) -> Unit, isPassword: Boolean = false) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Medium, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -98,12 +123,11 @@ fun CredentialField(label: String, isPassword: Boolean = false) {
     ) {
         OutlinedTextField(
             value = value,
-            onValueChange = { value = it },
+            onValueChange = onValueChange,
             label = { Text(label, style = MaterialTheme.typography.labelSmall) },
             modifier = Modifier.weight(1f),
             visualTransformation = if (isPassword) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             singleLine = true
         )
-        IconButton(onClick = {}) { Icon(Icons.Default.BugReport, "Test", tint = RobertColors.TextSecondary.copy(alpha = 0.5f)) }
     }
 }

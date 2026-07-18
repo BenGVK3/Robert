@@ -25,7 +25,7 @@ import java.util.Calendar
 
 class LogbookViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = DatabaseModule.logbookRepository(application)
+    val repository = DatabaseModule.logbookRepository(application)
     private val dxRepository = DxRepository(DatabaseModule.cacheDao(application))
     private val solarRepository = SolarDataRepository(DatabaseModule.cacheDao(application))
     private val propagationRepository = DatabaseModule.bandConditionsRepository(application)
@@ -114,37 +114,39 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateCurrentQso(update: (Qso) -> Qso) {
         val old = _currentQso.value
-        val next = update(old)
+        var next = update(old)
         
         // Auto-attach active activation
         val active = activeActivation.value
-        var finalQso = if (active != null) {
-            when(active.type) {
+        if (active != null) {
+            next = when(active.type) {
                 "POTA" -> next.copy(myPotaRef = active.reference)
                 "SOTA" -> next.copy(mySotaRef = active.reference)
                 "WWFF" -> next.copy(myWwffRef = active.reference)
                 else -> next
             }
-        } else next
+        }
 
         // Auto-detect band/mode
-        if (finalQso.frequency != old.frequency) {
-            val freqKhz = finalQso.frequency * 1000.0
+        if (next.frequency != old.frequency) {
+            val freqKhz = next.frequency * 1000.0
             val band = BandUtils.getBandFromFrequency(freqKhz)
             if (band.isNotEmpty()) {
-                val mode = BandUtils.getSuggestedMode(freqKhz)
-                finalQso = finalQso.copy(band = band, mode = if (mode.isNotEmpty()) mode else finalQso.mode)
+                val suggestedMode = BandUtils.getSuggestedMode(freqKhz)
+                next = next.copy(band = band, mode = if (modeIsAuto(next.mode)) (if (suggestedMode.isNotEmpty()) suggestedMode else next.mode) else next.mode)
                 isOutsideBand.value = false
             } else {
                 isOutsideBand.value = true
             }
         }
 
-        _currentQso.value = finalQso
+        _currentQso.value = next
         if (settings.value.autoSave) {
-            viewModelScope.launch { repository.saveDraft(finalQso) }
+            viewModelScope.launch { repository.saveDraft(next) }
         }
     }
+
+    private fun modeIsAuto(mode: String) = mode.isEmpty() || mode == "SSB" || mode == "CW"
 
     fun onCallsignChanged(call: String) {
         val upper = call.uppercase().trim()
@@ -164,21 +166,16 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
             
             // 1. Instant Local History
             _callHistory.value = lookupService.getHistorySummary(upper)
+            
+            // Check for Duplicate
             checkDuplicate(upper)
             
             // 2. Wait for user to finish typing
-            delay(600)
+            delay(500)
             
-            // 3. Sequential Online Lookup
+            // 3. Online Lookup
             val (result, status) = lookupService.lookup(upper)
-            
-            // Only show NO_MATCH if we truly found nothing and reached a minimum length
-            if (status == LookupStatus.NO_MATCH && upper.length < 5) {
-                _lookupStatus.value = LookupStatus.IDLE
-            } else {
-                _lookupStatus.value = status
-            }
-
+            _lookupStatus.value = status
             _lookupResult.value = result
             
             result?.let { res ->
@@ -198,11 +195,21 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
+    }
+
     private fun checkDuplicate(call: String) {
         val q = _currentQso.value
-        isDuplicate.value = qsos.value.any { 
-            it.callWorked.equals(call, ignoreCase = true) && it.band == q.band && it.mode == q.mode && (System.currentTimeMillis() - it.timestamp) < 24 * 3600000
+        val now = System.currentTimeMillis()
+        val inLogs = qsos.value.any { 
+            it.callWorked.equals(call, ignoreCase = true) && 
+            it.band == q.band && 
+            it.mode == q.mode && 
+            (now - it.timestamp) < 24 * 3600000 
         }
+        val inPileUp = _pileUpQueue.value.any { it.equals(call, ignoreCase = true) }
+        isDuplicate.value = inLogs || inPileUp
     }
 
     fun saveQso() {
@@ -210,6 +217,10 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
             repository.insertQso(_currentQso.value)
             resetCurrentQso()
         }
+    }
+
+    fun clearCurrentQso() {
+        viewModelScope.launch { resetCurrentQso() }
     }
 
     fun deleteQso(qso: Qso) {
@@ -225,31 +236,36 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun resetCurrentQso() {
-        viewModelScope.launch {
-            val s = settings.value
-            val active = activeActivation.value
-            val prev = _currentQso.value
-            
-            _currentQso.value = Qso(
-                operatorCallsign = if (s.copyPreviousOperator) prev.operatorCallsign else "",
-                onAirCallsign = if (s.copyPreviousOperator) prev.onAirCallsign else "",
-                callWorked = "",
-                frequency = prev.frequency,
-                band = prev.band,
-                mode = prev.mode,
-                power = prev.power,
-                radioId = prev.radioId,
-                antennaId = prev.antennaId,
-                qth = if (s.copyPreviousQth) prev.qth else "",
-                myPotaRef = if (active?.type == "POTA") active.reference else "",
-                mySotaRef = if (active?.type == "SOTA") active.reference else "",
-                myWwffRef = if (active?.type == "WWFF") active.reference else ""
-            )
-            _callsignInfo.value = null
-            isDuplicate.value = false
-            repository.saveDraft(null)
-        }
+    fun editQso(qso: Qso) {
+        _currentQso.value = qso
+    }
+
+    private suspend fun resetCurrentQso() {
+        val s = settings.value
+        val active = activeActivation.value
+        val prev = _currentQso.value
+        
+        _currentQso.value = Qso(
+            operatorCallsign = if (s.copyPreviousOperator) prev.operatorCallsign else "",
+            onAirCallsign = if (s.copyPreviousOperator) prev.onAirCallsign else "",
+            callWorked = "",
+            frequency = prev.frequency,
+            band = prev.band,
+            mode = prev.mode,
+            power = prev.power,
+            radioId = prev.radioId,
+            antennaId = prev.antennaId,
+            qth = if (s.copyPreviousQth) prev.qth else "",
+            myPotaRef = if (active?.type == "POTA") active.reference else "",
+            mySotaRef = if (active?.type == "SOTA") active.reference else "",
+            myWwffRef = if (active?.type == "WWFF") active.reference else ""
+        )
+        _callsignInfo.value = null
+        _lookupStatus.value = LookupStatus.IDLE
+        _lookupResult.value = null
+        _callHistory.value = null
+        isDuplicate.value = false
+        repository.saveDraft(null)
     }
 
     // --- Session Control ---
@@ -272,6 +288,25 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.saveActiveActivation(null)
         }
+    }
+
+    // --- Session State ---
+    private val _pileUpQueue = MutableStateFlow<List<String>>(emptyList())
+    val pileUpQueue = _pileUpQueue.asStateFlow()
+
+    fun addToPileUp(call: String) {
+        if (call.isEmpty()) return
+        _pileUpQueue.value = _pileUpQueue.value + call.uppercase()
+        updateCurrentQso { it.copy(callWorked = "") }
+    }
+
+    fun usePileUpCall(call: String) {
+        _pileUpQueue.value = _pileUpQueue.value - call
+        onCallsignChanged(call)
+    }
+
+    fun clearPileUpCall(call: String) {
+        _pileUpQueue.value = _pileUpQueue.value - call
     }
 
     // --- Statistics ---
@@ -334,6 +369,19 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     fun exportLogs(): String = repository.exportToAdif(qsos.value)
     fun exportCabrillo(): String = repository.exportToCabrillo(qsos.value, _currentQso.value.operatorCallsign)
     fun exportCsv(): String = repository.exportToCsv(qsos.value)
+    
+    fun updateCredential(cred: ServiceCredential) {
+        viewModelScope.launch {
+            val current = repository.serviceCredentials.first()
+            val index = current.indexOfFirst { it.serviceName == cred.serviceName }
+            val newList = if (index != -1) {
+                current.toMutableList().apply { set(index, cred) }
+            } else {
+                current + cred
+            }
+            repository.updateCredentials(newList)
+        }
+    }
 }
 
 data class LogbookStats(
