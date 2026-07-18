@@ -38,46 +38,84 @@ fun MoonScreen(
 ) {
     val moonData by viewModel.moonData.collectAsStateWithLifecycle()
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(Spacing.Medium),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        item {
-            Text(
-                text = "Moon (EME/Moonbounce)",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+    Scaffold(
+        modifier = Modifier.padding(paddingValues),
+        topBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.Medium)
+                    .padding(top = Spacing.Small),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    modifier = Modifier.size(56.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Image(
+                            painter = painterResource(id = au.com.benji.robert.R.drawable.moon1),
+                            contentDescription = null,
+                            modifier = Modifier.size(42.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+                Spacer(Modifier.height(Spacing.Small))
+                Text(
+                    text = "Moon Center",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "EME and Moonbounce tracking",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF03DAC6),
+                    textAlign = TextAlign.Center
+                )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                    modifier = Modifier.padding(top = Spacing.Small)
+                )
+            }
         }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = Spacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            item {
+                CurrentMoonCard(moonData)
+            }
 
-        item {
-            CurrentMoonCard(moonData)
-        }
+            item {
+                MoonPositionCard(moonData)
+            }
 
-        item {
-            MoonPositionCard(moonData)
-        }
+            item {
+                EmeInformationCard(moonData)
+            }
 
-        item {
-            EmeInformationCard(moonData)
-        }
+            item {
+                EmeOperatingConditionsCard(moonData)
+            }
 
-        item {
-            EmeOperatingConditionsCard(moonData)
-        }
+            item {
+                LunarCalendarCard(moonData)
+            }
 
-        item {
-            LunarCalendarCard(moonData)
-        }
-
-        item {
-            QuickFactsCard(moonData)
+            item {
+                QuickFactsCard(moonData)
+            }
         }
     }
 }

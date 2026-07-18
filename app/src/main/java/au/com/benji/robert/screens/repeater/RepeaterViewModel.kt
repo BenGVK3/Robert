@@ -46,10 +46,10 @@ class RepeaterViewModel(application: Application) : AndroidViewModel(application
                 repeater.frequency.contains(query)
             
             val matchesBand = filter.band == "All" || 
-                repeater.band?.contains(filter.band, ignoreCase = true) == true
+                matchesBandFilter(repeater.band, repeater.frequency, filter.band)
                 
             val matchesMode = filter.mode == "All" || 
-                repeater.mode?.contains(filter.mode, ignoreCase = true) == true
+                matchesModeFilter(repeater.mode, filter.mode)
                 
             val matchesFavorite = !filter.onlyFavorites || repeater.isFavorite
             val matchesDistance = repeater.distance <= filter.maxDistance
@@ -57,6 +57,48 @@ class RepeaterViewModel(application: Application) : AndroidViewModel(application
             matchesSearch && matchesBand && matchesMode && matchesFavorite && matchesDistance
         }.sortedBy { it.distance }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun matchesBandFilter(repeaterBand: String?, frequency: String, filterBand: String): Boolean {
+        val fBand = filterBand.lowercase().trim()
+        val rBand = repeaterBand?.lowercase()?.trim() ?: ""
+        
+        // 1. Try mapping via frequency (most reliable)
+        val freqNum = frequency.toDoubleOrNull() ?: 0.0
+        val mappedBand = when {
+            freqNum in 28.0..29.9 -> "10m"
+            freqNum in 50.0..54.0 -> "6m"
+            freqNum in 144.0..148.0 -> "2m"
+            freqNum in 430.0..450.0 -> "70cm"
+            freqNum > 1200.0 -> "23cm"
+            else -> null
+        }
+        if (mappedBand == fBand) return true
+
+        // 2. Fallback to existing band string keywords
+        return when (fBand) {
+            "2m" -> rBand.contains("144") || rBand.contains("146") || rBand.contains("147") || rBand.contains("vhf")
+            "70cm" -> rBand.contains("43") || rBand.contains("44") || rBand.contains("uhf")
+            "6m" -> rBand.contains("52") || rBand.contains("53") || rBand.contains("50")
+            "10m" -> rBand.contains("29") || rBand.contains("28")
+            "23cm" -> rBand.contains("1200") || rBand.contains("1290") || rBand.contains("1.2")
+            else -> rBand.contains(fBand)
+        }
+    }
+
+    private fun matchesModeFilter(repeaterMode: String?, filterMode: String): Boolean {
+        if (repeaterMode == null) return false
+        val rMode = repeaterMode.lowercase().trim()
+        val fMode = filterMode.lowercase().trim()
+        
+        return when (fMode) {
+            "fm" -> rMode.contains("fm") || rMode.contains("analog") || rMode.contains("f3e") || rMode.isEmpty() || rMode.contains("voice")
+            "dmr" -> rMode.contains("dmr") || rMode.contains("mototrbo") || rMode.contains("trbo") || (rMode.contains("digital") && !rMode.contains("dstar"))
+            "fusion" -> rMode.contains("fusion") || rMode.contains("c4fm") || rMode.contains("ysf")
+            "d-star" -> rMode.contains("dstar") || rMode.contains("d-star") || rMode.contains("f1d") || rMode.contains("dv")
+            "p25" -> rMode.contains("p25") || rMode.contains("apco")
+            else -> rMode.contains(fMode)
+        }
+    }
 
     val userEquipment: StateFlow<List<ShackEntity>> = shackRepository.equipment()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -174,7 +216,7 @@ data class RepeaterFilters(
     val band: String = "All",
     val mode: String = "All",
     val onlyFavorites: Boolean = false,
-    val maxDistance: Int = 200
+    val maxDistance: Int = 5000
 )
 
 sealed class RepeaterUiState {

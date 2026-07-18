@@ -1,5 +1,6 @@
 package au.com.benji.robert.screens.satellites
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -20,12 +21,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.style.TextAlign
+import au.com.benji.robert.R
 import au.com.benji.robert.network.SatellitePosition
 import au.com.benji.robert.network.SatellitePass
 import au.com.benji.robert.network.SatelliteCommInfo
@@ -34,6 +38,7 @@ import au.com.benji.robert.theme.Spacing
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import au.com.benji.robert.components.RobertHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,37 +65,65 @@ fun SatellitesScreen(
     Scaffold(
         modifier = Modifier
             .padding(bottom = paddingValues.calculateBottomPadding())
-            .statusBarsPadding(), // Add proper system insets
+            .statusBarsPadding(),
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { 
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxHeight()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.Medium)
+                    .padding(top = Spacing.Medium)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            "SATELLITE TRACKING", 
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.2.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(1.dp))
-                        Box(
-                            modifier = Modifier
-                                .height(2.dp)
-                                .width(20.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.satellites1),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                        
+                        Spacer(Modifier.width(Spacing.Small))
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "SATELLITES",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "Track amateur and weather spacecraft",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF03DAC6)
+                            )
+                        }
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                modifier = Modifier.height(44.dp) // Slightly more compact header
-            )
+                    IconButton(
+                        onClick = { isSearchActive = !isSearchActive },
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(if (isSearchActive) Icons.Default.Close else Icons.Default.Search, null)
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), modifier = Modifier.padding(top = Spacing.Small))
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {

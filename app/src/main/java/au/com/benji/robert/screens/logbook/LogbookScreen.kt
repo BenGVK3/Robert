@@ -1,5 +1,6 @@
 package au.com.benji.robert.screens.logbook
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,11 +19,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.R
+import au.com.benji.robert.components.RobertHeader
 import au.com.benji.robert.models.*
 import au.com.benji.robert.theme.RobertColors
 import au.com.benji.robert.theme.Spacing
@@ -53,14 +58,33 @@ fun LogbookScreen(
     Scaffold(
         modifier = Modifier.padding(paddingValues),
         topBar = {
-            TopAppBar(
-                title = { Text("LOGBOOK", fontWeight = FontWeight.Black, letterSpacing = 1.sp) },
-                actions = {
-                    IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Default.FileUpload, "Export") }
-                    IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.BarChart, "Stats") }
-                    IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.Medium)
+                    .padding(top = Spacing.Small)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().height(64.dp)) {
+                    RobertHeader(
+                        title = "Logbook",
+                        description = "Track your contacts and activations",
+                        iconRes = R.drawable.logbook1,
+                        isCentered = true,
+                        isHorizontal = true,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Default.FileUpload, "Export") }
+                        IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.BarChart, "Stats") }
+                        IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
+                    }
                 }
-            )
+                HorizontalDivider(color = RobertColors.TextSecondary.copy(alpha = 0.1f), modifier = Modifier.padding(top = Spacing.Small))
+            }
         }
     ) { padding ->
         LazyColumn(

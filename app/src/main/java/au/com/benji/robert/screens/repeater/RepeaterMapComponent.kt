@@ -98,6 +98,16 @@ fun LeafletMapView(
                     infoWindow = null
                 }
                 mv.overlays.add(userMarker)
+
+                // 3. Add Scale Bar
+                val scaleBarOverlay = org.osmdroid.views.overlay.ScaleBarOverlay(mv)
+                scaleBarOverlay.setCentred(true)
+                scaleBarOverlay.setScaleBarOffset(context.resources.displayMetrics.widthPixels / 2, 10)
+                mv.overlays.add(scaleBarOverlay)
+
+                // 4. Add Copyright/Info
+                val copyrightOverlay = org.osmdroid.views.overlay.CopyrightOverlay(context)
+                mv.overlays.add(copyrightOverlay)
                 
                 // Repeater Markers
                 groupedRepeaters.forEach { (coords, list) ->
@@ -256,11 +266,16 @@ class RepeaterInfoWindow(
             }
 
             val titleView = TextView(context).apply {
-                text = "${repeater.callsign}${if (!repeater.name.isNullOrBlank()) " - ${repeater.name}" else ""}"
+                val siteName = repeater.name ?: repeater.location ?: ""
+                text = if (siteName.isNotBlank() && siteName != repeater.callsign) {
+                    "${repeater.callsign} - $siteName"
+                } else {
+                    repeater.callsign
+                }
                 setTextColor(Color.parseColor("#2196F3"))
                 textSize = 13f
                 setTypeface(null, Typeface.BOLD)
-                maxLines = 1
+                maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }
             repeaterLayout.addView(titleView)

@@ -1,10 +1,14 @@
 package au.com.benji.robert.screens.repeater
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -14,11 +18,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import au.com.benji.robert.R
 import au.com.benji.robert.models.Repeater
 import au.com.benji.robert.theme.Spacing
 
@@ -51,20 +58,71 @@ fun RepeaterListScreen(
         modifier = Modifier.padding(paddingValues),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Repeaters") },
-                actions = {
-                    IconButton(onClick = { viewModel.refreshFromWia() }) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = "Import WIA CSV")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.Medium)
+                    .padding(top = Spacing.Medium)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.repeaters1),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                        
+                        Spacer(Modifier.width(Spacing.Small))
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "REPEATERS",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "Find nearby FM and Digital stations",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF03DAC6)
+                            )
+                        }
                     }
-                    IconButton(onClick = { showFilterDialog = true }) {
-                        val isFiltered = filters.band != "All" || filters.mode != "All" || filters.onlyFavorites
-                        BadgedBox(badge = { if (isFiltered) Badge() }) {
-                            Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                    Row(
+                        modifier = Modifier.align(Alignment.TopEnd),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(onClick = { viewModel.refreshFromWia() }) {
+                            Icon(Icons.Default.CloudDownload, contentDescription = "Import WIA CSV")
+                        }
+                        IconButton(onClick = { showFilterDialog = true }) {
+                            val isFiltered = filters.band != "All" || filters.mode != "All" || filters.onlyFavorites
+                            BadgedBox(badge = { if (isFiltered) Badge() }) {
+                                Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                            }
                         }
                     }
                 }
-            )
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), modifier = Modifier.padding(top = Spacing.Small))
+            }
         }
     ) { padding ->
         PullToRefreshBox(
@@ -351,8 +409,8 @@ fun RepeaterFilterDialog(
                 Slider(
                     value = maxDistance,
                     onValueChange = { maxDistance = it },
-                    valueRange = 10f..500f,
-                    steps = 49
+                    valueRange = 10f..5000f,
+                    steps = 499
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
