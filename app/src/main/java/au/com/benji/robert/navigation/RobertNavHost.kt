@@ -39,13 +39,13 @@ import au.com.benji.robert.screens.repeater.RepeaterListScreen
 import au.com.benji.robert.screens.repeater.RepeaterDetailScreen
 import au.com.benji.robert.screens.propagation.BandDetailScreen
 import au.com.benji.robert.screens.morse.MorseScreen
+import au.com.benji.robert.screens.dxspots.DxSpotsScreen
+import au.com.benji.robert.screens.shack.ShackScreen
 
 @Composable
 fun RobertNavHost(
     navController: NavHostController,
     paddingValues: PaddingValues,
-    onShowDxSpots: () -> Unit = {},
-    onShowShack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
 
@@ -59,8 +59,8 @@ fun RobertNavHost(
             DashboardScreen(
                 navController = navController,
                 paddingValues = paddingValues,
-                onShowDxSpots = onShowDxSpots,
-                onShowShack = onShowShack
+                onShowDxSpots = { navController.navigate(Screen.DxSpots.route) },
+                onShowShack = { navController.navigate(Screen.Shack.route) }
             )
         }
 
@@ -257,6 +257,20 @@ fun RobertNavHost(
             BandDetailScreen(
                 bandName = band,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.DxSpots.route) {
+            DxSpotsScreen(
+                onBack = { navController.popBackStack() },
+                paddingValues = paddingValues
+            )
+        }
+
+        composable(Screen.Shack.route) {
+            ShackScreen(
+                onBack = { navController.popBackStack() },
+                paddingValues = paddingValues
             )
         }
     }

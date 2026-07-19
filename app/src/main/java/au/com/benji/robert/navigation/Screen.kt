@@ -39,4 +39,6 @@ sealed class Screen(
         fun createRoute(band: String) = "banddetail/$band"
     }
     object Morse : Screen("morse")
+    object DxSpots : Screen("dxspots")
+    object Shack : Screen("shack")
 }

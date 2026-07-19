@@ -256,9 +256,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _dxContinentFilter = MutableStateFlow<String?>(null)
     val dxContinentFilter = _dxContinentFilter.asStateFlow()
 
+    private val _dxTimeFilter = MutableStateFlow<Int>(24) // Default 24 hours
+    val dxTimeFilter = _dxTimeFilter.asStateFlow()
+
     fun setDxBandFilter(band: String?) { _dxBandFilter.value = band }
     fun setDxModeFilter(mode: String?) { _dxModeFilter.value = mode }
     fun setDxContinentFilter(continent: String?) { _dxContinentFilter.value = continent }
+    fun setDxTimeFilter(hours: Int) { _dxTimeFilter.value = hours }
 
     val dxSpots = dxRepository.getDxSpotsFlow()
         .combine(_dxBandFilter) { spots, band ->
@@ -266,6 +270,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
         .combine(_dxModeFilter) { spots, mode ->
             if (mode == null) spots else spots.filter { it.mode == mode }
+        }
+        .combine(_dxContinentFilter) { spots, continent ->
+            if (continent == null) spots else spots.filter { it.continent == continent }
+        }
+        .combine(_dxTimeFilter) { spots, hours ->
+            val cutOff = System.currentTimeMillis() - (hours * 60 * 60 * 1000L)
+            spots.filter { it.timestamp >= cutOff }
         }
         .stateIn(
             scope = viewModelScope,

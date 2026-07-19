@@ -69,7 +69,7 @@ class DxRepository(private val cacheDao: CacheDao) {
 
         // 2. Fetch SOTA Spots
         try {
-            val sotaJson = ApiService.fetchData("https://api2.sota.org.uk/api/spots/20")
+            val sotaJson = ApiService.fetchData("https://api2.sota.org.uk/api/spots/50")
             sotaJson?.let {
                 val array = json.decodeFromString<JsonArray>(it)
                 array.forEach { element ->
@@ -91,7 +91,7 @@ class DxRepository(private val cacheDao: CacheDao) {
 
         // 3. Fetch General DX Spots (DX Summit)
         try {
-            val dxJson = ApiService.fetchData("https://www.dxsummit.fi/api/v1/spots?count=30")
+            val dxJson = ApiService.fetchData("https://www.dxsummit.fi/api/v1/spots?count=100")
             dxJson?.let {
                 val array = json.decodeFromString<JsonArray>(it)
                 array.forEach { element ->

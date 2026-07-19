@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,10 +41,15 @@ import au.com.benji.robert.models.*
 import au.com.benji.robert.screens.dashboard.*
 import au.com.benji.robert.theme.Spacing
 import coil.compose.AsyncImage
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import java.util.Date
+import java.text.SimpleDateFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +68,7 @@ fun GlobalDialogs(
     val activeBand by viewModel.dxBandFilter.collectAsStateWithLifecycle()
     val activeMode by viewModel.dxModeFilter.collectAsStateWithLifecycle()
     val activeContinent by viewModel.dxContinentFilter.collectAsStateWithLifecycle()
+    val activeTime by viewModel.dxTimeFilter.collectAsStateWithLifecycle()
     
     val equipment by viewModel.equipment.collectAsStateWithLifecycle()
     
@@ -73,10 +81,27 @@ fun GlobalDialogs(
     var showBandMenu by remember { mutableStateOf(false) }
     var showModeMenu by remember { mutableStateOf(false) }
     var showContinentMenu by remember { mutableStateOf(false) }
+    var showTimeMenu by remember { mutableStateOf(false) }
     
     val bands = listOf("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm")
     val modes = listOf("CW", "SSB", "FT8", "FT4", "FM", "RTTY")
     val continents = listOf("OC", "AS", "EU", "NA", "SA", "AF")
+    val times = listOf(1 to "1 Hour", 4 to "4 Hours", 12 to "12 Hours", 24 to "24 Hours")
+
+    // Dynamic clock for the top
+    var currentZuluTime by remember { mutableStateOf("") }
+    var currentLocalTime by remember { mutableStateOf("") }
+    
+    LaunchedEffect(Unit) {
+        while(true) {
+            val now = Instant.now()
+            currentZuluTime = ZonedDateTime.ofInstant(now, ZoneId.of("UTC"))
+                .format(DateTimeFormatter.ofPattern("HH:mm:ss")) + "z"
+            currentLocalTime = ZonedDateTime.ofInstant(now, ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+            kotlinx.coroutines.delay(1000)
+        }
+    }
 
     if (showDxSpots) {
         Box(
@@ -98,21 +123,44 @@ fun GlobalDialogs(
                             Image(
                                 painter = painterResource(id = au.com.benji.robert.R.drawable.dxspots1),
                                 contentDescription = null,
-                                modifier = Modifier.size(62.dp),
+                                modifier = Modifier.size(56.dp),
                                 contentScale = ContentScale.Fit
                             )
-                            Text(
-                                text = "Live DX Spots",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column {
+                                Text(
+                                    text = "Live DX Spots",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "Global cluster synchronization",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF03DAC6)
+                                )
+                            }
                         }
-                        Text(
-                            text = "POTA, SOTA and Global Clusters",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary,
-                            textAlign = TextAlign.Center
-                        )
+                        
+                        Spacer(modifier = Modifier.height(Spacing.Small))
+                        
+                        // Digital Clocks
+                        Row(
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("ZULU", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Text(currentZuluTime, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                            }
+                            Box(modifier = Modifier.width(1.dp).height(20.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("LOCAL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                                Text(currentLocalTime, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                            }
+                        }
                     }
                     IconButton(
                         onClick = onDismissDxSpots,
@@ -133,25 +181,31 @@ fun GlobalDialogs(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FilterChip(
-                        selected = activeBand == null && activeMode == null && activeContinent == null,
-                        onClick = { 
-                            viewModel.setDxBandFilter(null)
-                            viewModel.setDxModeFilter(null)
-                            viewModel.setDxContinentFilter(null)
-                        },
-                        label = { Text("All") },
-                        leadingIcon = if (activeBand == null && activeMode == null && activeContinent == null) {
-                            { Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                        } else null
-                    )
-                    
+                    // Time Filter
+                    Box {
+                        FilterChip(
+                            selected = true,
+                            onClick = { showTimeMenu = true },
+                            label = { Text("Last ${activeTime}h") },
+                            leadingIcon = { Icon(Icons.Default.History, null, modifier = Modifier.size(16.dp)) },
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                        )
+                        DropdownMenu(expanded = showTimeMenu, onDismissRequest = { showTimeMenu = false }) {
+                            times.forEach { (hours, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) }, 
+                                    onClick = { viewModel.setDxTimeFilter(hours); showTimeMenu = false }
+                                )
+                            }
+                        }
+                    }
+
                     // Band Filter Button
                     Box {
                         FilterChip(
                             selected = activeBand != null,
                             onClick = { showBandMenu = true },
-                            label = { Text(activeBand ?: "Band") },
+                            label = { Text(activeBand ?: "All Bands") },
                             trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
                         )
                         DropdownMenu(expanded = showBandMenu, onDismissRequest = { showBandMenu = false }) {
@@ -166,7 +220,7 @@ fun GlobalDialogs(
                         FilterChip(
                             selected = activeMode != null,
                             onClick = { showModeMenu = true },
-                            label = { Text(activeMode ?: "Mode") },
+                            label = { Text(activeMode ?: "All Modes") },
                             trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
                         )
                         DropdownMenu(expanded = showModeMenu, onDismissRequest = { showModeMenu = false }) {
@@ -181,7 +235,7 @@ fun GlobalDialogs(
                         FilterChip(
                             selected = activeContinent != null,
                             onClick = { showContinentMenu = true },
-                            label = { Text(activeContinent ?: "Continent") },
+                            label = { Text(activeContinent ?: "All Regions") },
                             trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
                         )
                         DropdownMenu(expanded = showContinentMenu, onDismissRequest = { showContinentMenu = false }) {
@@ -199,17 +253,17 @@ fun GlobalDialogs(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${dxSpots.size} active spots",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        text = "${dxSpots.size} spots matching criteria",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.Bold
                     )
                     
                     if (activeBand != null || activeMode != null || activeContinent != null) {
                         Text(
-                            text = "Clear Filters",
+                            text = "Reset Filters",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
                                 viewModel.setDxBandFilter(null)
                                 viewModel.setDxModeFilter(null)
@@ -219,9 +273,9 @@ fun GlobalDialogs(
                     }
                 }
 
-                if (dxSpots.isEmpty()) {
+                if (dxSpots.isEmpty() && !isRefreshingDx) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        EmptySectionCard("No spots found for selected timeframe.")
                     }
                 } else {
                     PullToRefreshBox(
@@ -230,11 +284,12 @@ fun GlobalDialogs(
                         state = dxPullToRefreshState,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.Small),
+                            contentPadding = PaddingValues(bottom = Spacing.Large)
                         ) {
-                            for (spot in dxSpots) {
+                            items(dxSpots) { spot ->
                                 DxSpotItem(spot, onClick = { selectedDxSpot = spot })
                             }
                         }

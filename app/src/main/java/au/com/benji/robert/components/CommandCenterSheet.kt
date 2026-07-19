@@ -84,8 +84,8 @@ fun CommandCenterSheet(
 
                 val actions = listOf(
                     CommandAction("Propagation", au.com.benji.robert.R.drawable.propagation1, CommandActionType.Navigate(Screen.Propagation.route)),
-                    CommandAction("DX Spots", au.com.benji.robert.R.drawable.dxspots1, CommandActionType.Dialog(DialogType.DX_SPOTS)),
-                    CommandAction("The Shack", au.com.benji.robert.R.drawable.theshack1, CommandActionType.Dialog(DialogType.SHACK)),
+                    CommandAction("DX Spots", au.com.benji.robert.R.drawable.dxspots1, CommandActionType.Navigate(Screen.DxSpots.route)),
+                    CommandAction("The Shack", au.com.benji.robert.R.drawable.theshack1, CommandActionType.Navigate(Screen.Shack.route)),
                     CommandAction("KiwiSDR", au.com.benji.robert.R.drawable.kiwisdr1, CommandActionType.Navigate(Screen.Sdr.route)),
                     CommandAction("APRS Map", au.com.benji.robert.R.drawable.aprs1, CommandActionType.Navigate(Screen.Aprs.route)),
                     CommandAction("DXLook", au.com.benji.robert.R.drawable.dxlook1, CommandActionType.Navigate(Screen.DxLook.route)),

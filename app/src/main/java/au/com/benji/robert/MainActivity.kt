@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.rememberNavController
+import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.components.BottomNavigationBar
 import au.com.benji.robert.components.CommandCenterSheet
 import au.com.benji.robert.components.CommandActionType
@@ -68,11 +69,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RobertApp() {
     val navController = rememberNavController()
-    val dashboardViewModel: DashboardViewModel = viewModel()
     
     var showCommandCenter by remember { mutableStateOf(false) }
-    var showDxSpots by remember { mutableStateOf(false) }
-    var showShack by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -87,9 +85,7 @@ fun RobertApp() {
         Box(modifier = Modifier.fillMaxSize()) {
             RobertNavHost(
                 navController = navController,
-                paddingValues = innerPadding,
-                onShowDxSpots = { showDxSpots = true },
-                onShowShack = { showShack = true }
+                paddingValues = innerPadding
             )
 
             AnimatedVisibility(
@@ -121,8 +117,8 @@ fun RobertApp() {
                         when (action) {
                             is CommandActionType.Dialog -> {
                                 when (action.type) {
-                                    DialogType.DX_SPOTS -> showDxSpots = true
-                                    DialogType.SHACK -> showShack = true
+                                    DialogType.DX_SPOTS -> navController.navigate(Screen.DxSpots.route)
+                                    DialogType.SHACK -> navController.navigate(Screen.Shack.route)
                                     else -> {}
                                 }
                             }
@@ -133,15 +129,6 @@ fun RobertApp() {
                     onDismiss = { showCommandCenter = false }
                 )
             }
-
-            GlobalDialogs(
-                viewModel = dashboardViewModel,
-                showDxSpots = showDxSpots,
-                onDismissDxSpots = { showDxSpots = false },
-                showShack = showShack,
-                onDismissShack = { showShack = false },
-                bottomPadding = innerPadding.calculateBottomPadding()
-            )
         }
     }
 }

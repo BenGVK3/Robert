@@ -304,26 +304,34 @@ fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Time and Continent column
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(55.dp)
+                modifier = Modifier.width(60.dp)
             ) {
                 Text(
                     text = spot.timeZulu,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary
                 )
+                Text(
+                    text = "(${spot.timeLocal})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 9.sp
+                )
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = spot.continent,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.secondary
+                    color = MaterialTheme.colorScheme.secondary,
+                    letterSpacing = 1.sp
                 )
             }
 
@@ -336,7 +344,8 @@ fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
                     Text(
                         text = spot.callsign,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     
                     // Band Badge
@@ -346,7 +355,7 @@ fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
                     ) {
                         Text(
                             text = spot.band,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.tertiary
@@ -359,17 +368,22 @@ fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
                         text = "${spot.frequency} MHz",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Bold
                     )
                     Text(text = "•", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    Text(text = spot.mode, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = spot.mode, 
+                        style = MaterialTheme.typography.labelSmall, 
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                 }
 
                 if (spot.comment.isNotEmpty()) {
                     Text(
                         text = spot.comment,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
@@ -378,30 +392,35 @@ fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
             
             // Source and Spotter
             Column(horizontalAlignment = Alignment.End) {
-                Surface(
-                    color = when(spot.source) {
+                if (spot.source != SpotSource.DX_CLUSTER) {
+                    val sourceColor = when(spot.source) {
                         SpotSource.POTA -> Color(0xFF4CAF50)
                         SpotSource.SOTA -> Color(0xFFFF9800)
+                        SpotSource.WWFF -> Color(0xFF2196F3)
                         else -> MaterialTheme.colorScheme.primary
-                    }.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = spot.source.name,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = when(spot.source) {
-                            SpotSource.POTA -> Color(0xFF4CAF50)
-                            SpotSource.SOTA -> Color(0xFFFF9800)
-                            else -> MaterialTheme.colorScheme.primary
-                        }
-                    )
+                    }
+                    
+                    Surface(
+                        color = sourceColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(0.5.dp, sourceColor.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = spot.source.name,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = sourceColor,
+                            fontSize = 9.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+
                 Text(
-                    text = "by ${spot.spotter}",
+                    text = spot.spotter,
                     style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.outline,
                     fontSize = 10.sp
                 )
