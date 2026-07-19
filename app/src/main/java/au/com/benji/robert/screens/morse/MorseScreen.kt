@@ -71,6 +71,7 @@ fun MorseScreen(
     }
 
     Scaffold(
+        modifier = Modifier.statusBarsPadding(),
         topBar = {
             Column(
                 modifier = Modifier
