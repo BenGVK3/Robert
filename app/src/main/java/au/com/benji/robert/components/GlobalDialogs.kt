@@ -51,7 +51,8 @@ fun GlobalDialogs(
     showDxSpots: Boolean,
     onDismissDxSpots: () -> Unit,
     showShack: Boolean,
-    onDismissShack: () -> Unit
+    onDismissShack: () -> Unit,
+    bottomPadding: androidx.compose.ui.unit.Dp = 0.dp
 ) {
     val dxSpots by viewModel.dxSpots.collectAsStateWithLifecycle()
     val isRefreshingDx by viewModel.isRefreshingDx.collectAsStateWithLifecycle()
@@ -78,166 +79,163 @@ fun GlobalDialogs(
     val continents = listOf("OC", "AS", "EU", "NA", "SA", "AF")
 
     if (showDxSpots) {
-        Dialog(
-            onDismissRequest = onDismissDxSpots,
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = bottomPadding)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background
-            ) {
-                Column(modifier = Modifier.padding(Spacing.Medium)) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
+            Column(modifier = Modifier.padding(Spacing.Medium)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-                            ) {
-                                Image(
-                                    painter = painterResource(id = au.com.benji.robert.R.drawable.dxspots1),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(62.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                                Text(
-                                    text = "Live DX Spots",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = au.com.benji.robert.R.drawable.dxspots1),
+                                contentDescription = null,
+                                modifier = Modifier.size(62.dp),
+                                contentScale = ContentScale.Fit
+                            )
                             Text(
-                                text = "POTA, SOTA and Global Clusters",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.secondary,
-                                textAlign = TextAlign.Center
+                                text = "Live DX Spots",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        IconButton(
-                            onClick = onDismissDxSpots,
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        Text(
+                            text = "POTA, SOTA and Global Clusters",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismissDxSpots,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(Spacing.Medium))
+
+                // Quick Filters
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = activeBand == null && activeMode == null && activeContinent == null,
+                        onClick = { 
+                            viewModel.setDxBandFilter(null)
+                            viewModel.setDxModeFilter(null)
+                            viewModel.setDxContinentFilter(null)
+                        },
+                        label = { Text("All") },
+                        leadingIcon = if (activeBand == null && activeMode == null && activeContinent == null) {
+                            { Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                        } else null
+                    )
+                    
+                    // Band Filter Button
+                    Box {
+                        FilterChip(
+                            selected = activeBand != null,
+                            onClick = { showBandMenu = true },
+                            label = { Text(activeBand ?: "Band") },
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                        )
+                        DropdownMenu(expanded = showBandMenu, onDismissRequest = { showBandMenu = false }) {
+                            DropdownMenuItem(text = { Text("All Bands") }, onClick = { viewModel.setDxBandFilter(null); showBandMenu = false })
+                            bands.forEach { band ->
+                                DropdownMenuItem(text = { Text(band) }, onClick = { viewModel.setDxBandFilter(band); showBandMenu = false })
+                            }
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(Spacing.Medium))
-
-                    // Quick Filters
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Box {
                         FilterChip(
-                            selected = activeBand == null && activeMode == null && activeContinent == null,
-                            onClick = { 
+                            selected = activeMode != null,
+                            onClick = { showModeMenu = true },
+                            label = { Text(activeMode ?: "Mode") },
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                        )
+                        DropdownMenu(expanded = showModeMenu, onDismissRequest = { showModeMenu = false }) {
+                            DropdownMenuItem(text = { Text("All Modes") }, onClick = { viewModel.setDxModeFilter(null); showModeMenu = false })
+                            modes.forEach { mode ->
+                                DropdownMenuItem(text = { Text(mode) }, onClick = { viewModel.setDxModeFilter(mode); showModeMenu = false })
+                            }
+                        }
+                    }
+
+                    Box {
+                        FilterChip(
+                            selected = activeContinent != null,
+                            onClick = { showContinentMenu = true },
+                            label = { Text(activeContinent ?: "Continent") },
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                        )
+                        DropdownMenu(expanded = showContinentMenu, onDismissRequest = { showContinentMenu = false }) {
+                            DropdownMenuItem(text = { Text("All Continents") }, onClick = { viewModel.setDxContinentFilter(null); showContinentMenu = false })
+                            continents.forEach { cont ->
+                                DropdownMenuItem(text = { Text(cont) }, onClick = { viewModel.setDxContinentFilter(cont); showContinentMenu = false })
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${dxSpots.size} active spots",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    if (activeBand != null || activeMode != null || activeContinent != null) {
+                        Text(
+                            text = "Clear Filters",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.clickable {
                                 viewModel.setDxBandFilter(null)
                                 viewModel.setDxModeFilter(null)
                                 viewModel.setDxContinentFilter(null)
-                            },
-                            label = { Text("All") },
-                            leadingIcon = if (activeBand == null && activeMode == null && activeContinent == null) {
-                                { Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                            } else null
+                            }
                         )
-                        
-                        // Band Filter Button
-                        Box {
-                            FilterChip(
-                                selected = activeBand != null,
-                                onClick = { showBandMenu = true },
-                                label = { Text(activeBand ?: "Band") },
-                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
-                            )
-                            DropdownMenu(expanded = showBandMenu, onDismissRequest = { showBandMenu = false }) {
-                                DropdownMenuItem(text = { Text("All Bands") }, onClick = { viewModel.setDxBandFilter(null); showBandMenu = false })
-                                bands.forEach { band ->
-                                    DropdownMenuItem(text = { Text(band) }, onClick = { viewModel.setDxBandFilter(band); showBandMenu = false })
-                                }
-                            }
-                        }
-                        
-                        Box {
-                            FilterChip(
-                                selected = activeMode != null,
-                                onClick = { showModeMenu = true },
-                                label = { Text(activeMode ?: "Mode") },
-                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
-                            )
-                            DropdownMenu(expanded = showModeMenu, onDismissRequest = { showModeMenu = false }) {
-                                DropdownMenuItem(text = { Text("All Modes") }, onClick = { viewModel.setDxModeFilter(null); showModeMenu = false })
-                                modes.forEach { mode ->
-                                    DropdownMenuItem(text = { Text(mode) }, onClick = { viewModel.setDxModeFilter(mode); showModeMenu = false })
-                                }
-                            }
-                        }
-
-                        Box {
-                            FilterChip(
-                                selected = activeContinent != null,
-                                onClick = { showContinentMenu = true },
-                                label = { Text(activeContinent ?: "Continent") },
-                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
-                            )
-                            DropdownMenu(expanded = showContinentMenu, onDismissRequest = { showContinentMenu = false }) {
-                                DropdownMenuItem(text = { Text("All Continents") }, onClick = { viewModel.setDxContinentFilter(null); showContinentMenu = false })
-                                continents.forEach { cont ->
-                                    DropdownMenuItem(text = { Text(cont) }, onClick = { viewModel.setDxContinentFilter(cont); showContinentMenu = false })
-                                }
-                            }
-                        }
                     }
+                }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                if (dxSpots.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshingDx,
+                        onRefresh = { viewModel.refreshDxSpots() },
+                        state = dxPullToRefreshState,
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Text(
-                            text = "${dxSpots.size} active spots",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        if (activeBand != null || activeMode != null || activeContinent != null) {
-                            Text(
-                                text = "Clear Filters",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.clickable {
-                                    viewModel.setDxBandFilter(null)
-                                    viewModel.setDxModeFilter(null)
-                                    viewModel.setDxContinentFilter(null)
-                                }
-                            )
-                        }
-                    }
-
-                    if (dxSpots.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                    } else {
-                        PullToRefreshBox(
-                            isRefreshing = isRefreshingDx,
-                            onRefresh = { viewModel.refreshDxSpots() },
-                            state = dxPullToRefreshState,
-                            modifier = Modifier.fillMaxSize()
+                        Column(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.Small)
-                            ) {
-                                for (spot in dxSpots) {
-                                    DxSpotItem(spot, onClick = { selectedDxSpot = spot })
-                                }
+                            for (spot in dxSpots) {
+                                DxSpotItem(spot, onClick = { selectedDxSpot = spot })
                             }
                         }
                     }
@@ -247,74 +245,71 @@ fun GlobalDialogs(
     }
 
     if (showShack) {
-        Dialog(
-            onDismissRequest = onDismissShack,
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = bottomPadding)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background
-            ) {
-                Column(modifier = Modifier.padding(Spacing.Medium)) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
+            Column(modifier = Modifier.padding(Spacing.Medium)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-                            ) {
-                                Image(
-                                    painter = painterResource(id = au.com.benji.robert.R.drawable.theshack1),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                                Text(
-                                    text = "The Shack",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = au.com.benji.robert.R.drawable.theshack1),
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                contentScale = ContentScale.Fit
+                            )
                             Text(
-                                text = "Your Inventory & Equipment",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.secondary,
-                                textAlign = TextAlign.Center
+                                text = "The Shack",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        IconButton(
-                            onClick = onDismissShack,
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
+                        Text(
+                            text = "Your Inventory & Equipment",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            textAlign = TextAlign.Center
+                        )
                     }
-                    
-                    TextButton(onClick = { showAddEquipmentDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("ADD GEAR")
+                    IconButton(
+                        onClick = onDismissShack,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
                     }
-                    
-                    Spacer(modifier = Modifier.height(Spacing.Medium))
-                    
-                    if (equipment.isEmpty()) {
-                        EmptySectionCard("No gear in the shack.")
-                    } else {
-                        Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(Spacing.Small)
-                        ) {
-                            for (item in equipment) {
-                                ShackItemCard(
-                                    item = item, 
-                                    onClick = { selectedShackItem = item },
-                                    onDelete = { itemToDelete = item },
-                                    onImageClick = { selectedImage = it }
-                                )
-                            }
+                }
+                
+                TextButton(onClick = { showAddEquipmentDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("ADD GEAR")
+                }
+                
+                Spacer(modifier = Modifier.height(Spacing.Medium))
+                
+                if (equipment.isEmpty()) {
+                    EmptySectionCard("No gear in the shack.")
+                } else {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.Small)
+                    ) {
+                        for (item in equipment) {
+                            ShackItemCard(
+                                item = item, 
+                                onClick = { selectedShackItem = item },
+                                onDelete = { itemToDelete = item },
+                                onImageClick = { selectedImage = it }
+                            )
                         }
                     }
                 }

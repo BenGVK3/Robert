@@ -4,9 +4,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -16,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.rememberNavController
 import au.com.benji.robert.components.BottomNavigationBar
@@ -87,21 +92,21 @@ fun RobertApp() {
                 onShowShack = { showShack = true }
             )
 
-            if (showCommandCenter) {
+            AnimatedVisibility(
+                visible = showCommandCenter,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
+            ) {
                 CommandCenterSheet(
-                    onNavigate = { route ->
-                        // If we are already on this route, just close the sheet
+                    onNavigate = { route -> 
                         if (navController.currentDestination?.route == route) {
                             showCommandCenter = false
                             return@CommandCenterSheet
                         }
-
-                        // Try to pop back to the route if it already exists in the stack
-                        // This preserves the existing instance and its state (like WebView audio)
+                        
                         val popped = navController.popBackStack(route, inclusive = false)
-
                         if (!popped) {
-                            // If not in stack, navigate normally with state restoration support
                             navController.navigate(route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
@@ -110,6 +115,7 @@ fun RobertApp() {
                                 restoreState = true
                             }
                         }
+                        showCommandCenter = false
                     },
                     onAction = { action ->
                         when (action) {
@@ -122,6 +128,7 @@ fun RobertApp() {
                             }
                             else -> {}
                         }
+                        showCommandCenter = false
                     },
                     onDismiss = { showCommandCenter = false }
                 )
@@ -132,7 +139,8 @@ fun RobertApp() {
                 showDxSpots = showDxSpots,
                 onDismissDxSpots = { showDxSpots = false },
                 showShack = showShack,
-                onDismissShack = { showShack = false }
+                onDismissShack = { showShack = false },
+                bottomPadding = innerPadding.calculateBottomPadding()
             )
         }
     }
