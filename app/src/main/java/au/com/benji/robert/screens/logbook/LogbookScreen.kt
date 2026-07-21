@@ -55,6 +55,20 @@ fun LogbookScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var showExportSheet by remember { mutableStateOf(false) }
 
+    var currentZuluTime by remember { mutableStateOf("") }
+    var currentLocalTime by remember { mutableStateOf("") }
+    
+    LaunchedEffect(Unit) {
+        while(true) {
+            val now = java.time.Instant.now()
+            currentZuluTime = java.time.ZonedDateTime.ofInstant(now, java.time.ZoneId.of("UTC"))
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "z"
+            currentLocalTime = java.time.ZonedDateTime.ofInstant(now, java.time.ZoneId.systemDefault())
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
     Scaffold(
         modifier = Modifier.padding(paddingValues),
         topBar = {
@@ -75,13 +89,37 @@ fun LogbookScreen(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
+                
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Default.FileUpload, "Export") }
-                    IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.BarChart, "Stats") }
-                    IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
+                    // Time block
+                    Row(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("ZULU", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+                            Text(currentZuluTime, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                        }
+                        Box(modifier = Modifier.width(1.dp).height(16.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("LOCAL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+                            Text(currentLocalTime, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                        }
+                    }
+
+                    // Action buttons
+                    Row(horizontalArrangement = Arrangement.End) {
+                        IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Default.FileUpload, "Export") }
+                        IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.BarChart, "Stats") }
+                        IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
+                    }
                 }
                 HorizontalDivider(color = RobertColors.TextSecondary.copy(alpha = 0.1f), modifier = Modifier.padding(top = Spacing.Small))
             }
@@ -124,6 +162,14 @@ fun LogbookScreen(
                         onClick = onNavigateToLogging
                     )
                     
+                    LargeActionButton(
+                        title = "Pile-Up",
+                        icon = Icons.Default.FlashOn,
+                        color = RobertColors.Accent,
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToPileUp
+                    )
+                    
                     if (activeAct == null) {
                         LargeActionButton(
                             title = "Activate",
@@ -160,7 +206,6 @@ fun LogbookScreen(
                 items(qsos.take(15), key = { it.id }) { qso ->
                     QsoSwipeItem(
                         qso, 
-                        onDuplicate = { viewModel.duplicateQso(qso) }, 
                         onDelete = { viewModel.deleteQso(qso) },
                         onClick = {
                             viewModel.editQso(qso)
@@ -197,14 +242,10 @@ fun LogbookScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QsoSwipeItem(qso: Qso, onDuplicate: () -> Unit, onDelete: () -> Unit, onClick: () -> Unit) {
+fun QsoSwipeItem(qso: Qso, onDelete: () -> Unit, onClick: () -> Unit) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             when (it) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    onDuplicate()
-                    false 
-                }
                 SwipeToDismissBoxValue.EndToStart -> {
                     onDelete()
                     true
@@ -216,17 +257,13 @@ fun QsoSwipeItem(qso: Qso, onDuplicate: () -> Unit, onDelete: () -> Unit, onClic
     
     SwipeToDismissBox(
         state = dismissState,
-        enableDismissFromStartToEnd = true,
+        enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true,
         backgroundContent = {
             val direction = dismissState.dismissDirection
-            val color = when (direction) {
-                SwipeToDismissBoxValue.StartToEnd -> RobertColors.StatusOrange
-                SwipeToDismissBoxValue.EndToStart -> RobertColors.StatusRed
-                else -> Color.Transparent
-            }
-            val alignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
-            val icon = if (direction == SwipeToDismissBoxValue.StartToEnd) Icons.Default.CopyAll else Icons.Default.Delete
+            val color = if (direction == SwipeToDismissBoxValue.EndToStart) RobertColors.StatusRed else Color.Transparent
+            val alignment = Alignment.CenterEnd
+            val icon = Icons.Default.Delete
             
             Box(modifier = Modifier.fillMaxSize().background(color).padding(horizontal = 24.dp), contentAlignment = alignment) {
                 Icon(icon, null, tint = Color.White)
@@ -275,7 +312,6 @@ fun AllLogsScreen(
             items(filteredQsos, key = { it.id }) { qso ->
                 QsoSwipeItem(
                     qso, 
-                    onDuplicate = { viewModel.duplicateQso(qso) }, 
                     onDelete = { viewModel.deleteQso(qso) },
                     onClick = {
                         viewModel.editQso(qso)
@@ -405,7 +441,9 @@ fun ActivationBanner(
 
 @Composable
 fun QsoRowItem(qso: Qso) {
-    val time = SimpleDateFormat("HH:mm'Z'", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(qso.timestamp))
+    val zuluTime = SimpleDateFormat("HH:mm'Z'", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(qso.timestamp))
+    val localTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(qso.timestamp))
+    val date = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(qso.timestamp))
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -417,9 +455,13 @@ fun QsoRowItem(qso: Qso) {
                 Text("${qso.band} • ${qso.mode} • S:${qso.rstSent} R:${qso.rstReceived}", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(time, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                Text(zuluTime, fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelLarge, color = RobertColors.Primary)
+                Text("($localTime L)", style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+                Text(date, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                
                 val ref = qso.potaRef.ifEmpty { qso.sotaRef.ifEmpty { qso.wwffRef } }
                 if (ref.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
                     Surface(color = RobertColors.Primary.copy(alpha = 0.1f), shape = RoundedCornerShape(4.dp)) {
                         Text(ref, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = RobertColors.Primary, fontWeight = FontWeight.Bold)
                     }

@@ -99,8 +99,13 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     private val _freqUnit = MutableStateFlow("KHz")
     val freqUnit = _freqUnit.asStateFlow()
 
+    private val _uiVersion = MutableStateFlow(0L)
+    val uiVersion = _uiVersion.asStateFlow()
+
     fun updateFreqUnit(unit: String) {
         _freqUnit.value = unit
+        // Refresh band/mode for current frequency with new unit
+        updateCurrentQso { it } 
         viewModelScope.launch {
             repository.updateSettings(settings.value.copy(lastFreqUnit = unit))
         }
@@ -108,13 +113,35 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         viewModelScope.launch {
-            repository.draftQso.first()?.let { _currentQso.value = it }
+            val draft = repository.draftQso.first()
+            val s = repository.settings.first()
             
-            settings.collect { s ->
+            if (draft != null) {
+                _currentQso.value = draft
                 _freqUnit.value = s.lastFreqUnit
-                s.defaultOperatorId?.let { id ->
-                    repository.getOperatorById(id)?.let { op ->
-                        updateCurrentQso { it.copy(operatorCallsign = op.callsign, onAirCallsign = op.callsign) }
+            } else {
+                // Initialize from sticky settings
+                _freqUnit.value = s.lastFreqUnit
+                _currentQso.value = Qso(
+                    frequency = s.lastFrequency,
+                    mode = s.lastMode,
+                    power = s.lastPower,
+                    band = BandUtils.getBandFromFrequency(s.lastFrequency * (if (s.lastFreqUnit == "KHz") 1.0 else if (s.lastFreqUnit == "MHz") 1000.0 else 0.001)),
+                    operatorCallsign = "", // Will be filled by collector below if default operator exists
+                    onAirCallsign = "",
+                    callWorked = ""
+                )
+            }
+            
+            _uiVersion.value++
+
+            settings.collect { latestSettings ->
+                // Apply default operator if not set
+                if (_currentQso.value.operatorCallsign.isEmpty()) {
+                    latestSettings.defaultOperatorId?.let { id ->
+                        repository.getOperatorById(id)?.let { op ->
+                            updateCurrentQso { it.copy(operatorCallsign = op.callsign, onAirCallsign = op.callsign) }
+                        }
                     }
                 }
             }
@@ -138,17 +165,19 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // Auto-detect band/mode
-        if (next.frequency != old.frequency) {
-            val freqKhz = next.frequency * 1000.0
-            val band = BandUtils.getBandFromFrequency(freqKhz)
-            if (band.isNotEmpty()) {
-                val suggestedMode = BandUtils.getSuggestedMode(freqKhz)
+        // Auto-detect band/mode based on frequency AND current unit
+        val freqKhz = next.frequency * (if (_freqUnit.value == "KHz") 1.0 else if (_freqUnit.value == "MHz") 1000.0 else 0.001)
+        val band = BandUtils.getBandFromFrequency(freqKhz)
+        
+        if (band.isNotEmpty()) {
+            val suggestedMode = BandUtils.getSuggestedMode(freqKhz)
+            // Only update band/mode if frequency changed OR if band was empty
+            if (next.frequency != old.frequency || next.band.isEmpty()) {
                 next = next.copy(band = band, mode = if (modeIsAuto(next.mode)) (if (suggestedMode.isNotEmpty()) suggestedMode else next.mode) else next.mode)
-                isOutsideBand.value = false
-            } else {
-                isOutsideBand.value = true
             }
+            isOutsideBand.value = false
+        } else if (next.frequency > 0) {
+            isOutsideBand.value = true
         }
 
         _currentQso.value = next
@@ -219,7 +248,7 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
             it.mode == q.mode && 
             (now - it.timestamp) < 24 * 3600000 
         }
-        val inPileUp = _pileUpQueue.value.any { it.equals(call, ignoreCase = true) }
+        val inPileUp = pileUpQueue.value.any { it.equals(call, ignoreCase = true) }
         isDuplicate.value = inLogs || inPileUp
     }
 
@@ -235,23 +264,26 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
                 else -> q.frequency
             }
             
-            val qToSave = q.copy(frequency = freqMhz)
-            repository.insertQso(qToSave)
+            repository.insertQso(q.copy(frequency = freqMhz))
             
-            // Save sticky settings (preserve user's entered value and unit)
-            repository.updateSettings(settings.value.copy(
+            // Create the new settings state immediately to avoid race conditions
+            val updatedSettings = settings.value.copy(
                 lastFrequency = q.frequency,
                 lastMode = q.mode,
                 lastPower = q.power,
                 lastFreqUnit = unit
-            ))
+            )
             
-            resetCurrentQso()
+            // Save to persistent storage
+            repository.updateSettings(updatedSettings)
+            
+            // Reset the form using the updated values directly
+            resetCurrentQso(updatedSettings)
         }
     }
 
     fun clearCurrentQso() {
-        viewModelScope.launch { resetCurrentQso() }
+        viewModelScope.launch { resetCurrentQso(settings.value) }
     }
 
     fun deleteQso(qso: Qso) {
@@ -268,11 +300,28 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun editQso(qso: Qso) {
-        _currentQso.value = qso
+        viewModelScope.launch {
+            // Determine best unit for display
+            val unit = when {
+                qso.frequency < 0.1 -> "Hz"
+                qso.frequency < 30.0 -> "MHz"
+                else -> "KHz"
+            }
+            
+            // If it's something like 14.200 MHz, and we want to show it in KHz, convert it
+            val displayFreq = when (unit) {
+                "KHz" -> qso.frequency * 1000.0
+                "Hz" -> qso.frequency * 1000000.0
+                else -> qso.frequency
+            }
+            
+            _freqUnit.value = unit
+            _currentQso.value = qso.copy(frequency = displayFreq)
+            _uiVersion.value++
+        }
     }
 
-    private suspend fun resetCurrentQso() {
-        val s = settings.value
+    private suspend fun resetCurrentQso(s: LogbookSettings) {
         val active = activeActivation.value
         
         _currentQso.value = Qso(
@@ -291,6 +340,7 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
             myWwffRef = if (active?.type == "WWFF") active.reference else ""
         )
         _freqUnit.value = s.lastFreqUnit
+        _uiVersion.value++
         _callsignInfo.value = null
         _lookupStatus.value = LookupStatus.IDLE
         _lookupResult.value = null
@@ -322,22 +372,30 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // --- Session State ---
-    private val _pileUpQueue = MutableStateFlow<List<String>>(emptyList())
-    val pileUpQueue = _pileUpQueue.asStateFlow()
+    val pileUpQueue = repository.pileUpQueue.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addToPileUp(call: String) {
         if (call.isEmpty()) return
-        _pileUpQueue.value = _pileUpQueue.value + call.uppercase()
-        updateCurrentQso { it.copy(callWorked = "") }
+        viewModelScope.launch {
+            val current = pileUpQueue.value
+            repository.savePileUpQueue(current + call.uppercase())
+            updateCurrentQso { it.copy(callWorked = "") }
+        }
     }
 
     fun usePileUpCall(call: String) {
-        _pileUpQueue.value = _pileUpQueue.value - call
-        onCallsignChanged(call)
+        viewModelScope.launch {
+            val current = pileUpQueue.value
+            repository.savePileUpQueue(current - call)
+            onCallsignChanged(call)
+        }
     }
 
     fun clearPileUpCall(call: String) {
-        _pileUpQueue.value = _pileUpQueue.value - call
+        viewModelScope.launch {
+            val current = pileUpQueue.value
+            repository.savePileUpQueue(current - call)
+        }
     }
 
     // --- Statistics ---

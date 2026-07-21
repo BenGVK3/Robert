@@ -46,13 +46,14 @@ fun LogbookEntryScreen(
     val isDuplicate by viewModel.isDuplicate.collectAsStateWithLifecycle()
     val activeAct by viewModel.activeActivation.collectAsStateWithLifecycle()
     val freqUnit by viewModel.freqUnit.collectAsStateWithLifecycle()
+    val uiVersion by viewModel.uiVersion.collectAsStateWithLifecycle()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     
     var showAdvanced by remember { mutableStateOf(false) }
     val modes = listOf("SSB", "CW", "FM", "AM", "DIGI", "FT8", "FT4", "RTTY")
     var modeExpanded by remember { mutableStateOf(false) }
-    var freqText by remember(qso.id) { mutableStateOf(if (qso.frequency == 0.0) "" else qso.frequency.toString()) }
-    var powerText by remember(qso.id) { mutableStateOf(qso.power.toString()) }
+    var freqText by remember(uiVersion) { mutableStateOf(if (qso.frequency == 0.0) "" else qso.frequency.toString()) }
+    var powerText by remember(uiVersion) { mutableStateOf(qso.power.toString()) }
 
     Scaffold(
         topBar = {

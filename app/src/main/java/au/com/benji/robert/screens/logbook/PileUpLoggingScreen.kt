@@ -1,10 +1,13 @@
 package au.com.benji.robert.screens.logbook
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -16,10 +19,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +45,21 @@ fun PileUpLoggingScreen(
     val isDuplicate by viewModel.isDuplicate.collectAsStateWithLifecycle()
     val pileUpQueue by viewModel.pileUpQueue.collectAsStateWithLifecycle()
     val activeAct by viewModel.activeActivation.collectAsStateWithLifecycle()
+    
+    var isCallsignFocused by remember { mutableStateOf(false) }
+    var callsignValue by remember { mutableStateOf(TextFieldValue(qso.callWorked)) }
+
+    // Keep local TextFieldValue in sync with ViewModel state (e.g. when cleared)
+    LaunchedEffect(qso.callWorked) {
+        if (qso.callWorked != callsignValue.text) {
+            callsignValue = TextFieldValue(
+                text = qso.callWorked,
+                selection = TextRange(qso.callWorked.length)
+            )
+        }
+    }
+    
+    val prefixes = listOf("VK1", "VK2", "VK3", "VK4", "VK5", "VK6", "VK7", "VK8", "VK9", "VK0")
 
     Scaffold(
         topBar = {
@@ -48,6 +69,50 @@ fun PileUpLoggingScreen(
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
                 }
             )
+        },
+        bottomBar = {
+            if (isCallsignFocused) {
+                // Quick Prefix Bar sticky above keyboard
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(Spacing.Small)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        prefixes.forEach { prefix ->
+                            AssistChip(
+                                onClick = { 
+                                    val newText = if (qso.callWorked.isEmpty()) {
+                                        prefix
+                                    } else if (!qso.callWorked.startsWith("VK")) {
+                                        prefix + qso.callWorked
+                                    } else {
+                                        prefix + qso.callWorked.substring(3.coerceAtMost(qso.callWorked.length))
+                                    }
+                                    callsignValue = TextFieldValue(text = newText, selection = TextRange(newText.length))
+                                    viewModel.onCallsignChanged(newText)
+                                },
+                                label = { Text(prefix, fontWeight = FontWeight.Black) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = RobertColors.Primary.copy(alpha = 0.1f),
+                                    labelColor = RobertColors.Primary
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -62,9 +127,12 @@ fun PileUpLoggingScreen(
             ) {
                 Column(modifier = Modifier.padding(Spacing.Medium), horizontalAlignment = Alignment.CenterHorizontally) {
                             OutlinedTextField(
-                                value = qso.callWorked,
-                                onValueChange = { viewModel.onCallsignChanged(it) },
-                                modifier = Modifier.fillMaxWidth(),
+                                value = callsignValue,
+                                onValueChange = { 
+                                    callsignValue = it
+                                    viewModel.onCallsignChanged(it.text)
+                                },
+                                modifier = Modifier.fillMaxWidth().onFocusChanged { isCallsignFocused = it.isFocused },
                                 textStyle = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Black, 
                                     color = if (isDuplicate) RobertColors.StatusRed else RobertColors.Primary,
@@ -84,7 +152,11 @@ fun PileUpLoggingScreen(
                             // Modifier buttons moved below
                             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small), modifier = Modifier.padding(top = 8.dp)) {
                                 TextButton(
-                                    onClick = { viewModel.onCallsignChanged("${qso.callWorked}/P") },
+                                    onClick = { 
+                                        val newText = "${qso.callWorked}/P"
+                                        callsignValue = TextFieldValue(text = newText, selection = TextRange(newText.length))
+                                        viewModel.onCallsignChanged(newText) 
+                                    },
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
@@ -92,7 +164,11 @@ fun PileUpLoggingScreen(
                                     Text("/P", fontSize = 12.sp, fontWeight = FontWeight.Black) 
                                 }
                                 TextButton(
-                                    onClick = { viewModel.onCallsignChanged("${qso.callWorked}/M") },
+                                    onClick = { 
+                                        val newText = "${qso.callWorked}/M"
+                                        callsignValue = TextFieldValue(text = newText, selection = TextRange(newText.length))
+                                        viewModel.onCallsignChanged(newText) 
+                                    },
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
@@ -145,10 +221,6 @@ fun PileUpLoggingScreen(
                             }
                             
                             Spacer(Modifier.width(Spacing.Small))
-                            
-                            IconButton(onClick = { /* Need long press handle */ }) {
-                                // For simplicity using a clickable on the row or custom interaction
-                            }
                             
                             // Single-tap Clear button
                             Surface(

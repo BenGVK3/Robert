@@ -26,6 +26,7 @@ class LogbookRepository(private val dao: LogbookDao, private val context: Contex
     private val DRAFT_QSO = stringPreferencesKey("draft_qso")
     private val ACTIVE_ACTIVATION = stringPreferencesKey("active_activation")
     private val SERVICE_CREDENTIALS = stringPreferencesKey("service_credentials")
+    private val PILE_UP_QUEUE = stringPreferencesKey("pile_up_queue")
     
     private val LAST_FREQUENCY = androidx.datastore.preferences.core.doublePreferencesKey("last_frequency")
     private val LAST_MODE = stringPreferencesKey("last_mode")
@@ -103,6 +104,23 @@ class LogbookRepository(private val dao: LogbookDao, private val context: Contex
             } else {
                 prefs[ACTIVE_ACTIVATION] = kotlinx.serialization.json.Json.encodeToString(activation)
             }
+        }
+    }
+
+    // Pile-up Queue Support
+    val pileUpQueue: Flow<List<String>> = context.logbookDataStore.data.map { prefs ->
+        prefs[PILE_UP_QUEUE]?.let { 
+            try {
+                kotlinx.serialization.json.Json.decodeFromString<List<String>>(it)
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } ?: emptyList()
+    }
+
+    suspend fun savePileUpQueue(queue: List<String>) {
+        context.logbookDataStore.edit { prefs ->
+            prefs[PILE_UP_QUEUE] = kotlinx.serialization.json.Json.encodeToString(queue)
         }
     }
 
