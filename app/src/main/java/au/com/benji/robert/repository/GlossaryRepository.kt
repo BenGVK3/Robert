@@ -60,8 +60,21 @@ class GlossaryRepository {
         GlossaryItem("QTX", "Will you keep your station open for further communication with me?", GlossaryCategory.Q_CODE),
         GlossaryItem("QUA", "Have you news of ...?", GlossaryCategory.Q_CODE),
 
-        // 93 Codes (commonly used in some regions, though less formal than Q codes)
         GlossaryItem("93", "Victory / Used as a sign-off (derived from Thelema, sometimes heard in specific circles)", GlossaryCategory.NUMERIC_CODE),
+
+        // Morse Code Prosigns
+        GlossaryItem("AR", "End of message (over)", GlossaryCategory.PROSIGN),
+        GlossaryItem("AS", "Wait (standby)", GlossaryCategory.PROSIGN),
+        GlossaryItem("BT", "Break / Pause / Separator (equals sign)", GlossaryCategory.PROSIGN),
+        GlossaryItem("CL", "Closing station", GlossaryCategory.PROSIGN),
+        GlossaryItem("CT", "Commencing transmission / Attention", GlossaryCategory.PROSIGN),
+        GlossaryItem("HH", "Error / Correction follows", GlossaryCategory.PROSIGN),
+        GlossaryItem("K", "Go ahead (invitation to transmit)", GlossaryCategory.PROSIGN),
+        GlossaryItem("KN", "Go ahead, only the station called", GlossaryCategory.PROSIGN),
+        GlossaryItem("R", "Received / Roger (all received correctly)", GlossaryCategory.PROSIGN),
+        GlossaryItem("SK", "End of contact (Silent Key / End of work)", GlossaryCategory.PROSIGN),
+        GlossaryItem("SOS", "Distress signal (Save Our Souls)", GlossaryCategory.PROSIGN),
+        GlossaryItem("VA", "End of work (same as SK)", GlossaryCategory.PROSIGN),
 
         // Radio Jargon / Terms
         GlossaryItem("Alpha", "A (Phonetic)", GlossaryCategory.PHONETIC),

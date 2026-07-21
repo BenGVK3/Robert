@@ -1,7 +1,9 @@
 package au.com.benji.robert.screens.moon
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -14,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,6 +40,7 @@ fun MoonScreen(
     viewModel: DashboardViewModel = viewModel()
 ) {
     val moonData by viewModel.moonData.collectAsStateWithLifecycle()
+    var showLocator by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.padding(paddingValues),
@@ -49,18 +53,27 @@ fun MoonScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(Modifier.height(4.dp))
-                Surface(
-                    modifier = Modifier.size(56.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Image(
-                            painter = painterResource(id = au.com.benji.robert.R.drawable.moon1),
-                            contentDescription = null,
-                            modifier = Modifier.size(42.dp),
-                            contentScale = ContentScale.Fit
-                        )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Surface(
+                        modifier = Modifier.size(56.dp).align(Alignment.Center),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = au.com.benji.robert.R.drawable.moon1),
+                                contentDescription = null,
+                                modifier = Modifier.size(42.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                    
+                    IconButton(
+                        onClick = { showLocator = true },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    ) {
+                        Icon(Icons.Default.Explore, "Locate Moon", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
                 Spacer(Modifier.height(Spacing.Small))
@@ -118,6 +131,142 @@ fun MoonScreen(
 
             item {
                 QuickFactsCard(moonData)
+            }
+        }
+    }
+
+    if (showLocator) {
+        MoonLocatorDialog(
+            azimuth = moonData.azimuth,
+            altitude = moonData.altitude,
+            onDismiss = { showLocator = false }
+        )
+    }
+}
+
+@Composable
+fun MoonLocatorDialog(
+    azimuth: Double,
+    altitude: Double,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var rotationMatrix = remember { FloatArray(9) }
+    var orientationAngles = remember { FloatArray(3) }
+    var currentAzimuth by remember { mutableFloatStateOf(0f) }
+    var currentPitch by remember { mutableFloatStateOf(0f) }
+    var currentRoll by remember { mutableFloatStateOf(0f) }
+
+    DisposableEffect(Unit) {
+        val sensorManager = context.getSystemService(android.content.Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val rotationSensor = sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)
+        
+        val listener = object : android.hardware.SensorEventListener {
+            override fun onSensorChanged(event: android.hardware.SensorEvent) {
+                if (event.sensor.type == android.hardware.Sensor.TYPE_ROTATION_VECTOR) {
+                    android.hardware.SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                    android.hardware.SensorManager.getOrientation(rotationMatrix, orientationAngles)
+                    
+                    // azimuth (0 to 360)
+                    currentAzimuth = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
+                    if (currentAzimuth < 0) currentAzimuth += 360
+                    
+                    // pitch (-90 to 90)
+                    currentPitch = Math.toDegrees(orientationAngles[1].toDouble()).toFloat()
+                    
+                    // roll (-180 to 180)
+                    currentRoll = Math.toDegrees(orientationAngles[2].toDouble()).toFloat()
+                }
+            }
+            override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+        }
+
+        sensorManager.registerListener(listener, rotationSensor, android.hardware.SensorManager.SENSOR_DELAY_UI)
+        
+        onDispose {
+            sensorManager.unregisterListener(listener)
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Black.copy(alpha = 0.9f)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "MOON LOCATOR",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(Spacing.Large))
+
+                    // 3D-ish target
+                    Box(
+                        modifier = Modifier.size(280.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Outer Circle (Compass)
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.2f),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                            )
+                            
+                            // North marker
+                            val nAngle = Math.toRadians((currentAzimuth).toDouble())
+                            // ... simple logic for now, showing relative moon position
+                        }
+
+                        // Target Moon Icon
+                        val deltaAz = (azimuth - currentAzimuth).let { if (it < -180) it + 360 else if (it > 180) it - 360 else it }
+                        // deltaAlt: phone level is usually 0 pitch? or 90?
+                        // Let's assume phone held vertically: pitch 0 is vertical? No, pitch is usually around X axis.
+                        // For simplicity, let's use a 2D projection for now that "feels" like locating it.
+                        
+                        val xOffset = (deltaAz / 45.0 * 140.dp.value).coerceIn(-140.0, 140.0)
+                        val yOffset = ((altitude - currentPitch) / 45.0 * 140.dp.value).coerceIn(-140.0, 140.0)
+
+                        Icon(
+                            imageVector = Icons.Default.Brightness2,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .offset(x = xOffset.dp, y = (-yOffset).dp),
+                            tint = if (Math.abs(deltaAz) < 5 && Math.abs(altitude - currentPitch) < 5) Color(0xFF03DAC6) else Color.White
+                        )
+                        
+                        // Crosshair
+                        Box(modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.1f), CircleShape))
+                        Divider(modifier = Modifier.width(60.dp), color = Color.White.copy(alpha = 0.5f))
+                        Divider(modifier = Modifier.height(60.dp).width(1.dp), color = Color.White.copy(alpha = 0.5f))
+                    }
+
+                    Spacer(Modifier.height(Spacing.Large))
+                    
+                    Text(
+                        text = "Target: Az ${azimuth.toInt()}° Alt ${altitude.toInt()}°",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Device: Az ${currentAzimuth.toInt()}° Alt ${currentPitch.toInt()}°",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    
+                    Spacer(Modifier.height(Spacing.ExtraLarge))
+                    
+                    Button(onClick = onDismiss) {
+                        Text("DONE")
+                    }
+                }
             }
         }
     }

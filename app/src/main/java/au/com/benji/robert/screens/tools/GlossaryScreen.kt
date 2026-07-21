@@ -71,50 +71,46 @@ fun GlossaryScreen(
         )
 
         // Category Buttons Grid
-        Row(
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.Small),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Small)
         ) {
             CategoryButton(
                 title = "Common",
                 isSelected = selectedCategory == null && searchQuery.isEmpty(),
-                onClick = { viewModel.selectCategory(null); viewModel.updateSearchQuery("") },
-                modifier = Modifier.weight(1f)
+                onClick = { viewModel.selectCategory(null); viewModel.updateSearchQuery("") }
             )
             CategoryButton(
                 title = "Q Codes",
                 isSelected = selectedCategory == GlossaryCategory.Q_CODE,
-                onClick = { viewModel.selectCategory(GlossaryCategory.Q_CODE) },
-                modifier = Modifier.weight(1f)
+                onClick = { viewModel.selectCategory(GlossaryCategory.Q_CODE) }
+            )
+            CategoryButton(
+                title = "Prosigns",
+                isSelected = selectedCategory == GlossaryCategory.PROSIGN,
+                onClick = { viewModel.selectCategory(GlossaryCategory.PROSIGN) }
             )
             CategoryButton(
                 title = "Numeric",
                 isSelected = selectedCategory == GlossaryCategory.NUMERIC_CODE,
-                onClick = { viewModel.selectCategory(GlossaryCategory.NUMERIC_CODE) },
-                modifier = Modifier.weight(1f)
+                onClick = { viewModel.selectCategory(GlossaryCategory.NUMERIC_CODE) }
             )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.Small),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
-        ) {
             CategoryButton(
                 title = "Jargon",
                 isSelected = selectedCategory == GlossaryCategory.JARGON,
-                onClick = { viewModel.selectCategory(GlossaryCategory.JARGON) },
-                modifier = Modifier.weight(1f)
+                onClick = { viewModel.selectCategory(GlossaryCategory.JARGON) }
             )
             CategoryButton(
                 title = "Phonetic",
                 isSelected = selectedCategory == GlossaryCategory.PHONETIC,
-                onClick = { viewModel.selectCategory(GlossaryCategory.PHONETIC) },
-                modifier = Modifier.weight(1f)
+                onClick = { viewModel.selectCategory(GlossaryCategory.PHONETIC) }
             )
             CategoryButton(
                 title = "All",
-                isSelected = selectedCategory == null && searchQuery.isNotEmpty(),
-                onClick = { viewModel.selectCategory(null) },
-                modifier = Modifier.weight(1f)
+                isSelected = selectedCategory == null && searchQuery == "ALL_ITEMS_TRIGGER",
+                onClick = { viewModel.selectCategory(null); viewModel.updateSearchQuery("ALL_ITEMS_TRIGGER") }
             )
         }
 
@@ -138,6 +134,7 @@ fun GlossaryScreen(
                 item {
                     Text(
                         text = when {
+                            searchQuery == "ALL_ITEMS_TRIGGER" -> "All Terms"
                             selectedCategory != null -> selectedCategory.toString().replace("_", " ")
                             searchQuery.isNotEmpty() -> "Search Results"
                             else -> "All Terms"

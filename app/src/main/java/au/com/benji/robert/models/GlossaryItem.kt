@@ -14,5 +14,6 @@ enum class GlossaryCategory {
     Q_CODE,
     NUMERIC_CODE, // e.g., 93 Codes, 73, etc.
     JARGON,
-    PHONETIC
+    PHONETIC,
+    PROSIGN
 }

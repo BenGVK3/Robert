@@ -23,11 +23,11 @@ class GlossaryViewModel(
 
     val filteredItems: StateFlow<List<GlossaryItem>> = combine(_searchQuery, _selectedCategory) { query, category ->
         allItems.filter { item ->
-            val matchesQuery = if (query.isBlank()) {
-                true
-            } else {
-                item.term.contains(query, ignoreCase = true) || 
-                item.definition.contains(query, ignoreCase = true)
+            val matchesQuery = when {
+                query == "ALL_ITEMS_TRIGGER" -> true
+                query.isBlank() -> true
+                else -> item.term.contains(query, ignoreCase = true) || 
+                        item.definition.contains(query, ignoreCase = true)
             }
             
             val matchesCategory = if (category == null) true else item.category == category
