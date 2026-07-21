@@ -19,10 +19,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,8 +54,23 @@ fun LogbookEntryScreen(
     var showAdvanced by remember { mutableStateOf(false) }
     val modes = listOf("SSB", "CW", "FM", "AM", "DIGI", "FT8", "FT4", "RTTY")
     var modeExpanded by remember { mutableStateOf(false) }
+    var callsignValue by remember(uiVersion) { mutableStateOf(TextFieldValue(text = qso.callWorked, selection = TextRange(qso.callWorked.length))) }
+    var nameValue by remember(uiVersion) { mutableStateOf(TextFieldValue(text = qso.name, selection = TextRange(qso.name.length))) }
     var freqText by remember(uiVersion) { mutableStateOf(if (qso.frequency == 0.0) "" else qso.frequency.toString()) }
     var powerText by remember(uiVersion) { mutableStateOf(qso.power.toString()) }
+
+    // Sync external updates (like lookup results) into local text fields
+    LaunchedEffect(qso.name) {
+        if (qso.name != nameValue.text) {
+            nameValue = TextFieldValue(text = qso.name, selection = TextRange(qso.name.length))
+        }
+    }
+    
+    LaunchedEffect(qso.callWorked) {
+        if (qso.callWorked != callsignValue.text) {
+            callsignValue = TextFieldValue(text = qso.callWorked, selection = TextRange(qso.callWorked.length))
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -94,8 +111,11 @@ fun LogbookEntryScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
-                                value = qso.callWorked,
-                                onValueChange = { viewModel.onCallsignChanged(it) },
+                                value = callsignValue,
+                                onValueChange = { 
+                                    callsignValue = it
+                                    viewModel.onCallsignChanged(it.text) 
+                                },
                                 label = { Text("WORKED CALLSIGN", fontWeight = FontWeight.Bold) },
                                 modifier = Modifier.weight(1f),
                                 textStyle = MaterialTheme.typography.headlineLarge.copy(
@@ -120,8 +140,14 @@ fun LogbookEntryScreen(
 
                         // Modifier buttons below text field
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                            val modClick = { suffix: String ->
+                                val current = callsignValue.text
+                                val next = if (current.endsWith(suffix)) current else current + suffix
+                                callsignValue = TextFieldValue(text = next, selection = TextRange(next.length))
+                                viewModel.onCallsignChanged(next)
+                            }
                             TextButton(
-                                onClick = { viewModel.onCallsignChanged("${qso.callWorked}/P") },
+                                onClick = { modClick("/P") },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
@@ -129,7 +155,7 @@ fun LogbookEntryScreen(
                                 Text("/P (PORTABLE)", fontSize = 11.sp, fontWeight = FontWeight.Bold) 
                             }
                             TextButton(
-                                onClick = { viewModel.onCallsignChanged("${qso.callWorked}/M") },
+                                onClick = { modClick("/M") },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.textButtonColors(containerColor = RobertColors.Primary.copy(alpha = 0.05f))
@@ -144,8 +170,11 @@ fun LogbookEntryScreen(
                     }
                     
                     OutlinedTextField(
-                        value = qso.name,
-                        onValueChange = { viewModel.updateCurrentQso { q -> q.copy(name = it) } },
+                        value = nameValue,
+                        onValueChange = { 
+                            nameValue = it
+                            viewModel.updateCurrentQso { q -> q.copy(name = it.text) } 
+                        },
                         label = { Text("NAME / OP") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -241,7 +270,7 @@ fun LogbookEntryScreen(
                 RstSelectorField(label = "RCVD", value = qso.rstReceived, onValueChange = { viewModel.updateCurrentQso { q -> q.copy(rstReceived = it) } }, modifier = Modifier.weight(1f))
                 
                 CompactEntryField(
-                    label = "POWER (W)", 
+                    label = "PWR (W)",
                     value = powerText, 
                     onValueChange = { 
                         powerText = it
@@ -266,22 +295,99 @@ fun LogbookEntryScreen(
             if (showAdvanced) {
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)) {
                     Column(modifier = Modifier.padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                        Text("OPERATOR", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
+                        val operators by viewModel.operators.collectAsStateWithLifecycle()
+                        var opExpanded by remember { mutableStateOf(false) }
+                        
+                        ExposedDropdownMenuBox(
+                            expanded = opExpanded,
+                            onExpandedChange = { opExpanded = !opExpanded },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = qso.operatorCallsign,
+                                onValueChange = { viewModel.updateCurrentQso { q -> q.copy(operatorCallsign = it.uppercase(), onAirCallsign = it.uppercase()) } },
+                                label = { Text("STATION CALLSIGN") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = opExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                singleLine = true
+                            )
+                            if (operators.isNotEmpty()) {
+                                ExposedDropdownMenu(expanded = opExpanded, onDismissRequest = { opExpanded = false }) {
+                                    operators.forEach { op ->
+                                        DropdownMenuItem(
+                                            text = { Text("${op.callsign} (${op.name})") },
+                                            onClick = {
+                                                viewModel.updateCurrentQso { it.copy(operatorCallsign = op.callsign, onAirCallsign = op.callsign) }
+                                                opExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(Spacing.Small))
                         Text("EQUIPMENT", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)
+                        val radios by viewModel.radios.collectAsStateWithLifecycle()
+                        val antennas by viewModel.antennas.collectAsStateWithLifecycle()
+                        
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                            OutlinedTextField(
-                                value = qso.radioId?.toString() ?: "", 
-                                onValueChange = { viewModel.updateCurrentQso { q -> q.copy(radioId = it.toLongOrNull()) } }, 
-                                label = { Text("RADIO USED") }, 
-                                modifier = Modifier.weight(1f), 
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = qso.antennaId?.toString() ?: "", 
-                                onValueChange = { viewModel.updateCurrentQso { q -> q.copy(antennaId = it.toLongOrNull()) } }, 
-                                label = { Text("ANTENNA USED") }, 
-                                modifier = Modifier.weight(1f), 
-                                singleLine = true
-                            )
+                            var radioExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = radioExpanded,
+                                onExpandedChange = { radioExpanded = !radioExpanded },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                OutlinedTextField(
+                                    value = radios.find { it.id == qso.radioId }?.name ?: "",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("RADIO", fontSize = 10.sp) },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = radioExpanded) },
+                                    modifier = Modifier.menuAnchor()
+                                )
+                                ExposedDropdownMenu(expanded = radioExpanded, onDismissRequest = { radioExpanded = false }) {
+                                    DropdownMenuItem(text = { Text("None") }, onClick = { viewModel.updateCurrentQso { it.copy(radioId = null) }; radioExpanded = false })
+                                    radios.forEach { radio ->
+                                        DropdownMenuItem(
+                                            text = { Text(radio.name) },
+                                            onClick = {
+                                                viewModel.updateCurrentQso { it.copy(radioId = radio.id) }
+                                                radioExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            var antennaExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = antennaExpanded,
+                                onExpandedChange = { antennaExpanded = !antennaExpanded },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                OutlinedTextField(
+                                    value = antennas.find { it.id == qso.antennaId }?.name ?: "",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("ANTENNA", fontSize = 10.sp) },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = antennaExpanded) },
+                                    modifier = Modifier.menuAnchor()
+                                )
+                                ExposedDropdownMenu(expanded = antennaExpanded, onDismissRequest = { antennaExpanded = false }) {
+                                    DropdownMenuItem(text = { Text("None") }, onClick = { viewModel.updateCurrentQso { it.copy(antennaId = null) }; antennaExpanded = false })
+                                    antennas.forEach { antenna ->
+                                        DropdownMenuItem(
+                                            text = { Text(antenna.name) },
+                                            onClick = {
+                                                viewModel.updateCurrentQso { it.copy(antennaId = antenna.id) }
+                                                antennaExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         Text("LOCATION", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RobertColors.TextSecondary)

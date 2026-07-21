@@ -25,6 +25,7 @@ import au.com.benji.robert.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogbookOperatorsScreen(
+    paddingValues: PaddingValues,
     onBack: () -> Unit,
     viewModel: LogbookViewModel = viewModel()
 ) {
@@ -33,22 +34,19 @@ fun LogbookOperatorsScreen(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { Text("OPERATORS", fontWeight = FontWeight.Black, letterSpacing = 1.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+                },
+                actions = {
+                    IconButton(onClick = { showAddDialog = true }) {
+                        Icon(Icons.Default.Add, "Add Operator", tint = RobertColors.Primary)
+                    }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = RobertColors.Primary,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.PersonAdd, "Add Operator")
-            }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(Spacing.Medium)) {

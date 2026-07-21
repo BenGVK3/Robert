@@ -41,6 +41,7 @@ import au.com.benji.robert.screens.propagation.BandDetailScreen
 import au.com.benji.robert.screens.morse.MorseScreen
 import au.com.benji.robert.screens.dxspots.DxSpotsScreen
 import au.com.benji.robert.screens.shack.ShackScreen
+import au.com.benji.robert.screens.logbook.LogbookViewModel
 
 @Composable
 fun RobertNavHost(
@@ -48,6 +49,7 @@ fun RobertNavHost(
     paddingValues: PaddingValues,
     modifier: Modifier = Modifier
 ) {
+    val logbookViewModel: LogbookViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -80,29 +82,36 @@ fun RobertNavHost(
                 onNavigateToStats = { navController.navigate(Screen.LogbookStats.route) },
                 onNavigateToSettings = { navController.navigate(Screen.LogbookSettings.route) },
                 onNavigateToPileUp = { navController.navigate(Screen.LogbookPileUp.route) },
-                onNavigateToAllLogs = { navController.navigate("logbook/all") }
+                onNavigateToAllLogs = { navController.navigate("logbook/all") },
+                viewModel = logbookViewModel
             )
         }
         
         composable("logbook/all") {
             au.com.benji.robert.screens.logbook.AllLogsScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookPileUp.route) {
             PileUpLoggingScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToLogging = { navController.navigate(Screen.LogbookLogging.route) }
+                onNavigateToLogging = { navController.navigate(Screen.LogbookLogging.route) },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookSettings.route) {
             LogbookSettingsScreen(
+                paddingValues = paddingValues,
                 onBack = { navController.popBackStack() },
                 onNavigateToOperators = { navController.navigate(Screen.LogbookOperators.route) },
                 onNavigateToUserProfiles = { navController.navigate(Screen.LogbookUserProfiles.route) },
-                onNavigateToStats = { navController.navigate(Screen.LogbookStats.route) }
+                onNavigateToRadios = { navController.navigate(Screen.LogbookRadios.route) },
+                onNavigateToAntennas = { navController.navigate(Screen.LogbookAntennas.route) },
+                onNavigateToStats = { navController.navigate(Screen.LogbookStats.route) },
+                viewModel = logbookViewModel
             )
         }
 
@@ -114,44 +123,56 @@ fun RobertNavHost(
 
         composable(Screen.LogbookUserProfiles.route) {
             LogbookUserProfilesScreen(
-                onBack = { navController.popBackStack() }
+                paddingValues = paddingValues,
+                onBack = { navController.popBackStack() },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookActivation.route) {
             LogbookActivationScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookLogging.route) {
             LogbookEntryScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToMap = { grid: String -> navController.navigate(Screen.LogbookMap.createRoute(grid)) }
+                onNavigateToMap = { grid: String -> navController.navigate(Screen.LogbookMap.createRoute(grid)) },
+                onNavigateToPileUp = { navController.navigate(Screen.LogbookPileUp.route) },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookRadios.route) {
             LogbookRadiosScreen(
-                onBack = { navController.popBackStack() }
+                paddingValues = paddingValues,
+                onBack = { navController.popBackStack() },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookAntennas.route) {
             LogbookAntennasScreen(
-                onBack = { navController.popBackStack() }
+                paddingValues = paddingValues,
+                onBack = { navController.popBackStack() },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookOperators.route) {
             LogbookOperatorsScreen(
-                onBack = { navController.popBackStack() }
+                paddingValues = paddingValues,
+                onBack = { navController.popBackStack() },
+                viewModel = logbookViewModel
             )
         }
 
         composable(Screen.LogbookStats.route) {
             LogbookStatsScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                viewModel = logbookViewModel
             )
         }
 

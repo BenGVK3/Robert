@@ -54,6 +54,7 @@ fun LogbookScreen(
     val pileUpQueue by viewModel.pileUpQueue.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     var showExportSheet by remember { mutableStateOf(false) }
+    var selectedQsoForDetail by remember { mutableStateOf<Qso?>(null) }
 
     var currentZuluTime by remember { mutableStateOf("") }
     var currentLocalTime by remember { mutableStateOf("") }
@@ -208,13 +209,24 @@ fun LogbookScreen(
                         qso, 
                         onDelete = { viewModel.deleteQso(qso) },
                         onClick = {
-                            viewModel.editQso(qso)
-                            onNavigateToLogging()
+                            selectedQsoForDetail = qso
                         }
                     )
                 }
             }
         }
+    }
+
+    if (selectedQsoForDetail != null) {
+        QsoDetailDialog(
+            qso = selectedQsoForDetail!!,
+            onDismiss = { selectedQsoForDetail = null },
+            onEdit = {
+                viewModel.editQso(selectedQsoForDetail!!)
+                selectedQsoForDetail = null
+                onNavigateToLogging()
+            }
+        )
     }
 
     if (showExportSheet) {
@@ -468,5 +480,69 @@ fun QsoRowItem(qso: Qso) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun QsoDetailDialog(
+    qso: Qso,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit
+) {
+    val zuluTime = SimpleDateFormat("HH:mm'Z'", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(qso.timestamp))
+    val localTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(qso.timestamp))
+    val date = SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.getDefault()).format(Date(qso.timestamp))
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(qso.callWorked, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = RobertColors.Primary)
+                Text(date, style = MaterialTheme.typography.labelMedium, color = RobertColors.TextSecondary)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    DetailItem("Frequency", "${qso.frequency} MHz", Modifier.weight(1f))
+                    DetailItem("Band", qso.band, Modifier.weight(1f))
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    DetailItem("Mode", qso.mode, Modifier.weight(1f))
+                    DetailItem("Power", "${qso.power}W", Modifier.weight(1f))
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    DetailItem("RST Sent", qso.rstSent, Modifier.weight(1f))
+                    DetailItem("RST Rcvd", qso.rstReceived, Modifier.weight(1f))
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    DetailItem("Zulu Time", zuluTime, Modifier.weight(1f))
+                    DetailItem("Local Time", localTime, Modifier.weight(1f))
+                }
+                if (qso.name.isNotEmpty()) DetailItem("Name", qso.name)
+                if (qso.qth.isNotEmpty()) DetailItem("QTH", qso.qth)
+                
+                val ref = qso.potaRef.ifEmpty { qso.sotaRef.ifEmpty { qso.wwffRef } }
+                if (ref.isNotEmpty()) DetailItem("Reference", ref)
+            }
+        },
+        confirmButton = {
+            Button(onClick = onEdit) {
+                Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("EDIT LOG")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("CLOSE") }
+        }
+    )
+}
+
+@Composable
+fun DetailItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary, fontWeight = FontWeight.Bold)
+        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
     }
 }

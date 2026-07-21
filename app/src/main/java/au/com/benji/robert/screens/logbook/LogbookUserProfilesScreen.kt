@@ -23,12 +23,14 @@ import au.com.benji.robert.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogbookUserProfilesScreen(
+    paddingValues: PaddingValues,
     onBack: () -> Unit,
     viewModel: LogbookViewModel = viewModel()
 ) {
     val credentials by viewModel.repository.serviceCredentials.collectAsStateWithLifecycle(emptyList<ServiceCredential>())
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { Text("SERVICE CREDENTIALS", fontWeight = FontWeight.Black, letterSpacing = 1.sp) },
@@ -44,20 +46,8 @@ fun LogbookUserProfilesScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(Spacing.Medium),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Large)
+            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
         ) {
-            // Security Notice
-            Surface(
-                color = RobertColors.Primary.copy(alpha = 0.1f),
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Row(modifier = Modifier.padding(Spacing.Medium), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Lock, null, tint = RobertColors.Primary)
-                    Spacer(Modifier.width(Spacing.Medium))
-                    Text("Your credentials are encrypted and stored locally. No passwords leave your device except to the respective service.", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-
             CredentialGroup(title = "CALLSIGN LOOKUPS", icon = Icons.Default.Public) {
                 val qrz = credentials.find { it.serviceName == "QRZ" } ?: ServiceCredential("QRZ")
                 CredentialField(
@@ -116,14 +106,27 @@ fun CredentialGroup(title: String, icon: androidx.compose.ui.graphics.vector.Ima
 
 @Composable
 fun CredentialField(label: String, value: String, onValueChange: (String) -> Unit, isPassword: Boolean = false) {
+    var textState by remember { mutableStateOf(value) }
+    
+    // Update local state when external value changes (e.g. on load)
+    // but only if we're not currently editing to avoid cursor jumps
+    LaunchedEffect(value) {
+        if (textState != value) {
+            textState = value
+        }
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Medium, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Medium, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.Small)
     ) {
         OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = textState,
+            onValueChange = { 
+                textState = it
+                onValueChange(it) 
+            },
             label = { Text(label, style = MaterialTheme.typography.labelSmall) },
             modifier = Modifier.weight(1f),
             visualTransformation = if (isPassword) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,

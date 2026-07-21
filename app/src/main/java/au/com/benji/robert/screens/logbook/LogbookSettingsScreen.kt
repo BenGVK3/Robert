@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,16 +26,19 @@ import au.com.benji.robert.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogbookSettingsScreen(
+    paddingValues: PaddingValues,
     onBack: () -> Unit,
     onNavigateToOperators: () -> Unit = {},
     onNavigateToUserProfiles: () -> Unit = {},
     onNavigateToRadios: () -> Unit = {},
+    onNavigateToAntennas: () -> Unit = {},
     onNavigateToStats: () -> Unit = {},
     viewModel: LogbookViewModel = viewModel()
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
                 title = { Text("SETTINGS", fontWeight = FontWeight.Black, letterSpacing = 1.sp) },
@@ -49,12 +53,12 @@ fun LogbookSettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(Spacing.Medium),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+                .padding(horizontal = Spacing.Medium, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            SettingsGroup(title = "GENERAL LOGGING") {
+            SettingsGroup(title = "LOGGING") {
                 TogglePreference(
-                    title = "Auto-save while typing",
+                    title = "Auto-save typing",
                     checked = settings.autoSave,
                     onCheckedChange = { viewModel.updateSettings(settings.copy(autoSave = it)) }
                 )
@@ -63,31 +67,26 @@ fun LogbookSettingsScreen(
                     checked = settings.autoIncrementTime,
                     onCheckedChange = { viewModel.updateSettings(settings.copy(autoIncrementTime = it)) }
                 )
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Medium)) {
-                    TogglePreference(
-                        title = "Copy Prev Op",
-                        checked = settings.copyPreviousOperator,
-                        onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousOperator = it)) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    TogglePreference(
-                        title = "Copy Prev QTH",
-                        checked = settings.copyPreviousQth,
-                        onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousQth = it)) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                TogglePreference(
+                    title = "Copy Prev Operator",
+                    checked = settings.copyPreviousOperator,
+                    onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousOperator = it)) }
+                )
+                TogglePreference(
+                    title = "Copy Prev QTH",
+                    checked = settings.copyPreviousQth,
+                    onCheckedChange = { viewModel.updateSettings(settings.copy(copyPreviousQth = it)) }
+                )
             }
 
             SettingsGroup(title = "EQUIPMENT & OPERATORS") {
+                ActionPreference(
+                    title = "Station Operators",
+                    subtitle = "Manage Operator IDs",
+                    icon = Icons.Default.Person,
+                    onClick = onNavigateToOperators
+                )
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    ActionPreference(
-                        title = "Operators",
-                        subtitle = "Manage IDs",
-                        icon = Icons.Default.Person,
-                        onClick = onNavigateToOperators,
-                        modifier = Modifier.weight(1f)
-                    )
                     ActionPreference(
                         title = "Radios",
                         subtitle = "Inventory",
@@ -95,27 +94,34 @@ fun LogbookSettingsScreen(
                         onClick = onNavigateToRadios,
                         modifier = Modifier.weight(1f)
                     )
+                    ActionPreference(
+                        title = "Antennas",
+                        subtitle = "Inventory",
+                        icon = Icons.Default.SettingsInputAntenna,
+                        onClick = onNavigateToAntennas,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 
-            SettingsGroup(title = "SERVICES & INTEGRATIONS") {
+            SettingsGroup(title = "SERVICES") {
                 ActionPreference(
-                    title = "Service Credentials",
-                    subtitle = "QRZ, LoTW, API Keys",
+                    title = "Credentials",
+                    subtitle = "QRZ, eQSL, API Keys",
                     icon = Icons.Default.VpnKey,
                     onClick = onNavigateToUserProfiles
                 )
             }
             
-            Spacer(Modifier.height(Spacing.ExtraLarge))
+            Spacer(Modifier.height(Spacing.Medium))
         }
     }
 }
 
 @Composable
 fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-        Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = RobertColors.Primary)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = RobertColors.Primary)
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RobertColors.Surface)) {
             Column { content() }
         }
@@ -125,26 +131,30 @@ fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
 @Composable
 fun TogglePreference(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(Spacing.Medium),
+        modifier = modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+        Switch(
+            checked = checked, 
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.scale(0.8f)
+        )
     }
 }
 
 @Composable
 fun ActionPreference(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(Spacing.Medium),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = RobertColors.Primary)
+        Icon(icon, null, tint = RobertColors.Primary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(Spacing.Medium))
         Column {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary)
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = RobertColors.TextSecondary, fontSize = 10.sp)
         }
     }
 }

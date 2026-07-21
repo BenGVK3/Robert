@@ -14,8 +14,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.models.RadioProfile
@@ -24,6 +26,7 @@ import au.com.benji.robert.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogbookRadiosScreen(
+    paddingValues: PaddingValues,
     onBack: () -> Unit,
     viewModel: LogbookViewModel = viewModel()
 ) {
@@ -31,20 +34,21 @@ fun LogbookRadiosScreen(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        modifier = Modifier.padding(paddingValues),
         topBar = {
             TopAppBar(
-                title = { Text("Radios", fontWeight = FontWeight.Bold) },
+                title = { Text("RADIOS", fontWeight = FontWeight.Black, letterSpacing = 1.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
+                },
+                actions = {
+                    IconButton(onClick = { showAddDialog = true }) {
+                        Icon(Icons.Default.Add, "Add Radio", tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, null)
-            }
         }
     ) { padding ->
         if (radios.isEmpty()) {

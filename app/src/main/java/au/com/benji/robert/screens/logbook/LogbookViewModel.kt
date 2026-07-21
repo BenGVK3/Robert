@@ -190,7 +190,26 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
 
     fun onCallsignChanged(call: String) {
         val upper = call.uppercase().trim()
-        updateCurrentQso { it.copy(callWorked = upper) }
+        val oldCall = _currentQso.value.callWorked
+        
+        // If the callsign has actually changed, clear the fields that were previously auto-filled
+        if (upper != oldCall) {
+            updateCurrentQso { q ->
+                q.copy(
+                    callWorked = upper,
+                    name = "",
+                    qth = "",
+                    gridsquare = "",
+                    country = "",
+                    dxcc = "",
+                    cqZone = 0,
+                    ituZone = 0,
+                    continent = ""
+                )
+            }
+        } else {
+            updateCurrentQso { it.copy(callWorked = upper) }
+        }
         
         lookupJob?.cancel()
         if (upper.length < 3) {
@@ -242,13 +261,19 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
     private fun checkDuplicate(call: String) {
         val q = _currentQso.value
         val now = System.currentTimeMillis()
+        val oneHourAgo = now - (60 * 60 * 1000)
+        
+        // 1. Check if call exists in logs within the last hour on same band/mode
         val inLogs = qsos.value.any { 
             it.callWorked.equals(call, ignoreCase = true) && 
             it.band == q.band && 
             it.mode == q.mode && 
-            (now - it.timestamp) < 24 * 3600000 
+            it.timestamp >= oneHourAgo
         }
-        val inPileUp = pileUpQueue.value.any { it.equals(call, ignoreCase = true) }
+        
+        // 2. Check if call is already in the pile-up queue (excluding self if we are editing/using it)
+        val inPileUp = pileUpQueue.value.count { it.equals(call, ignoreCase = true) } > (if (call == q.callWorked) 1 else 0)
+
         isDuplicate.value = inLogs || inPileUp
     }
 
@@ -387,7 +412,9 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val current = pileUpQueue.value
             repository.savePileUpQueue(current - call)
+            // Set current QSO to the call
             onCallsignChanged(call)
+            _uiVersion.value++
         }
     }
 
@@ -463,10 +490,18 @@ class LogbookViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val current = repository.serviceCredentials.first()
             val index = current.indexOfFirst { it.serviceName == cred.serviceName }
-            val newList = if (index != -1) {
-                current.toMutableList().apply { set(index, cred) }
+            
+            // Auto-enable if it has some data
+            val updatedCred = if (cred.username.isNotEmpty() || cred.apiKeyEncrypted.isNotEmpty()) {
+                cred.copy(isEnabled = true)
             } else {
-                current + cred
+                cred
+            }
+
+            val newList = if (index != -1) {
+                current.toMutableList().apply { set(index, updatedCred) }
+            } else {
+                current + updatedCred
             }
             repository.updateCredentials(newList)
         }

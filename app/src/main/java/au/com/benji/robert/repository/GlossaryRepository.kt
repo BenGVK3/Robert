@@ -62,14 +62,6 @@ class GlossaryRepository {
 
         // 93 Codes (commonly used in some regions, though less formal than Q codes)
         GlossaryItem("93", "Victory / Used as a sign-off (derived from Thelema, sometimes heard in specific circles)", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-1", "Receiving poorly", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-2", "Receiving well", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-4", "Acknowledgment / OK", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-7", "Out of service / Leaving air", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-8", "In service / Subject to call", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-9", "Repeat message", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-10", "Transmission completed, standing by", GlossaryCategory.NUMERIC_CODE),
-        GlossaryItem("10-20", "My location is...", GlossaryCategory.NUMERIC_CODE),
 
         // Radio Jargon / Terms
         GlossaryItem("Alpha", "A (Phonetic)", GlossaryCategory.PHONETIC),
