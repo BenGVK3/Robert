@@ -10,7 +10,15 @@ data class BandCondition(
     val score: Int = 0,
     val color: String = "#CCCCCC",
     val history: List<Int> = emptyList(),
+    val historicalData: List<PropagationPoint> = emptyList(), // Real history
+    val forecastData: List<PropagationPoint> = emptyList(), // Predictions
     val summaries: List<OperatingSummary> = emptyList()
+)
+
+@Serializable
+data class PropagationPoint(
+    val timestamp: Long,
+    val score: Int
 )
 
 @Serializable
@@ -50,5 +58,6 @@ data class PropagationData(
     val ducting: DuctingAlert,
     val aurora: AuroraReport? = null,
     val eSkip: ESkipReport? = null,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val confidence: Int = 90
 )

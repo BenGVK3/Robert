@@ -313,6 +313,18 @@ object DatabaseProvider {
         }
     }
 
+    private val MIGRATION_21_22 = object : Migration(21, 22) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Add new columns to propagation_history for the advanced engine
+            db.execSQL("ALTER TABLE propagation_history ADD COLUMN muf REAL NOT NULL DEFAULT 0.0")
+            db.execSQL("ALTER TABLE propagation_history ADD COLUMN sfi INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE propagation_history ADD COLUMN kIndex INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE propagation_history ADD COLUMN aIndex INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE propagation_history ADD COLUMN solarElevation REAL NOT NULL DEFAULT 0.0")
+            db.execSQL("ALTER TABLE propagation_history ADD COLUMN confidence INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     private fun addColumnIfNotExists(db: SupportSQLiteDatabase, tableName: String, columnName: String, columnDef: String) {
         val cursor = db.query("PRAGMA table_info($tableName)")
         var exists = false
@@ -341,7 +353,17 @@ object DatabaseProvider {
                 RobertDatabase::class.java,
                 "robert.db"
             )
-            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
+            .addMigrations(
+                MIGRATION_11_12, 
+                MIGRATION_14_15, 
+                MIGRATION_15_16, 
+                MIGRATION_16_17, 
+                MIGRATION_17_18, 
+                MIGRATION_18_19, 
+                MIGRATION_19_20, 
+                MIGRATION_20_21,
+                MIGRATION_21_22
+            )
             .build()
 
             INSTANCE = instance

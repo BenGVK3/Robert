@@ -681,12 +681,17 @@ fun BandMiniGraph(modifier: Modifier, band: BandCondition) {
         Color.Gray
     }
     
+    val smoothedHistory = remember(band.historicalData) {
+        if (band.historicalData.isEmpty()) emptyList()
+        else au.com.benji.robert.utils.PropagationSmoother.smoothHistory(band.band, band.historicalData)
+    }
+
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(band.band, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White, fontSize = 7.sp)
         
         Box(modifier = Modifier.height(28.dp).fillMaxWidth().padding(vertical = 2.dp)) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                if (band.history.size < 2) {
+                if (smoothedHistory.size < 2) {
                     drawLine(
                         color = color.copy(alpha = 0.2f),
                         start = Offset(0f, size.height / 2),
@@ -694,9 +699,9 @@ fun BandMiniGraph(modifier: Modifier, band: BandCondition) {
                         strokeWidth = 1.dp.toPx()
                     )
                 } else {
-                    val stepX = size.width / (band.history.size - 1)
-                    val points = band.history.mapIndexed { index, score ->
-                        Offset(index * stepX, size.height - (score.toFloat() / 100f * size.height))
+                    val stepX = size.width / (smoothedHistory.size - 1)
+                    val points = smoothedHistory.mapIndexed { index, p ->
+                        Offset(index * stepX, size.height - (p.score.toFloat() / 100f * size.height))
                     }
                     
                     val path = Path().apply {

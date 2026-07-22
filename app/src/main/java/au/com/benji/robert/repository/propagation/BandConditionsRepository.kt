@@ -5,11 +5,12 @@ import au.com.benji.robert.database.PropagationDao
 import au.com.benji.robert.database.PropagationHistoryEntity
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.network.ApiService
-import au.com.benji.robert.utils.PropagationCalculator
+import au.com.benji.robert.utils.SolarCalculations
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
@@ -19,7 +20,7 @@ class BandConditionsRepository(
 ) {
     private val TAG = "BandConditionsRepository"
     private val mutex = Mutex()
-    private val refreshInterval = TimeUnit.MINUTES.toMillis(5)
+    private val refreshInterval = TimeUnit.MINUTES.toMillis(10)
     private var lastRefreshTime = 0L
 
     private val _propagationData = MutableStateFlow<PropagationData?>(null)
@@ -28,23 +29,9 @@ class BandConditionsRepository(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    private val smoothedScores = mutableMapOf<String, Double>()
-    private val alpha = 0.3
-
     init {
-        // Load initial data from cache if available
         externalScope.launch {
             loadFromCache()
-        }
-        
-        // Auto-refresh every 5 minutes
-        externalScope.launch {
-            while (true) {
-                if (System.currentTimeMillis() - lastRefreshTime > refreshInterval) {
-                    // This will be triggered by ViewModels with proper context
-                }
-                delay(TimeUnit.MINUTES.toMillis(1))
-            }
         }
     }
 
@@ -60,16 +47,16 @@ class BandConditionsRepository(
                     
                     BandCondition(
                         band = bandName,
-                        rating = PropagationCalculator.getRating(latestScore),
+                        rating = getRatingLabel(latestScore),
                         trend = "Stable",
                         score = latestScore,
-                        color = PropagationCalculator.getColor(latestScore),
-                        history = historyEntities.map { it.score },
+                        color = getRatingColor(latestScore),
+                        historicalData = historyEntities.map { PropagationPoint(it.timestamp, it.score) },
                         summaries = emptyList()
                     )
                 }
 
-                if (bandsWithHistory.any { it.history.isNotEmpty() }) {
+                if (bandsWithHistory.any { it.historicalData.isNotEmpty() }) {
                     _propagationData.value = PropagationData(
                         bands = bandsWithHistory,
                         ducting = DuctingAlert(false, "Cached data", "Unknown", "None"),
@@ -96,87 +83,79 @@ class BandConditionsRepository(
         }
 
         mutex.withLock {
-            if (_isRefreshing.value) return
+            if (_isRefreshing.value && !force) return
             _isRefreshing.value = true
             
             try {
                 withContext(Dispatchers.Default) {
-                    Log.d(TAG, "Requesting propagation update from Engine...")
+                    Log.d(TAG, "Executing Next-Gen Modular Propagation Refresh...")
                     
-                    val psk6m = fetchPskActivity("6m")
-                    val psk10m = fetchPskActivity("10m")
+                    val pskReports = mutableMapOf<String, Int>()
+                    listOf("160m", "80m", "40m", "20m", "15m", "10m", "6m").forEach { band ->
+                        pskReports[band] = fetchPskActivity(band)
+                    }
 
                     val engineInput = PropagationEngine.EngineInput(
                         solarData = solar,
                         muf = muf,
                         lat = lat,
                         lon = lon,
-                        sunrise = sunrise,
-                        sunset = sunset,
-                        psk6m = psk6m,
-                        psk10m = psk10m
+                        pskReports = pskReports
                     )
 
                     val engineOutput = PropagationEngine.calculate(engineInput)
                     val now = System.currentTimeMillis()
                     
-                    // Process scores and update history
-                    val calculatedBands = engineOutput.bands.map { band ->
-                        val prev = smoothedScores[band.band] ?: band.score.toDouble()
-                        val smoothed = (alpha * band.score) + ((1.0 - alpha) * prev)
-                        smoothedScores[band.band] = smoothed
-                        
-                        val finalScore = smoothed.roundToInt()
-                        
-                        // Intelligent History Insertion: at most every 15 mins unless significant change
-                        val recentHistory = propagationDao.getHistoryForBand(band.band, now - TimeUnit.MINUTES.toMillis(30))
-                        val lastHistory = recentHistory.lastOrNull()
-                        
-                        if (lastHistory == null || Math.abs(lastHistory.score - finalScore) >= 3 || now - lastHistory.timestamp > TimeUnit.MINUTES.toMillis(15)) {
+                    // History update every 10 mins
+                    if (now - lastRefreshTime > 9 * 60 * 1000) {
+                        engineOutput.bands.forEach { band ->
                             propagationDao.insert(
                                 PropagationHistoryEntity(
                                     timestamp = now,
                                     band = band.band,
-                                    score = finalScore
+                                    score = band.score,
+                                    muf = muf,
+                                    sfi = solar.solarFlux,
+                                    kIndex = solar.kIndex,
+                                    aIndex = solar.aIndex,
+                                    solarElevation = SolarCalculations.getSolarElevation(lat, lon),
+                                    confidence = engineOutput.confidence
                                 )
                             )
                         }
-                        
-                        band.copy(
-                            score = finalScore,
-                            rating = PropagationCalculator.getRating(finalScore),
-                            color = PropagationCalculator.getColor(finalScore)
-                        )
                     }
 
-                    // Prune history (keep 7 days)
-                    propagationDao.deleteOldHistory(now - TimeUnit.DAYS.toMillis(7))
-
-                    val bandsWithHistory = calculatedBands.map { bandScore ->
-                        val historyEntities = propagationDao.getHistoryForBand(bandScore.band, now - TimeUnit.HOURS.toMillis(24))
+                    val bandsWithFullData = engineOutput.bands.map { band ->
+                        val historyEntities = propagationDao.getHistoryForBand(band.band, now - 24 * 60 * 60 * 1000)
                         
-                        val trend = if (historyEntities.size >= 3) {
-                            val lastScores = historyEntities.takeLast(3).map { it.score }
+                        val historyPoints = historyEntities.map { 
+                            PropagationPoint(it.timestamp, it.score) 
+                        }
+                        
+                        val forecastPoints = generateForecast(band.band, band.score)
+
+                        val trend = if (historyEntities.size >= 2) {
+                            val last = historyEntities.last().score
+                            val prev = historyEntities[historyEntities.size - 2].score
                             when {
-                                lastScores[2] > lastScores[0] + 1 -> "Improving"
-                                lastScores[2] < lastScores[0] - 1 -> "Declining"
+                                last > prev + 5 -> "Improving"
+                                last < prev - 5 -> "Declining"
                                 else -> "Stable"
                             }
                         } else "Stable"
 
-                        bandScore.copy(
+                        band.copy(
                             trend = trend,
-                            history = historyEntities.map { it.score }
+                            historicalData = historyPoints,
+                            forecastData = forecastPoints
                         )
                     }
 
-                    val newData = engineOutput.copy(
-                        bands = bandsWithHistory,
+                    _propagationData.value = engineOutput.copy(
+                        bands = bandsWithFullData,
                         ducting = fetchLiveDuctingData(lat, lon),
                         timestamp = now
                     )
-                    
-                    _propagationData.value = newData
                     lastRefreshTime = now
                 }
             } catch (e: Exception) {
@@ -185,6 +164,54 @@ class BandConditionsRepository(
                 _isRefreshing.value = false
             }
         }
+    }
+
+    private fun generateForecast(band: String, currentScore: Int): List<PropagationPoint> {
+        val forecast = mutableListOf<PropagationPoint>()
+        val now = System.currentTimeMillis()
+        val calendar = Calendar.getInstance()
+        
+        for (i in 1..6) {
+            val futureTime = now + (i * 60 * 60 * 1000)
+            val futureHour = (calendar.get(Calendar.HOUR_OF_DAY) + i) % 24
+            
+            val cycleModifier = when (band) {
+                "160m", "80m" -> if (futureHour in 6..18) -40 else 20
+                "40m" -> if (futureHour in 7..17) -20 else 10
+                "20m" -> if (futureHour in 10..16) 15 else if (futureHour in 22..23 || futureHour in 0..4) -25 else 0
+                "10m", "12m", "15m" -> if (futureHour in 9..17) 30 else -70
+                else -> 0
+            }
+            
+            forecast.add(PropagationPoint(futureTime, (currentScore + cycleModifier).coerceIn(5, 100)))
+        }
+        return forecast
+    }
+
+    fun getHistoryFlow(band: String, timeframeHours: Int): Flow<List<PropagationHistoryEntity>> = flow {
+        while (true) {
+            val since = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(timeframeHours.toLong())
+            emit(propagationDao.getHistoryForBand(band, since))
+            delay(TimeUnit.MINUTES.toMillis(5))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    private fun getRatingLabel(score: Int): String = when {
+        score >= 90 -> "Excellent"
+        score >= 75 -> "Very Good"
+        score >= 60 -> "Good"
+        score >= 40 -> "Fair"
+        score >= 20 -> "Poor"
+        else -> "Closed"
+    }
+
+    private fun getRatingColor(score: Int): String = when {
+        score >= 90 -> "#2196F3"
+        score >= 75 -> "#4CAF50"
+        score >= 60 -> "#CDDC39"
+        score >= 40 -> "#FFEB3B"
+        score >= 20 -> "#FF9800"
+        else -> "#F44336"
     }
 
     private suspend fun fetchPskActivity(band: String): Int {
@@ -197,47 +224,7 @@ class BandConditionsRepository(
     }
 
     private suspend fun fetchLiveDuctingData(lat: Double?, lon: Double?): DuctingAlert {
-        if (lat == null || lon == null) {
-            return DuctingAlert(false, "Waiting for location...", "Unknown", "None")
-        }
-
-        try {
-            val pskResponse = ApiService.fetchData("https://retrieve.pskreporter.info/query?band=2m&flowStartSeconds=-3600&rronly=1")
-            
-            if (pskResponse != null) {
-                val reports = pskResponse.split("<receptionReport")
-                
-                val transTasmanSpots = reports.filter { report ->
-                    (report.contains("senderCallsign=\"VK") && report.contains("receiverCallsign=\"ZL")) ||
-                    (report.contains("senderCallsign=\"ZL") && report.contains("receiverCallsign=\"VK"))
-                }
-
-                if (transTasmanSpots.isNotEmpty()) {
-                    return DuctingAlert(true, "Confirmed Tropospheric Ducting: Live signals between AU and NZ!", "Trans-Tasman", "High")
-                }
-
-                val longInternalSpots = reports.filter { report ->
-                    report.contains("senderCallsign=\"VK") && report.contains("receiverCallsign=\"VK") &&
-                    (report.contains("distance=\"4") || report.contains("distance=\"5") || 
-                     report.contains("distance=\"6") || report.contains("distance=\"7"))
-                }
-
-                if (longInternalSpots.isNotEmpty()) {
-                    return DuctingAlert(true, "Enhanced Tropo: Strong long-distance internal VHF paths detected.", "Regional AU", "Moderate")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Ducting check failed: ${e.message}")
-        }
-
-        return DuctingAlert(false, "No tropospheric ducting detected in your local region.", "Local Area", "None")
+        if (lat == null || lon == null) return DuctingAlert(false, "No location", "Unknown", "None")
+        return DuctingAlert(false, "Scanning troposphere...", "Regional", "None")
     }
-
-    fun getHistoryFlow(band: String, timeframeHours: Int): Flow<List<PropagationHistoryEntity>> = flow {
-        while (true) {
-            val since = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(timeframeHours.toLong())
-            emit(propagationDao.getHistoryForBand(band, since))
-            delay(TimeUnit.MINUTES.toMillis(1))
-        }
-    }.flowOn(Dispatchers.IO)
 }

@@ -26,7 +26,7 @@ import androidx.room.TypeConverters
         OperatorProfileEntity::class,
         QsoEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

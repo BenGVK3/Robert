@@ -37,6 +37,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val solarRepository = SolarDataRepository(cacheDao)
     private val weatherRepository = WeatherRepository(DatabaseModule.weatherDao(application))
     private val bandConditionsRepository = DatabaseModule.bandConditionsRepository(application)
+    val bandConditions = bandConditionsRepository
     private val moonRepository = MoonRepository(DatabaseModule.moonDao(application))
     private val aprsRepository = AprsRepository(cacheDao)
     private val dxRepository = DxRepository(cacheDao)
@@ -489,6 +490,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 icon = "🌍",
                 title = "K Index",
                 value = solar.kIndex.toString()
+            ),
+            InfoCardModel(
+                type = CardType.SOLAR,
+                icon = "📡",
+                title = "foF2",
+                value = solar.foF2
             ),
             InfoCardModel(
                 type = CardType.SOLAR,

@@ -75,6 +75,9 @@ interface CacheDao {
     @Query("SELECT * FROM user_settings WHERE id = 0")
     fun getSettings(): Flow<UserSettingsEntity?>
 
+    @Query("SELECT * FROM user_settings WHERE id = 0")
+    fun getSettingsSync(): UserSettingsEntity?
+
     // Callsign Lookup Cache
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCallsign(entry: CallsignCacheEntity)

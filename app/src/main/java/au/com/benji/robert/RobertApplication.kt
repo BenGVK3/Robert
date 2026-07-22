@@ -1,12 +1,15 @@
 package au.com.benji.robert
 
 import android.app.Application
+import androidx.work.*
 import au.com.benji.robert.database.DatabaseModule
+import au.com.benji.robert.network.SolarWorker
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.util.DebugLogger
+import java.util.concurrent.TimeUnit
 
 class RobertApplication : Application(), ImageLoaderFactory {
 
@@ -14,6 +17,24 @@ class RobertApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         // Force initialization of database to check for migrations early
         DatabaseModule.database(this)
+        setupBackgroundTasks()
+    }
+
+    private fun setupBackgroundTasks() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        // 15 minutes is the minimum interval for PeriodicWork
+        val solarRequest = PeriodicWorkRequestBuilder<SolarWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "SolarDataSync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            solarRequest
+        )
     }
 
     override fun newImageLoader(): ImageLoader {

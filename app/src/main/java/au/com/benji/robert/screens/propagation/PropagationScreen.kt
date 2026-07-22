@@ -27,6 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -36,12 +41,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import au.com.benji.robert.R
 import au.com.benji.robert.components.PremiumActionCard
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.repository.propagation.BandCondition
+import au.com.benji.robert.repository.propagation.PropagationPoint
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 import java.util.Locale
@@ -102,7 +107,7 @@ fun PropagationScreen(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Real-time HF & Solar Analysis",
+                            text = "Next-Gen Modular Engine v2.0",
                             style = MaterialTheme.typography.labelMedium,
                             color = Color(0xFF03DAC6),
                             textAlign = TextAlign.Center
@@ -119,20 +124,14 @@ fun PropagationScreen(
                     PremiumActionCard(
                         icon = R.drawable.dxlook1,
                         title = "Open DXLook",
-                        onClick = { 
-                            try {
-                                navController.navigate(Screen.DxLook.route) 
-                            } catch (e: Exception) {
-                                android.util.Log.e("PropagationScreen", "Navigation to DXLook failed", e)
-                            }
-                        },
+                        onClick = { navController.navigate(Screen.DxLook.route) },
                         modifier = Modifier.widthIn(min = 180.dp, max = 220.dp)
                     )
                 }
             }
 
             item(span = { GridItemSpan(2) }) {
-                SectionHeader("Solar Data", Icons.Default.WbSunny)
+                SectionHeader("Solar Intelligence", Icons.Default.WbSunny)
             }
 
             item(span = { GridItemSpan(2) }) {
@@ -147,17 +146,17 @@ fun PropagationScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SectionHeader("Live Band Conditions", Icons.Default.Podcasts)
+                    SectionHeader("Live Band Analytics", Icons.Default.Podcasts)
                     
                     bandConditions?.let { data ->
-                        val mins = (System.currentTimeMillis() - data.timestamp) / 60000
-                        Text(
-                            text = if (mins < 1) "LIVE" else "${mins}m ago",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 10.sp
-                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Confidence: ${data.confidence}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (data.confidence > 80) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                                fontWeight = FontWeight.Black
+                            )
+                        }
                     }
                 }
             }
@@ -166,26 +165,10 @@ fun PropagationScreen(
             if (bands.isEmpty()) {
                 item(span = { GridItemSpan(2) }) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)),
+                        modifier = Modifier.fillMaxWidth().height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(32.dp),
-                                strokeWidth = 3.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                "Analyzing band conditions...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        CircularProgressIndicator()
                     }
                 }
             } else {
@@ -246,10 +229,13 @@ fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.Image
 
 @Composable
 fun DetailedBandCard(condition: BandCondition, onClick: () -> Unit) {
-    val scoreColor = try {
-        Color(android.graphics.Color.parseColor(condition.color))
-    } catch (e: Exception) {
-        MaterialTheme.colorScheme.primary
+    val scoreColor = when {
+        condition.score >= 90 -> Color(0xFF2196F3)
+        condition.score >= 75 -> Color(0xFF4CAF50)
+        condition.score >= 60 -> Color(0xFFCDDC39)
+        condition.score >= 40 -> Color(0xFFFFEB3B)
+        condition.score >= 20 -> Color(0xFFFF9800)
+        else -> Color(0xFFF44336)
     }
 
     Card(
@@ -301,16 +287,18 @@ fun DetailedBandCard(condition: BandCondition, onClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(Spacing.Small))
 
+            // 9. Replace Synthetic Graphs
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(36.dp)
+                    .height(60.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(scoreColor.copy(alpha = 0.05f))
                     .padding(vertical = 4.dp)
             ) {
-                SparklineGraph(
-                    data = condition.history,
+                PropagationHistoryGraph(
+                    history = condition.historicalData,
+                    forecast = condition.forecastData,
                     color = scoreColor,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -346,24 +334,120 @@ fun DetailedBandCard(condition: BandCondition, onClick: () -> Unit) {
                             text = summary.label,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            fontSize = 10.sp
+                            fontSize = 9.sp
                         )
-                        val ratingColor = when (summary.rating) {
-                            "Excellent", "Very Good", "Good" -> Color(0xFF4CAF50)
-                            "Fair" -> Color(0xFFFFC107)
-                            "Poor" -> Color(0xFFFF9800)
-                            else -> Color.Red
-                        }
                         Text(
                             text = summary.rating,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 10.sp,
-                            color = ratingColor
+                            fontSize = 9.sp,
+                            color = scoreColor
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Advanced Graphing Component
+ * 10. Future Prediction (Dotted lines)
+ * 11. Graph Improvements (Quality Colors)
+ */
+@Composable
+fun PropagationHistoryGraph(
+    history: List<PropagationPoint>,
+    forecast: List<PropagationPoint>,
+    color: Color,
+    modifier: Modifier
+) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        if (history.isEmpty() && forecast.isEmpty()) return@Canvas
+        
+        val allPoints = (history + forecast).sortedBy { it.timestamp }
+        if (allPoints.size < 2) return@Canvas
+
+        val minTime = allPoints.minOf { it.timestamp }
+        val maxTime = allPoints.maxOf { it.timestamp }
+        val timeRange = (maxTime - minTime).coerceAtLeast(1L)
+        
+        fun getOffset(p: PropagationPoint): androidx.compose.ui.geometry.Offset {
+            val x = ((p.timestamp - minTime).toFloat() / timeRange.toFloat()) * size.width
+            val y = size.height - (p.score.toFloat() / 100f * size.height)
+            return androidx.compose.ui.geometry.Offset(x, y)
+        }
+
+        // 1. Draw Historical Solid Line with Cubic Interpolation
+        if (history.size >= 2) {
+            val smoothedHistory = history // Assume history is already smoothed by Repository
+            val historyPath = Path()
+            val points = smoothedHistory.map { getOffset(it) }
+            
+            historyPath.moveTo(points[0].x, points[0].y)
+            
+            for (i in 0 until points.size - 1) {
+                val p1 = points[i]
+                val p2 = points[i + 1]
+                
+                // Cubic Bézier for smooth flow
+                val controlPoint1 = androidx.compose.ui.geometry.Offset(
+                    p1.x + (p2.x - p1.x) / 2, 
+                    p1.y
+                )
+                val controlPoint2 = androidx.compose.ui.geometry.Offset(
+                    p1.x + (p2.x - p1.x) / 2, 
+                    p2.y
+                )
+                
+                historyPath.cubicTo(
+                    controlPoint1.x, controlPoint1.y,
+                    controlPoint2.x, controlPoint2.y,
+                    p2.x, p2.y
+                )
+            }
+            
+            drawPath(
+                path = historyPath,
+                color = color,
+                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            )
+            
+            // Terminal Point (Connection between history and forecast)
+            drawCircle(color = color, radius = 3.dp.toPx(), center = points.last())
+        }
+
+        // 2. Draw Forecast Dotted Line (Beginning exactly at history end)
+        if (forecast.isNotEmpty() && history.isNotEmpty()) {
+            val forecastPath = Path()
+            val lastHistoryPoint = getOffset(history.last())
+            val forecastPoints = listOf(lastHistoryPoint) + forecast.map { getOffset(it) }
+            
+            forecastPath.moveTo(forecastPoints[0].x, forecastPoints[0].y)
+            
+            for (i in 0 until forecastPoints.size - 1) {
+                val p1 = forecastPoints[i]
+                val p2 = forecastPoints[i + 1]
+                
+                val controlPoint1 = androidx.compose.ui.geometry.Offset(p1.x + (p2.x - p1.x) / 2, p1.y)
+                val controlPoint2 = androidx.compose.ui.geometry.Offset(p1.x + (p2.x - p1.x) / 2, p2.y)
+                
+                forecastPath.cubicTo(
+                    controlPoint1.x, controlPoint1.y,
+                    controlPoint2.x, controlPoint2.y,
+                    p2.x, p2.y
+                )
+            }
+            
+            drawPath(
+                path = forecastPath,
+                color = color.copy(alpha = 0.4f),
+                style = Stroke(
+                    width = 2.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f),
+                    cap = StrokeCap.Round
+                )
+            )
         }
     }
 }
@@ -378,7 +462,7 @@ fun OperatingConditionsCard(solarData: SolarData, muf: Double) {
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
     ) {
         Column(modifier = Modifier.padding(Spacing.Medium)) {
-            // 1. Primary Solar Indices (Top Row)
+            // Primary Metrics
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -393,23 +477,24 @@ fun OperatingConditionsCard(solarData: SolarData, muf: Double) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f))
             Spacer(modifier = Modifier.height(Spacing.Medium))
 
-            // 2. Secondary Solar Data (Two Columns)
+            // Secondary Metrics
             Row(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
                     SecondaryMetricItem("X-RAY", solarData.xRay)
                     SecondaryMetricItem("SOLAR WIND", solarData.solarWind)
-                    SecondaryMetricItem("MAG FIELD (Bz)", solarData.magneticField)
+                    SecondaryMetricItem("MAG FIELD", solarData.magneticField)
+                    SecondaryMetricItem("foF2", solarData.foF2)
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
-                    SecondaryMetricItem("PROTON FLUX", solarData.protonFlux)
-                    SecondaryMetricItem("ELECTRON FLUX", solarData.electronFlux)
-                    SecondaryMetricItem("AURORA INDEX", solarData.aurora)
+                    SecondaryMetricItem("PROTONS", solarData.protonFlux)
+                    SecondaryMetricItem("ELECTRONS", solarData.electronFlux)
+                    SecondaryMetricItem("AURORA", solarData.aurora)
                 }
             }
 
             Spacer(modifier = Modifier.height(Spacing.Large))
 
-            // 3. Highlighted Radio Metrics
+            // Highlights
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)
@@ -427,25 +512,6 @@ fun OperatingConditionsCard(solarData: SolarData, muf: Double) {
                     MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
                 )
             }
-
-            Spacer(modifier = Modifier.height(Spacing.Large))
-
-            // 4. VHF Conditions Row
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(vertical = Spacing.Small, horizontal = Spacing.Medium),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    VhfStatusItem("VHF AURORA", solarData.vhfAurora)
-                    Box(modifier = Modifier.width(1.dp).height(16.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
-                    VhfStatusItem("E-SKIP", solarData.eSkip)
-                }
-            }
         }
     }
 }
@@ -461,20 +527,9 @@ private fun PrimaryMetricCard(modifier: Modifier, label: String, value: String) 
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(vertical = 10.dp)
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF81D4FA),
-                fontWeight = FontWeight.Bold,
-                fontSize = 9.sp
-            )
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color(0xFF81D4FA), fontWeight = FontWeight.Bold, fontSize = 9.sp)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Black,
-                color = Color.White
-            )
+            Text(text = value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White)
         }
     }
 }
@@ -482,19 +537,8 @@ private fun PrimaryMetricCard(modifier: Modifier, label: String, value: String) 
 @Composable
 private fun SecondaryMetricItem(label: String, value: String) {
     Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF81D4FA),
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color.White
-        )
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color(0xFF81D4FA), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
     }
 }
 
@@ -509,39 +553,10 @@ private fun HighlightedMetricCard(modifier: Modifier, label: String, value: Stri
             modifier = Modifier.padding(Spacing.Medium),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF81D4FA).copy(alpha = 0.8f),
-                fontWeight = FontWeight.Black,
-                fontSize = 9.sp
-            )
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color(0xFF81D4FA).copy(alpha = 0.8f), fontWeight = FontWeight.Black, fontSize = 9.sp)
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Black,
-                color = Color.White
-            )
+            Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Black, color = Color.White)
         }
-    }
-}
-
-@Composable
-private fun VhfStatusItem(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = "$label: ",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF81D4FA),
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Black,
-            color = Color.White
-        )
     }
 }
 
@@ -559,68 +574,11 @@ fun SolarDataDisclaimer() {
         ) {
             Icon(Icons.Default.Info, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
             Text(
-                text = "Data combines real-time NOAA solar indices and traffic density analysis.",
+                text = "Modular Engine v2.0 combines real-time indices, traffic density, and solar positioning.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 14.sp
             )
         }
-    }
-}
-
-@Composable
-fun SparklineGraph(data: List<Int>, color: Color, modifier: Modifier) {
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        if (data.size < 2) return@Canvas
-        val path = androidx.compose.ui.graphics.Path()
-        
-        val stepX = size.width / (data.size - 1)
-        val points = data.mapIndexed { index, value ->
-            androidx.compose.ui.geometry.Offset(
-                x = index * stepX,
-                y = size.height - (value.toFloat() / 100f * size.height)
-            )
-        }
-
-        path.moveTo(points[0].x, points[0].y)
-        
-        for (i in 0 until points.size - 1) {
-            val p1 = points[i]
-            val p2 = points[i + 1]
-            val controlPoint1 = androidx.compose.ui.geometry.Offset(p1.x + (p2.x - p1.x) / 2, p1.y)
-            val controlPoint2 = androidx.compose.ui.geometry.Offset(p1.x + (p2.x - p1.x) / 2, p2.y)
-            path.cubicTo(controlPoint1.x, controlPoint1.y, controlPoint2.x, controlPoint2.y, p2.x, p2.y)
-        }
-        
-        // Shadow/Fill
-        val fillPath = androidx.compose.ui.graphics.Path().apply {
-            addPath(path)
-            lineTo(points.last().x, size.height)
-            lineTo(points.first().x, size.height)
-            close()
-        }
-        drawPath(
-            path = fillPath,
-            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                colors = listOf(color.copy(alpha = 0.15f), Color.Transparent)
-            )
-        )
-
-        drawPath(
-            path = path,
-            color = color,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(
-                width = 2.5.dp.toPx(),
-                cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                join = androidx.compose.ui.graphics.StrokeJoin.Round
-            )
-        )
-        
-        // Draw terminal point
-        drawCircle(
-            color = color,
-            radius = 3.dp.toPx(),
-            center = points.last()
-        )
     }
 }

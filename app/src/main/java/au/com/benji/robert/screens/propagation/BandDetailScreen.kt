@@ -25,8 +25,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import au.com.benji.robert.database.PropagationHistoryEntity
+import au.com.benji.robert.repository.propagation.PropagationPoint
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
+import au.com.benji.robert.utils.PropagationSmoother
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -41,7 +43,12 @@ fun BandDetailScreen(
     val bandCondition = propagationData?.bands?.find { it.band == bandName }
     
     var timeframeHours by remember { mutableIntStateOf(24) }
-    val history by viewModel.getHistoryForBand(bandName, timeframeHours).collectAsStateWithLifecycle(initialValue = emptyList())
+    val historyEntities by viewModel.bandConditions.getHistoryFlow(bandName, timeframeHours).collectAsStateWithLifecycle(initialValue = emptyList())
+
+    val smoothedHistory = remember(historyEntities) {
+        val rawPoints = historyEntities.map { PropagationPoint(it.timestamp, it.score) }
+        PropagationSmoother.smoothHistory(bandName, rawPoints)
+    }
 
     Scaffold(
         topBar = {
@@ -167,7 +174,8 @@ fun BandDetailScreen(
                     .padding(vertical = 24.dp, horizontal = 8.dp)
             ) {
                 DetailedPropagationGraph(
-                    history = history,
+                    history = smoothedHistory,
+                    forecast = bandCondition?.forecastData ?: emptyList(),
                     color = try { Color(android.graphics.Color.parseColor(bandCondition?.color ?: "#00B2FF")) } catch(e: Exception) { Color(0xFF00B2FF) },
                     timeframeLabel = "Last $timeframeHours Hours"
                 )
@@ -175,7 +183,7 @@ fun BandDetailScreen(
 
             // Additional Stats
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
-                StatCard(Modifier.weight(1f), "Peak Score", "${history.maxOrNull() ?: "--"}", Icons.Default.TrendingUp)
+                StatCard(Modifier.weight(1f), "Peak Score", "${smoothedHistory.maxOfOrNull { it.score } ?: "--"}", Icons.Default.TrendingUp)
                 StatCard(Modifier.weight(1f), "Trend", bandCondition?.trend ?: "Stable", Icons.Default.Timeline)
             }
         }
@@ -184,7 +192,8 @@ fun BandDetailScreen(
 
 @Composable
 fun DetailedPropagationGraph(
-    history: List<Int>,
+    history: List<PropagationPoint>,
+    forecast: List<PropagationPoint>,
     color: Color,
     timeframeLabel: String
 ) {
@@ -228,60 +237,89 @@ fun DetailedPropagationGraph(
                     )
                 }
 
-                if (history.size < 2) return@Canvas
+                val allPoints = (history + forecast).sortedBy { it.timestamp }
+                if (allPoints.isEmpty()) return@Canvas
 
-                val stepX = width / (history.size - 1)
-                val points = history.mapIndexed { index, score ->
-                    Offset(
-                        x = index * stepX + offset,
-                        y = height - (score.toFloat() / 100f * height)
-                    )
+                val minTime = if (allPoints.isNotEmpty()) allPoints.minOf { it.timestamp } else 0L
+                val maxTime = if (allPoints.isNotEmpty()) allPoints.maxOf { it.timestamp } else 0L
+                val timeRange = (maxTime - minTime).coerceAtLeast(1L)
+                
+                fun getOffset(p: PropagationPoint): Offset {
+                    val x = ((p.timestamp - minTime).toFloat() / timeRange.toFloat()) * width + offset
+                    val y = height - (p.score.toFloat() / 100f * height)
+                    return Offset(x, y)
                 }
 
-                // Draw Path with Bézier Smoothing
-                val path = Path().apply {
-                    if (points.isNotEmpty()) {
-                        moveTo(points[0].x, points[0].y)
-                        for (i in 0 until points.size - 1) {
-                            val p1 = points[i]
-                            val p2 = points[i + 1]
-                            val controlPoint1 = Offset(p1.x + (p2.x - p1.x) / 2, p1.y)
-                            val controlPoint2 = Offset(p1.x + (p2.x - p1.x) / 2, p2.y)
-                            cubicTo(controlPoint1.x, controlPoint1.y, controlPoint2.x, controlPoint2.y, p2.x, p2.y)
+                // Draw History Path with Cubic Smoothing
+                if (history.size >= 2) {
+                    val historyPoints = history.map { getOffset(it) }
+                    val path = Path().apply {
+                        moveTo(historyPoints[0].x, historyPoints[0].y)
+                        for (i in 0 until historyPoints.size - 1) {
+                            val p1 = historyPoints[i]
+                            val p2 = historyPoints[i + 1]
+                            val cp1 = Offset(p1.x + (p2.x - p1.x) / 2, p1.y)
+                            val cp2 = Offset(p1.x + (p2.x - p1.x) / 2, p2.y)
+                            cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y)
                         }
                     }
-                }
 
-                // Gradient Fill
-                val fillPath = Path().apply {
-                    addPath(path)
-                    if (points.isNotEmpty()) {
-                        lineTo(points.last().x, height)
-                        lineTo(points.first().x, height)
+                    // Gradient Fill
+                    val fillPath = Path().apply {
+                        addPath(path)
+                        lineTo(historyPoints.last().x, height)
+                        lineTo(historyPoints.first().x, height)
                         close()
                     }
+                    
+                    drawPath(
+                        path = fillPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(color.copy(alpha = 0.3f), Color.Transparent)
+                        )
+                    )
+
+                    drawPath(
+                        path = path,
+                        color = color,
+                        style = Stroke(
+                            width = 3.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
                 }
                 
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(color.copy(alpha = 0.3f), Color.Transparent)
-                    )
-                )
+                // Draw Forecast Path with Cubic Smoothing (Dotted)
+                if (forecast.isNotEmpty() && history.isNotEmpty()) {
+                    val lastHistory = getOffset(history.last())
+                    val forecastPoints = listOf(lastHistory) + forecast.map { getOffset(it) }
+                    
+                    val forecastPath = Path().apply {
+                        moveTo(forecastPoints[0].x, forecastPoints[0].y)
+                        for (i in 0 until forecastPoints.size - 1) {
+                            val p1 = forecastPoints[i]
+                            val p2 = forecastPoints[i + 1]
+                            val cp1 = Offset(p1.x + (p2.x - p1.x) / 2, p1.y)
+                            val cp2 = Offset(p1.x + (p2.x - p1.x) / 2, p2.y)
+                            cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y)
+                        }
+                    }
 
-                drawPath(
-                    path = path,
-                    color = color,
-                    style = Stroke(
-                        width = 3.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round
+                    drawPath(
+                        path = forecastPath,
+                        color = color.copy(alpha = 0.4f),
+                        style = Stroke(
+                            width = 2.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f),
+                            cap = StrokeCap.Round
+                        )
                     )
-                )
-                
+                }
+
                 // Draw current point marker
-                if (points.isNotEmpty()) {
-                    val lastPoint = points.last()
+                if (history.isNotEmpty()) {
+                    val lastPoint = getOffset(history.last())
                     if (lastPoint.x in 0f..size.width) {
                         drawCircle(
                             color = color,

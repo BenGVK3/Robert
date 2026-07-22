@@ -7,10 +7,7 @@ import au.com.benji.robert.database.PropagationHistoryEntity
 import au.com.benji.robert.models.SolarData
 import au.com.benji.robert.models.PskSpot
 import au.com.benji.robert.network.ApiService
-import au.com.benji.robert.utils.PropagationCalculator
-import au.com.benji.robert.utils.maidenheadToLatLng
-import au.com.benji.robert.utils.calculateDistance
-import au.com.benji.robert.utils.calculateBearing
+import au.com.benji.robert.utils.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -18,13 +15,12 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import java.io.StringReader
+import java.util.Calendar
 import kotlin.math.roundToInt
 
 class PropagationRepository(private val propagationDao: PropagationDao) {
     private val TAG = "PropagationRepository"
     private var lastCalculatedTimestamp: Long = 0
-    private val smoothedScores = mutableMapOf<String, Double>()
-    private val alpha = 0.3 // Smoothing factor
 
     fun getPropagationData(
         lat: Double?,
@@ -36,86 +32,114 @@ class PropagationRepository(private val propagationDao: PropagationDao) {
     ): Flow<PropagationData> = flow {
         while (true) {
             try {
-                if (solar != null) {
-                    Log.d(TAG, "Calculating real HF propagation scores...")
+                if (solar != null && lat != null && lon != null) {
+                    Log.d(TAG, "Executing Next-Gen Propagation Engine...")
                     
-                    val rawBands = PropagationCalculator.calculateAllBands(
+                    // 1. Fetch real-world activity
+                    val pskReports = mutableMapOf<String, Int>()
+                    listOf("160m", "80m", "40m", "20m", "15m", "10m", "6m").forEach { band ->
+                        pskReports[band] = fetchPskActivity(band)
+                    }
+
+                    // 2. Run Modular Calculation
+                    val input = PropagationEngine.EngineInput(
                         solarData = solar,
                         muf = muf,
                         lat = lat,
                         lon = lon,
-                        sunrise = sunrise,
-                        sunset = sunset
+                        pskReports = pskReports
                     )
-
-                    // Apply Smoothing
-                    val calculatedBands = rawBands.map { raw ->
-                        val prev = smoothedScores[raw.band] ?: raw.score.toDouble()
-                        val smoothed = (alpha * raw.score) + ((1.0 - alpha) * prev)
-                        smoothedScores[raw.band] = smoothed
-                        
-                        val finalScore = smoothed.roundToInt()
-                        raw.copy(
-                            score = finalScore,
-                            rating = PropagationCalculator.getRating(finalScore),
-                            colorHex = PropagationCalculator.getColor(finalScore)
-                        )
-                    }
+                    
+                    val currentData = PropagationEngine.calculate(input)
 
                     val now = System.currentTimeMillis()
                     
+                    // 3. Save History (Every 10 mins)
                     if (now - lastCalculatedTimestamp > 9 * 60 * 1000) {
-                        calculatedBands.forEach { bandScore ->
+                        currentData.bands.forEach { band ->
                             propagationDao.insert(
                                 PropagationHistoryEntity(
                                     timestamp = now,
-                                    band = bandScore.band,
-                                    score = bandScore.score
+                                    band = band.band,
+                                    score = band.score,
+                                    muf = muf,
+                                    sfi = solar.solarFlux,
+                                    kIndex = solar.kIndex,
+                                    aIndex = solar.aIndex,
+                                    solarElevation = SolarCalculations.getSolarElevation(lat, lon),
+                                    confidence = currentData.confidence
                                 )
                             )
                         }
                         lastCalculatedTimestamp = now
-                        propagationDao.deleteOldHistory(now - 24 * 60 * 60 * 1000)
+                        propagationDao.deleteOldHistory(now - 48 * 60 * 60 * 1000) // Keep 48h
                     }
 
-                    val bandsWithHistory = calculatedBands.map { bandScore ->
-                        val history = propagationDao.getHistoryForBand(bandScore.band, now - 24 * 60 * 60 * 1000)
+                    // 4. Build Detailed Bands with Real History and Forecast
+                    val finalBands = currentData.bands.map { band ->
+                        val historyEntities = propagationDao.getHistoryForBand(band.band, now - 24 * 60 * 60 * 1000)
                         
-                        val trend = if (history.size >= 2) {
-                            val last = history.last().score
-                            val prev = history[history.size - 2].score
+                        val rawHistoryPoints = historyEntities.map { 
+                            PropagationPoint(it.timestamp, it.score) 
+                        }
+
+                        // Apply smoothing to history before sending to UI
+                        val smoothedHistory = PropagationSmoother.smoothHistory(band.band, rawHistoryPoints)
+                        
+                        val forecastPoints = generateForecast(band.band, band.score, input)
+
+                        val trend = if (smoothedHistory.size >= 2) {
+                            val last = smoothedHistory.last().score
+                            val prev = smoothedHistory[smoothedHistory.size - 2].score
                             when {
-                                last > prev -> "Improving"
-                                last < prev -> "Declining"
+                                last > prev + 5 -> "Improving"
+                                last < prev - 5 -> "Declining"
                                 else -> "Stable"
                             }
                         } else "Stable"
 
-                        BandCondition(
-                            band = bandScore.band,
-                            rating = bandScore.rating,
+                        band.copy(
                             trend = trend,
-                            score = bandScore.score,
-                            color = bandScore.colorHex,
-                            history = history.map { it.score },
-                            summaries = bandScore.summaries
+                            historicalData = smoothedHistory,
+                            forecastData = forecastPoints
                         )
                     }
 
-                    val psk6m = fetchPskActivity("6m")
-                    val psk10m = fetchPskActivity("10m")
-
                     val ducting = fetchLiveDuctingData(lat, lon)
-                    val aurora = PropagationCalculator.calculateAurora(solar)
-                    val eSkip = PropagationCalculator.calculateESkip(solar, muf, psk6m, psk10m)
-
-                    emit(PropagationData(bandsWithHistory, ducting, aurora, eSkip))
+                    emit(currentData.copy(bands = finalBands, ducting = ducting))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in propagation engine: ${e.message}")
             }
             delay(10 * 60 * 1000)
         }
+    }
+
+    private fun generateForecast(band: String, currentScore: Int, input: PropagationEngine.EngineInput): List<PropagationPoint> {
+        val forecast = mutableListOf<PropagationPoint>()
+        val now = System.currentTimeMillis()
+        
+        // Predict next 6 hours (6 points)
+        for (i in 1..6) {
+            val futureTime = now + (i * 60 * 60 * 1000)
+            
+            // Heuristic forecast: Adjust score based on solar movement
+            // This is a simplified simulation of "Time of day" movement
+            val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            val targetHour = (currentHour + i) % 24
+            
+            // Simple cycle logic for forecasting
+            val cycleModifier = when (band) {
+                "160m", "80m" -> if (targetHour in 6..18) -40 else 20
+                "20m" -> if (targetHour in 10..15) 15 else if (targetHour in 22..4) -20 else 0
+                "10m" -> if (targetHour in 9..17) 25 else -60
+                else -> 0
+            }
+            
+            val predictedScore = (currentScore + cycleModifier).coerceIn(5, 100)
+            forecast.add(PropagationPoint(futureTime, predictedScore))
+        }
+        return forecast
     }
 
     suspend fun getLiveSpots(band: String, lat: Double?, lon: Double?): List<PskSpot> = withContext(Dispatchers.IO) {
