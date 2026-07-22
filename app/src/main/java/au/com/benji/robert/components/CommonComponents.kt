@@ -392,30 +392,32 @@ fun DxSpotItem(spot: DxSpot, onClick: () -> Unit) {
             
             // Source and Spotter
             Column(horizontalAlignment = Alignment.End) {
-                if (spot.source != SpotSource.DX_CLUSTER) {
-                    val sourceColor = when(spot.source) {
-                        SpotSource.POTA -> Color(0xFF4CAF50)
-                        SpotSource.SOTA -> Color(0xFFFF9800)
-                        SpotSource.WWFF -> Color(0xFF2196F3)
-                        else -> MaterialTheme.colorScheme.primary
-                    }
-                    
-                    Surface(
-                        color = sourceColor.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(4.dp),
-                        border = BorderStroke(0.5.dp, sourceColor.copy(alpha = 0.3f))
-                    ) {
-                        Text(
-                            text = spot.source.name,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            color = sourceColor,
-                            fontSize = 9.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
+                val (sourceText, sourceColor) = when(spot.provider) {
+                    SpotSource.SOTA -> "🏔 SOTA" to Color(0xFFFF9800)
+                    SpotSource.POTA -> "🌳 POTA" to Color(0xFF4CAF50)
+                    SpotSource.WWFF -> "🌿 WWFF" to Color(0xFF2196F3)
+                    SpotSource.SIOTA -> "🌾 SIOTA" to Color(0xFFFF5722)
+                    SpotSource.DX_CLUSTER -> "📡 DX" to MaterialTheme.colorScheme.primary
+                    SpotSource.RBN -> "📻 RBN" to Color(0xFF9C27B0)
+                    SpotSource.DIGITAL -> "💻 DIGI" to Color(0xFF00BCD4)
+                    SpotSource.PARKSNPEAKS -> "⛰️ PNP" to Color(0xFF795548)
                 }
+                
+                Surface(
+                    color = sourceColor.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(4.dp),
+                    border = BorderStroke(0.5.dp, sourceColor.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = sourceText,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        color = sourceColor,
+                        fontSize = 9.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = spot.spotter,

@@ -41,12 +41,7 @@ fun BandDetailScreen(
     val bandCondition = propagationData?.bands?.find { it.band == bandName }
     
     var timeframeHours by remember { mutableIntStateOf(24) }
-    
-    // We would ideally fetch this from repository based on timeframe
-    // For this implementation, we'll use a mocked historical data fetch if needed, 
-    // or just use what's in the condition for now if it has enough history.
-    // In a real app, we'd have a separate flow for the detailed history.
-    val history = bandCondition?.history ?: emptyList()
+    val history by viewModel.getHistoryForBand(bandName, timeframeHours).collectAsStateWithLifecycle(initialValue = emptyList())
 
     Scaffold(
         topBar = {
@@ -76,42 +71,63 @@ fun BandDetailScreen(
                 shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1C242F))
             ) {
-                Row(
-                    modifier = Modifier.padding(Spacing.Medium),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("CURRENT SCORE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        Text(
-                            text = "${bandCondition?.score ?: "--"}",
-                            style = MaterialTheme.typography.displayMedium,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        val color = try { Color(android.graphics.Color.parseColor(bandCondition?.color ?: "#808080")) } catch(e: Exception) { Color.Gray }
-                        Surface(
-                            color = color.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.4f))
-                        ) {
+                Column(modifier = Modifier.padding(Spacing.Medium)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("CURRENT SCORE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             Text(
-                                text = bandCondition?.rating?.uppercase() ?: "UNKNOWN",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.titleSmall,
+                                text = "${bandCondition?.score ?: "--"}",
+                                style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Black,
-                                color = color
+                                color = Color.White
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Last updated: Just now",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.Gray
-                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            val color = try { Color(android.graphics.Color.parseColor(bandCondition?.color ?: "#808080")) } catch(e: Exception) { Color.Gray }
+                            Surface(
+                                color = color.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = bandCondition?.rating?.uppercase() ?: "UNKNOWN",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = color
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Last updated: Just now",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
+                        }
                     }
+                    
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = Color.White.copy(alpha = 0.1f)
+                    )
+                    
+                    Text(
+                        text = "ANALYSIS & ALGORITHM",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "This forecast is calculated using a real-time blend of Solar Flux (SFI), Sunspot activity, and current K-Index trends. For the $bandName band, we also integrate live PSK Reporter signal-to-noise ratios and regional ionospheric MUF data to determine the current path probability score (0-100).",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        lineHeight = 14.sp
+                    )
                 }
             }
 

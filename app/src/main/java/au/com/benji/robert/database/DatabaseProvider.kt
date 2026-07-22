@@ -260,6 +260,59 @@ object DatabaseProvider {
         }
     }
 
+    private val MIGRATION_19_20 = object : Migration(19, 20) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Drop and recreate the cache table to ensure clean schema with new columns and unique index
+            db.execSQL("DROP TABLE IF EXISTS dx_spots_cache")
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS dx_spots_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    frequency TEXT NOT NULL,
+                    callsign TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    de TEXT NOT NULL,
+                    band TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    comment TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'DX_CLUSTER',
+                    location TEXT NOT NULL DEFAULT ''
+                )
+            """.trimIndent())
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_dx_spots_cache_callsign_frequency_timestamp ON dx_spots_cache (callsign, frequency, timestamp)")
+        }
+    }
+
+    private val MIGRATION_20_21 = object : Migration(20, 21) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Recreate dx_spots_cache with full provider fields
+            db.execSQL("DROP TABLE IF EXISTS dx_spots_cache")
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS dx_spots_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    frequency TEXT NOT NULL,
+                    callsign TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    de TEXT NOT NULL,
+                    band TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    comment TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'DX_CLUSTER',
+                    location TEXT NOT NULL DEFAULT '',
+                    activator TEXT NOT NULL DEFAULT '',
+                    reference TEXT NOT NULL DEFAULT '',
+                    name TEXT NOT NULL DEFAULT '',
+                    country TEXT NOT NULL DEFAULT '',
+                    latitude REAL,
+                    longitude REAL,
+                    spotUrl TEXT NOT NULL DEFAULT ''
+                )
+            """.trimIndent())
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_dx_spots_cache_callsign_frequency_timestamp ON dx_spots_cache (callsign, frequency, timestamp)")
+        }
+    }
+
     private fun addColumnIfNotExists(db: SupportSQLiteDatabase, tableName: String, columnName: String, columnDef: String) {
         val cursor = db.query("PRAGMA table_info($tableName)")
         var exists = false
@@ -288,7 +341,7 @@ object DatabaseProvider {
                 RobertDatabase::class.java,
                 "robert.db"
             )
-            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
+            .addMigrations(MIGRATION_11_12, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
             .build()
 
             INSTANCE = instance

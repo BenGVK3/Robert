@@ -256,23 +256,30 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _dxContinentFilter = MutableStateFlow<String?>(null)
     val dxContinentFilter = _dxContinentFilter.asStateFlow()
 
+    private val _dxSourceFilter = MutableStateFlow<SpotSource?>(null)
+    val dxSourceFilter = _dxSourceFilter.asStateFlow()
+
     private val _dxTimeFilter = MutableStateFlow<Int>(24) // Default 24 hours
     val dxTimeFilter = _dxTimeFilter.asStateFlow()
 
     fun setDxBandFilter(band: String?) { _dxBandFilter.value = band }
     fun setDxModeFilter(mode: String?) { _dxModeFilter.value = mode }
     fun setDxContinentFilter(continent: String?) { _dxContinentFilter.value = continent }
+    fun setDxSourceFilter(source: SpotSource?) { _dxSourceFilter.value = source }
     fun setDxTimeFilter(hours: Int) { _dxTimeFilter.value = hours }
 
     val dxSpots = dxRepository.getDxSpotsFlow()
         .combine(_dxBandFilter) { spots, band ->
-            if (band == null) spots else spots.filter { it.band == band }
+            if (band == null) spots else spots.filter { it.band.equals(band, ignoreCase = true) }
         }
         .combine(_dxModeFilter) { spots, mode ->
-            if (mode == null) spots else spots.filter { it.mode == mode }
+            if (mode == null) spots else spots.filter { it.mode.contains(mode, ignoreCase = true) || it.normalizedMode.equals(mode, ignoreCase = true) }
         }
         .combine(_dxContinentFilter) { spots, continent ->
-            if (continent == null) spots else spots.filter { it.continent == continent }
+            if (continent == null) spots else spots.filter { it.continent.equals(continent, ignoreCase = true) }
+        }
+        .combine(_dxSourceFilter) { spots, source ->
+            if (source == null) spots else spots.filter { it.provider == source }
         }
         .combine(_dxTimeFilter) { spots, hours ->
             val cutOff = System.currentTimeMillis() - (hours * 60 * 60 * 1000L)
@@ -593,6 +600,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteEquipment(item: ShackEntity) {
         viewModelScope.launch {
             shackRepository.deleteEquipment(item)
+        }
+    }
+
+    fun getHistoryForBand(band: String, hours: Int): Flow<List<Int>> {
+        return bandConditionsRepository.getHistoryFlow(band, hours).map { entities ->
+            entities.map { it.score }
         }
     }
 }

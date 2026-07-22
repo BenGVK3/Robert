@@ -1,6 +1,7 @@
 package au.com.benji.robert.database
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
@@ -36,7 +37,10 @@ data class SatelliteEntity(
     val isFavorite: Boolean = false
 )
 
-@Entity(tableName = "dx_spots_cache")
+@Entity(
+    tableName = "dx_spots_cache",
+    indices = [Index(value = ["callsign", "frequency", "timestamp"], unique = true)]
+)
 data class DxSpotEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val frequency: String,
@@ -46,7 +50,16 @@ data class DxSpotEntity(
     val band: String,
     val mode: String,
     val comment: String = "",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val source: String = "DX_CLUSTER",
+    val location: String = "",
+    val activator: String = "",
+    val reference: String = "",
+    val name: String = "",
+    val country: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val spotUrl: String = ""
 )
 
 @Entity(tableName = "aprs_cache")

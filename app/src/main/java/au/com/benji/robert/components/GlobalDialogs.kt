@@ -581,7 +581,17 @@ fun DxSpotDetailDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text(text = spot.source.name, style = MaterialTheme.typography.labelSmall, color = when (spot.source) { SpotSource.POTA -> Color(0xFF4CAF50); SpotSource.SOTA -> Color(0xFFFF9800); else -> MaterialTheme.colorScheme.primary }, fontWeight = FontWeight.Bold)
+                val (sourceText, sourceColor) = when(spot.provider) {
+                    SpotSource.SOTA -> "🏔 SOTA" to Color(0xFFFF9800)
+                    SpotSource.POTA -> "🌳 POTA" to Color(0xFF4CAF50)
+                    SpotSource.WWFF -> "🌿 WWFF" to Color(0xFF2196F3)
+                    SpotSource.SIOTA -> "🌾 SIOTA" to Color(0xFFFF5722)
+                    SpotSource.DX_CLUSTER -> "📡 DX" to MaterialTheme.colorScheme.primary
+                    SpotSource.RBN -> "📻 RBN" to Color(0xFF9C27B0)
+                    SpotSource.DIGITAL -> "💻 DIGI" to Color(0xFF00BCD4)
+                    SpotSource.PARKSNPEAKS -> "⛰️ PNP" to Color(0xFF795548)
+                }
+                Text(text = sourceText, style = MaterialTheme.typography.labelSmall, color = sourceColor, fontWeight = FontWeight.Bold)
                 Text(text = spot.callsign, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
             }
         },
@@ -590,6 +600,13 @@ fun DxSpotDetailDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
             ) {
+                if (spot.name.isNotEmpty()) {
+                    DetailInfoItem(label = "LOCATION NAME", value = spot.name)
+                }
+                if (spot.reference.isNotEmpty()) {
+                    DetailInfoItem(label = "REFERENCE", value = spot.reference)
+                }
+                
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.Large)) {
                     DetailInfoItem(label = "FREQUENCY", value = "${spot.frequency} MHz", modifier = Modifier.weight(1f))
                     DetailInfoItem(label = "MODE", value = spot.mode.ifEmpty { "N/A" }, modifier = Modifier.weight(1f))
@@ -598,12 +615,25 @@ fun DxSpotDetailDialog(
                     DetailInfoItem(label = "BAND", value = spot.band, modifier = Modifier.weight(1f))
                     DetailInfoItem(label = "SPOTTER", value = spot.spotter, modifier = Modifier.weight(1f))
                 }
-                if (spot.location.isNotEmpty()) DetailInfoItem(label = "LOCATION", value = spot.location)
+                if (spot.location.isNotEmpty()) DetailInfoItem(label = "REGION/STATE", value = spot.location)
+                if (spot.country.isNotEmpty()) DetailInfoItem(label = "COUNTRY", value = spot.country)
                 if (spot.comment.isNotEmpty()) DetailInfoItem(label = "COMMENT", value = spot.comment)
-                Button(onClick = { uriHandler.openUri("https://www.qrz.com/db/${spot.callsign}") }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
+                
+                if (spot.latitude != null && spot.longitude != null) {
+                    DetailInfoItem(label = "COORDINATES", value = "${spot.latitude}, ${spot.longitude}")
+                }
+
+                Button(
+                    onClick = { 
+                        val url = if (spot.spotUrl.isNotEmpty()) spot.spotUrl else "https://www.qrz.com/db/${spot.callsign}"
+                        uriHandler.openUri(url) 
+                    }, 
+                    modifier = Modifier.fillMaxWidth(), 
+                    shape = MaterialTheme.shapes.medium
+                ) {
                     Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("VIEW QRZ PROFILE")
+                    Text(if (spot.spotUrl.isNotEmpty()) "OPEN SPOT URL" else "VIEW QRZ PROFILE")
                 }
             }
         },

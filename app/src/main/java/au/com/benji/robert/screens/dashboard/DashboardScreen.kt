@@ -2,6 +2,7 @@ package au.com.benji.robert.screens.dashboard
 
 import android.Manifest
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -772,9 +773,41 @@ fun RecentDxSpotsCard(modifier: Modifier, spots: List<DxSpot>, onClick: () -> Un
                     ) {
                         Text(spot.callsign, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = Color.White, maxLines = 1)
                         Text(spot.frequency, style = MaterialTheme.typography.labelSmall, color = Color(0xFF00B2FF), fontWeight = FontWeight.Bold)
-                        Text(spot.band, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        Text(spot.normalizedMode, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        Spacer(modifier = Modifier.weight(0.2f))
+                        
+                        // Source Badge
+                        val sourceLabel = when(spot.provider) {
+                            SpotSource.SOTA -> "SOTA"
+                            SpotSource.POTA -> "POTA"
+                            SpotSource.WWFF -> "WWFF"
+                            SpotSource.SIOTA -> "SILO"
+                            SpotSource.DX_CLUSTER -> "DX"
+                            SpotSource.RBN -> "RBN"
+                            SpotSource.DIGITAL -> "DIGI"
+                            SpotSource.PARKSNPEAKS -> "PNP"
+                        }
+                        val sourceColor = when(spot.provider) {
+                            SpotSource.SOTA -> Color(0xFFFF9800)
+                            SpotSource.POTA -> Color(0xFF4CAF50)
+                            SpotSource.WWFF -> Color(0xFF2196F3)
+                            SpotSource.SIOTA -> Color(0xFFFF5722)
+                            else -> Color.Gray
+                        }
+                        
+                        Surface(
+                            color = sourceColor.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp),
+                            border = BorderStroke(0.5.dp, sourceColor.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = sourceLabel,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black,
+                                color = sourceColor,
+                                fontSize = 8.sp
+                            )
+                        }
+
                         Text(spot.timeZulu.take(5), style = MaterialTheme.typography.labelSmall, color = Color.Gray, textAlign = TextAlign.End)
                     }
                 }

@@ -20,7 +20,7 @@ object ApiService {
         val request = Request.Builder()
             .url(url)
             .header("Cache-Control", "no-cache")
-            .header("User-Agent", "Robert-Ham-App/1.0") // Add User-Agent to avoid being blocked
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Robert/1.0")
             .build()
 
         try {

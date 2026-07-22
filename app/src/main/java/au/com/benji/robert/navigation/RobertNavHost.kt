@@ -229,7 +229,10 @@ fun RobertNavHost(
         }
 
         composable(Screen.BandPlan.route) {
-            BandPlanScreen(paddingValues)
+            BandPlanScreen(
+                onBack = { navController.popBackStack() },
+                paddingValues = paddingValues
+            )
         }
 
         composable(Screen.RepeaterList.route) {

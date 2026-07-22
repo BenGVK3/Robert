@@ -43,13 +43,15 @@ fun MoonScreen(
     var showLocator by remember { mutableStateOf(false) }
 
     Scaffold(
-        modifier = Modifier.padding(paddingValues),
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = Spacing.Medium),
+                    .padding(horizontal = Spacing.Medium)
+                    .padding(top = paddingValues.calculateTopPadding()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(Modifier.height(4.dp))
@@ -101,7 +103,8 @@ fun MoonScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(top = padding.calculateTopPadding())
+                .padding(bottom = paddingValues.calculateBottomPadding())
                 .padding(horizontal = Spacing.Medium),
             verticalArrangement = Arrangement.spacedBy(Spacing.Medium),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -225,12 +228,14 @@ fun MoonLocatorDialog(
 
                         // Target Moon Icon
                         val deltaAz = (azimuth - currentAzimuth).let { if (it < -180) it + 360 else if (it > 180) it - 360 else it }
-                        // deltaAlt: phone level is usually 0 pitch? or 90?
-                        // Let's assume phone held vertically: pitch 0 is vertical? No, pitch is usually around X axis.
-                        // For simplicity, let's use a 2D projection for now that "feels" like locating it.
                         
+                        // Altitude correction: In portrait mode, back of phone pointing up/down is pitch
+                        // Altitude 0 = horizon, 90 = zenith.
+                        // Pitch 0 = phone vertical (pointing at horizon). Pitch 90 = phone flat (pointing up).
+                        val deltaAlt = altitude - currentPitch
+
                         val xOffset = (deltaAz / 45.0 * 140.dp.value).coerceIn(-140.0, 140.0)
-                        val yOffset = ((altitude - currentPitch) / 45.0 * 140.dp.value).coerceIn(-140.0, 140.0)
+                        val yOffset = (deltaAlt / 45.0 * 140.dp.value).coerceIn(-140.0, 140.0)
 
                         Icon(
                             imageVector = Icons.Default.Brightness2,
@@ -238,7 +243,7 @@ fun MoonLocatorDialog(
                             modifier = Modifier
                                 .size(64.dp)
                                 .offset(x = xOffset.dp, y = (-yOffset).dp),
-                            tint = if (Math.abs(deltaAz) < 5 && Math.abs(altitude - currentPitch) < 5) Color(0xFF03DAC6) else Color.White
+                            tint = if (Math.abs(deltaAz) < 5 && Math.abs(deltaAlt) < 5) Color(0xFF03DAC6) else Color.White
                         )
                         
                         // Crosshair

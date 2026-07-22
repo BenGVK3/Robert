@@ -63,15 +63,15 @@ fun SatellitesScreen(
     val categories = listOf("All", "Amateur", "ISS", "Weather", "Experimental")
 
     Scaffold(
-        modifier = Modifier
-            .padding(bottom = paddingValues.calculateBottomPadding())
-            .statusBarsPadding(),
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(horizontal = Spacing.Medium)
+                    .padding(top = paddingValues.calculateTopPadding())
                     .padding(top = Spacing.Medium)
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -94,7 +94,7 @@ fun SatellitesScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -107,14 +107,15 @@ fun SatellitesScreen(
                     onRefresh = { viewModel.refresh() },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(260.dp) // Adjusted height slightly for better peeking
+                        .height(260.dp)
+                        .padding(top = padding.calculateTopPadding())
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 )
 
                 // --- SCROLLABLE CONTENT BELOW ---
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp), // Extra space at bottom
+                    contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + Spacing.Medium),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                 // Search and Filters Row
@@ -230,6 +231,7 @@ fun SatellitesScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .padding(bottom = paddingValues.calculateBottomPadding())
                 .height(60.dp)
                 .background(
                     brush = androidx.compose.ui.graphics.Brush.verticalGradient(

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -32,6 +33,7 @@ import au.com.benji.robert.R
 import au.com.benji.robert.components.DxSpotItem
 import au.com.benji.robert.components.DxSpotDetailDialog
 import au.com.benji.robert.models.DxSpot
+import au.com.benji.robert.models.SpotSource
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
 import java.time.Instant
@@ -53,18 +55,11 @@ fun DxSpotsScreen(
     val activeBand by viewModel.dxBandFilter.collectAsStateWithLifecycle()
     val activeMode by viewModel.dxModeFilter.collectAsStateWithLifecycle()
     val activeContinent by viewModel.dxContinentFilter.collectAsStateWithLifecycle()
+    val activeSource by viewModel.dxSourceFilter.collectAsStateWithLifecycle()
     val activeTime by viewModel.dxTimeFilter.collectAsStateWithLifecycle()
     
     var selectedDxSpot by remember { mutableStateOf<DxSpot?>(null) }
-    var showBandMenu by remember { mutableStateOf(false) }
-    var showModeMenu by remember { mutableStateOf(false) }
-    var showContinentMenu by remember { mutableStateOf(false) }
-    var showTimeMenu by remember { mutableStateOf(false) }
-    
-    val bands = listOf("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm")
-    val modes = listOf("CW", "SSB", "FT8", "FT4", "FM", "RTTY")
-    val continents = listOf("OC", "AS", "EU", "NA", "SA", "AF")
-    val times = listOf(1 to "1 Hour", 4 to "4 Hours", 12 to "12 Hours", 24 to "24 Hours")
+    var showFilterDialog by remember { mutableStateOf(false) }
 
     var currentZuluTime by remember { mutableStateOf("") }
     var currentLocalTime by remember { mutableStateOf("") }
@@ -81,13 +76,15 @@ fun DxSpotsScreen(
     }
 
     Scaffold(
-        modifier = Modifier.padding(paddingValues),
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(horizontal = Spacing.Medium)
+                    .padding(top = paddingValues.calculateTopPadding())
                     .padding(top = Spacing.Medium)
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -147,79 +144,42 @@ fun DxSpotsScreen(
                             }
                         }
                     }
+
+                    IconButton(
+                        onClick = { showFilterDialog = true },
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        val isFiltered = activeBand != null || activeMode != null || activeContinent != null || activeSource != null
+                        BadgedBox(badge = { if (isFiltered) Badge() }) {
+                            Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                        }
+                    }
                 }
                 
-                Spacer(modifier = Modifier.height(Spacing.Medium))
-
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box {
-                        FilterChip(
-                            selected = true,
-                            onClick = { showTimeMenu = true },
-                            label = { Text("Last ${activeTime}h") },
-                            leadingIcon = { Icon(Icons.Default.History, null, modifier = Modifier.size(16.dp)) },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
-                        )
-                        DropdownMenu(expanded = showTimeMenu, onDismissRequest = { showTimeMenu = false }) {
-                            times.forEach { (hours, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) }, 
-                                    onClick = { viewModel.setDxTimeFilter(hours); showTimeMenu = false }
-                                )
-                            }
-                        }
-                    }
-
-                    Box {
-                        FilterChip(
-                            selected = activeBand != null,
-                            onClick = { showBandMenu = true },
-                            label = { Text(activeBand ?: "All Bands") },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
-                        )
-                        DropdownMenu(expanded = showBandMenu, onDismissRequest = { showBandMenu = false }) {
-                            DropdownMenuItem(text = { Text("All Bands") }, onClick = { viewModel.setDxBandFilter(null); showBandMenu = false })
-                            bands.forEach { band ->
-                                DropdownMenuItem(text = { Text(band) }, onClick = { viewModel.setDxBandFilter(band); showBandMenu = false })
-                            }
-                        }
-                    }
+                    Text(
+                        text = "${dxSpots.size} spots matching criteria",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.Bold
+                    )
                     
-                    Box {
-                        FilterChip(
-                            selected = activeMode != null,
-                            onClick = { showModeMenu = true },
-                            label = { Text(activeMode ?: "All Modes") },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
-                        )
-                        DropdownMenu(expanded = showModeMenu, onDismissRequest = { showModeMenu = false }) {
-                            DropdownMenuItem(text = { Text("All Modes") }, onClick = { viewModel.setDxModeFilter(null); showModeMenu = false })
-                            modes.forEach { mode ->
-                                DropdownMenuItem(text = { Text(mode) }, onClick = { viewModel.setDxModeFilter(mode); showModeMenu = false })
+                    if (activeBand != null || activeMode != null || activeContinent != null || activeSource != null) {
+                        Text(
+                            text = "Reset Filters",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable {
+                                viewModel.setDxBandFilter(null)
+                                viewModel.setDxModeFilter(null)
+                                viewModel.setDxContinentFilter(null)
+                                viewModel.setDxSourceFilter(null)
                             }
-                        }
-                    }
-
-                    Box {
-                        FilterChip(
-                            selected = activeContinent != null,
-                            onClick = { showContinentMenu = true },
-                            label = { Text(activeContinent ?: "All Regions") },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
                         )
-                        DropdownMenu(expanded = showContinentMenu, onDismissRequest = { showContinentMenu = false }) {
-                            DropdownMenuItem(text = { Text("All Continents") }, onClick = { viewModel.setDxContinentFilter(null); showContinentMenu = false })
-                            continents.forEach { cont ->
-                                DropdownMenuItem(text = { Text(cont) }, onClick = { viewModel.setDxContinentFilter(cont); showContinentMenu = false })
-                            }
-                        }
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), modifier = Modifier.padding(top = Spacing.Small))
@@ -230,12 +190,15 @@ fun DxSpotsScreen(
             isRefreshing = isRefreshingDx,
             onRefresh = { viewModel.refreshDxSpots() },
             state = dxPullToRefreshState,
-            modifier = Modifier.padding(padding).fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Small),
-                contentPadding = PaddingValues(Spacing.Medium)
+                contentPadding = PaddingValues(
+                    top = padding.calculateTopPadding() + Spacing.Medium,
+                    bottom = paddingValues.calculateBottomPadding() + Spacing.Medium
+                )
             ) {
                 items(dxSpots) { spot ->
                     DxSpotItem(spot, onClick = { selectedDxSpot = spot })
@@ -244,7 +207,123 @@ fun DxSpotsScreen(
         }
     }
 
+    if (showFilterDialog) {
+        DxFilterDialog(
+            viewModel = viewModel,
+            onDismiss = { showFilterDialog = false }
+        )
+    }
+
     selectedDxSpot?.let { spot ->
         DxSpotDetailDialog(spot = spot, onDismiss = { selectedDxSpot = null })
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DxFilterDialog(
+    viewModel: DashboardViewModel,
+    onDismiss: () -> Unit
+) {
+    val activeBand by viewModel.dxBandFilter.collectAsStateWithLifecycle()
+    val activeMode by viewModel.dxModeFilter.collectAsStateWithLifecycle()
+    val activeContinent by viewModel.dxContinentFilter.collectAsStateWithLifecycle()
+    val activeSource by viewModel.dxSourceFilter.collectAsStateWithLifecycle()
+    val activeTime by viewModel.dxTimeFilter.collectAsStateWithLifecycle()
+
+    val bands = listOf("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm")
+    val modes = listOf("CW", "SSB", "FT8", "FT4", "FM", "RTTY")
+    val continents = listOf("OC", "AS", "EU", "NA", "SA", "AF")
+    val times = listOf(1 to "1h", 4 to "4h", 12 to "12h", 24 to "24h")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Filter DX Spots", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
+            ) {
+                Text("Timeframe", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    times.forEach { (hours, label) ->
+                        FilterChip(
+                            selected = activeTime == hours,
+                            onClick = { viewModel.setDxTimeFilter(hours) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
+                Text("Source", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = activeSource == null,
+                        onClick = { viewModel.setDxSourceFilter(null) },
+                        label = { Text("All Sources") }
+                    )
+                    SpotSource.entries.forEach { source ->
+                        FilterChip(
+                            selected = activeSource == source,
+                            onClick = { viewModel.setDxSourceFilter(source) },
+                            label = { Text(if (source == SpotSource.PARKSNPEAKS) "PNP" else source.name) }
+                        )
+                    }
+                }
+
+                Text("Band", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = activeBand == null,
+                        onClick = { viewModel.setDxBandFilter(null) },
+                        label = { Text("All Bands") }
+                    )
+                    bands.forEach { band ->
+                        FilterChip(
+                            selected = activeBand == band,
+                            onClick = { viewModel.setDxBandFilter(band) },
+                            label = { Text(band) }
+                        )
+                    }
+                }
+
+                Text("Mode", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = activeMode == null,
+                        onClick = { viewModel.setDxModeFilter(null) },
+                        label = { Text("All Modes") }
+                    )
+                    modes.forEach { mode ->
+                        FilterChip(
+                            selected = activeMode == mode,
+                            onClick = { viewModel.setDxModeFilter(mode) },
+                            label = { Text(mode) }
+                        )
+                    }
+                }
+
+                Text("Region", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = activeContinent == null,
+                        onClick = { viewModel.setDxContinentFilter(null) },
+                        label = { Text("All Continents") }
+                    )
+                    continents.forEach { cont ->
+                        FilterChip(
+                            selected = activeContinent == cont,
+                            onClick = { viewModel.setDxContinentFilter(cont) },
+                            label = { Text(cont) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("CLOSE")
+            }
+        }
+    )
 }

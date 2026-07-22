@@ -5,18 +5,23 @@ import au.com.benji.robert.database.CacheDao
 import au.com.benji.robert.database.DxSpotEntity
 import au.com.benji.robert.models.DxSpot
 import au.com.benji.robert.models.SpotSource
-import au.com.benji.robert.network.ApiService
-import kotlinx.coroutines.delay
+import au.com.benji.robert.repository.dx.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.serialization.json.*
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.util.Locale
 
 class DxRepository(private val cacheDao: CacheDao) {
     private val TAG = "DxRepository"
-    private val json = Json { ignoreUnknownKeys = true }
+    
+    private val providers = listOf(
+        SotaProvider(),
+        PotaProvider(),
+        WwffProvider(),
+        ParksNPeaksProvider(),
+        DxClusterProvider(),
+        RbnProvider(),
+        DigitalProvider()
+    )
 
     fun getDxSpotsFlow(): Flow<List<DxSpot>> {
         val refreshFlow = flow<Unit?> {
@@ -42,104 +47,45 @@ class DxRepository(private val cacheDao: CacheDao) {
         ).distinctUntilChanged()
     }
 
-    suspend fun fetchAllSpots(): List<DxSpot> {
-        val allSpots = mutableListOf<DxSpot>()
-
-        // 1. Fetch POTA Spots
-        try {
-            val potaJson = ApiService.fetchData("https://api.pota.app/spot/active")
-            potaJson?.let {
-                val array = json.decodeFromString<JsonArray>(it)
-                array.forEach { element ->
-                    val obj = element.jsonObject
-                    val timeStr = obj["spotTime"]?.jsonPrimitive?.content ?: ""
-                    allSpots.add(DxSpot(
-                        callsign = obj["activator"]?.jsonPrimitive?.content ?: "",
-                        frequency = obj["frequency"]?.jsonPrimitive?.content ?: "",
-                        mode = obj["mode"]?.jsonPrimitive?.content ?: "",
-                        spotter = obj["spotter"]?.jsonPrimitive?.content ?: "",
-                        timestamp = parseIsoToTimestamp(timeStr),
-                        comment = obj["comments"]?.jsonPrimitive?.content ?: "",
-                        source = SpotSource.POTA,
-                        location = obj["reference"]?.jsonPrimitive?.content ?: ""
-                    ))
+    suspend fun fetchAllSpots(): List<DxSpot> = coroutineScope {
+        val deferredSpots = providers.map { provider ->
+            async {
+                try {
+                    provider.fetchSpots()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Provider ${provider.name} failed: ${e.message}")
+                    emptyList<DxSpot>()
                 }
             }
-        } catch (e: Exception) { Log.e(TAG, "DxRepository POTA Error: ${e.message}") }
-
-        // 2. Fetch SOTA Spots
-        try {
-            val sotaJson = ApiService.fetchData("https://api2.sota.org.uk/api/spots/50")
-            sotaJson?.let {
-                val array = json.decodeFromString<JsonArray>(it)
-                array.forEach { element ->
-                    val obj = element.jsonObject
-                    val timeStr = obj["timeStamp"]?.jsonPrimitive?.content ?: ""
-                    allSpots.add(DxSpot(
-                        callsign = obj["activatorCallsign"]?.jsonPrimitive?.content ?: "",
-                        frequency = obj["frequency"]?.jsonPrimitive?.content ?: "",
-                        mode = obj["mode"]?.jsonPrimitive?.content ?: "",
-                        spotter = obj["spotterCallsign"]?.jsonPrimitive?.content ?: "",
-                        timestamp = parseIsoToTimestamp(timeStr),
-                        comment = obj["comments"]?.jsonPrimitive?.content ?: "",
-                        source = SpotSource.SOTA,
-                        location = obj["associationName"]?.jsonPrimitive?.content ?: ""
-                    ))
-                }
-            }
-        } catch (e: Exception) { Log.e(TAG, "DxRepository SOTA Error: ${e.message}") }
-
-        // 3. Fetch General DX Spots (DX Summit)
-        try {
-            val dxJson = ApiService.fetchData("https://www.dxsummit.fi/api/v1/spots?count=100")
-            dxJson?.let {
-                val array = json.decodeFromString<JsonArray>(it)
-                array.forEach { element ->
-                    val obj = element.jsonObject
-                    val freqKhz = obj["frequency"]?.jsonPrimitive?.doubleOrNull ?: 0.0
-                    val freqMhz = freqKhz / 1000.0
-                    val timeStr = obj["time"]?.jsonPrimitive?.content ?: ""
-                    
-                    allSpots.add(DxSpot(
-                        callsign = obj["dx_call"]?.jsonPrimitive?.content ?: "",
-                        frequency = String.format(Locale.US, "%.3f", freqMhz),
-                        mode = obj["mode"]?.jsonPrimitive?.content ?: "---",
-                        spotter = obj["de_call"]?.jsonPrimitive?.content ?: "",
-                        timestamp = parseIsoToTimestamp(timeStr), 
-                        comment = obj["info"]?.jsonPrimitive?.content ?: "",
-                        source = SpotSource.DX_CLUSTER
-                    ))
-                }
-            }
-        } catch (e: Exception) { Log.e(TAG, "DxRepository DX Summit Error: ${e.message}") }
-
-        return allSpots.sortedByDescending { it.timestamp }
-    }
-
-    private fun parseIsoToTimestamp(isoString: String): Long {
-        if (isoString.isEmpty()) return System.currentTimeMillis()
-        return try {
-            val cleaned = if (isoString.contains(" ") && !isoString.contains("T")) {
-                isoString.replace(" ", "T")
-            } else isoString
-            val finalString = if (!cleaned.contains("+") && !cleaned.endsWith("Z")) {
-                cleaned + "Z"
-            } else cleaned
-            ZonedDateTime.parse(finalString).toInstant().toEpochMilli()
-        } catch (e: DateTimeParseException) {
-            System.currentTimeMillis()
         }
+
+        val allSpots = deferredSpots.awaitAll().flatten()
+        
+        // Deduplication and Sorting
+        // Use a more robust key: callsign + frequency + reference + provider
+        allSpots.distinctBy { spot ->
+            "${spot.callsign}-${spot.frequency}-${spot.reference}-${spot.provider}"
+        }.sortedByDescending { it.timestamp }
     }
 
     private fun DxSpot.toEntity() = DxSpotEntity(
         frequency = frequency,
         callsign = callsign,
-        date = "", // Not strictly used for display if we have timestamp
+        date = "", 
         de = spotter,
-        band = "", // Calculated if needed
+        band = band, 
         mode = mode,
         comment = comment,
-        timestamp = timestamp
+        timestamp = timestamp,
+        source = provider.name,
+        location = location,
+        activator = activator,
+        reference = reference,
+        name = name,
+        country = country,
+        latitude = latitude,
+        longitude = longitude,
+        spotUrl = spotUrl
     )
 
     private fun DxSpotEntity.toModel() = DxSpot(
@@ -149,7 +95,14 @@ class DxRepository(private val cacheDao: CacheDao) {
         spotter = de,
         timestamp = timestamp,
         comment = comment,
-        source = SpotSource.DX_CLUSTER, // Fallback source
-        location = ""
+        provider = try { SpotSource.valueOf(source) } catch(e: Exception) { SpotSource.DX_CLUSTER },
+        location = location,
+        activator = activator,
+        reference = reference,
+        name = name,
+        country = country,
+        latitude = latitude,
+        longitude = longitude,
+        spotUrl = spotUrl
     )
 }

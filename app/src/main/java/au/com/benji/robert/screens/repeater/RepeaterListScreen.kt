@@ -56,7 +56,8 @@ fun RepeaterListScreen(
     }
 
     Scaffold(
-        modifier = Modifier.padding(paddingValues),
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0.dp),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column(
@@ -64,6 +65,7 @@ fun RepeaterListScreen(
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(horizontal = Spacing.Medium)
+                    .padding(top = paddingValues.calculateTopPadding())
                     .padding(top = Spacing.Medium)
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -98,7 +100,7 @@ fun RepeaterListScreen(
             isRefreshing = isLoading,
             onRefresh = { viewModel.refreshLocation() },
             state = pullToRefreshState,
-            modifier = Modifier.padding(padding).fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
             Column {
                 OutlinedTextField(
@@ -106,7 +108,8 @@ fun RepeaterListScreen(
                     onValueChange = { viewModel.setSearchQuery(it) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(Spacing.Medium),
+                        .padding(top = padding.calculateTopPadding())
+                        .padding(horizontal = Spacing.Medium, vertical = Spacing.Medium),
                     placeholder = { Text("Search by callsign, town, freq...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
@@ -156,7 +159,8 @@ fun RepeaterListScreen(
                     )
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + Spacing.Medium)
                     ) {
                         items(repeaters, key = { it.callsign + it.frequency }) { repeater ->
                             RepeaterCard(

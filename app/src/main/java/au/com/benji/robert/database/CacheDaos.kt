@@ -33,7 +33,7 @@ interface CacheDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDxSpots(spots: List<DxSpotEntity>)
 
-    @Query("SELECT * FROM dx_spots_cache ORDER BY timestamp DESC LIMIT 100")
+    @Query("SELECT * FROM dx_spots_cache ORDER BY timestamp DESC")
     fun getDxSpots(): Flow<List<DxSpotEntity>>
 
     @Query("DELETE FROM dx_spots_cache WHERE timestamp < :expiry")

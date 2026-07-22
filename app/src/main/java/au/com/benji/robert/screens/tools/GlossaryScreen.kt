@@ -44,7 +44,6 @@ fun GlossaryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(paddingValues)
             .padding(horizontal = Spacing.Medium)
     ) {
         OutlinedTextField(
@@ -104,7 +103,7 @@ fun GlossaryScreen(
             )
             CategoryButton(
                 title = "Phonetic",
-                isSelected = selectedCategory == GlossaryCategory.PHONETIC,
+                isSelected = GlossaryCategory.PHONETIC == selectedCategory,
                 onClick = { viewModel.selectCategory(GlossaryCategory.PHONETIC) }
             )
             CategoryButton(
@@ -115,8 +114,9 @@ fun GlossaryScreen(
         }
 
         LazyColumn(
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            contentPadding = PaddingValues(bottom = Spacing.Large)
+            contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + Spacing.Medium)
         ) {
             if (selectedCategory == null && searchQuery.isEmpty()) {
                 item {

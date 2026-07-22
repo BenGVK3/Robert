@@ -36,6 +36,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +45,7 @@ import au.com.benji.robert.R
 import au.com.benji.robert.navigation.Screen
 import au.com.benji.robert.screens.dashboard.DashboardViewModel
 import au.com.benji.robert.theme.Spacing
+import au.com.benji.robert.components.RobertMap
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,94 +60,134 @@ fun ToolsScreen(
     val pullToRefreshState = rememberPullToRefreshState()
 
     Scaffold(
-        modifier = Modifier.padding(paddingValues),
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
-            TopAppBar(
-                title = { Text(activeTool ?: "Radio Tools", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
+            val title = activeTool ?: "Radio Tools"
+            val iconRes = when (activeTool) {
+                "Maidenhead Locator" -> R.drawable.maidenhead1
+                "Antenna Calculator" -> R.drawable.antcalc1
+                "Prefix Map" -> R.drawable.prefixmap1
+                "Callsign Lookup" -> R.drawable.cslookup1
+                "Band Plan" -> R.drawable.bandplan1
+                "Club Nets" -> R.drawable.nets1
+                "Glossary" -> R.drawable.glossary1
+                else -> R.drawable.tools1
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(top = paddingValues.calculateTopPadding())
+                    .padding(top = 12.dp, bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     if (activeTool != null) {
-                        IconButton(onClick = { activeTool = null }) {
+                        IconButton(
+                            onClick = { activeTool = null },
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
+                    
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Image(
+                            painter = painterResource(id = iconRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(if (activeTool == null) 48.dp else 40.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = title,
+                            style = if (activeTool == null) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
-            )
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 12.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                )
+            }
         }
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = { viewModel.refresh() },
             state = pullToRefreshState,
-            modifier = Modifier.padding(padding).fillMaxSize()
+            modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()
         ) {
             if (activeTool == null) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = paddingValues.calculateBottomPadding() + 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    userScrollEnabled = false // Prevent scrolling to keep it on one page
                 ) {
-                    item {
+                    val tools = listOf(
+                        "Maidenhead Locator" to R.drawable.maidenhead1,
+                        "Antenna Calculator" to R.drawable.antcalc1,
+                        "Prefix Map" to R.drawable.prefixmap1,
+                        "Callsign Lookup" to R.drawable.cslookup1,
+                        "Band Plan" to R.drawable.bandplan1,
+                        "Club Nets" to R.drawable.nets1,
+                        "Glossary" to R.drawable.glossary1
+                    )
+                    
+                    items(tools) { (title, image) ->
                         ToolGridCard(
-                            title = "Maidenhead Locator",
-                            icon = Icons.Default.MyLocation,
-                            onClick = { activeTool = "Maidenhead Locator" }
-                        )
-                    }
-                    item {
-                        ToolGridCard(
-                            title = "Antenna Calculator",
-                            icon = Icons.Default.PrecisionManufacturing,
-                            onClick = { activeTool = "Antenna Calculator" }
-                        )
-                    }
-                    item {
-                        ToolGridCard(
-                            title = "Prefix Map",
-                            icon = Icons.Default.Map,
-                            onClick = { activeTool = "Prefix Map" }
-                        )
-                    }
-                    item {
-                        ToolGridCard(
-                            title = "Callsign Lookup",
-                            icon = Icons.Default.Search,
-                            onClick = { activeTool = "Callsign Lookup" }
-                        )
-                    }
-                    item {
-                        ToolGridCard(
-                            title = "Band Plan",
-                            icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-                            onClick = { activeTool = "Band Plan" }
-                        )
-                    }
-                    item {
-                        ToolGridCard(
-                            title = "Club Nets",
-                            icon = Icons.Default.Groups,
-                            onClick = { activeTool = "Club Nets" }
-                        )
-                    }
-                    item {
-                        ToolGridCard(
-                            title = "Glossary",
-                            icon = Icons.Default.Book,
-                            onClick = { activeTool = "Glossary" }
+                            title = title,
+                            imageRes = image,
+                            onClick = { activeTool = title }
                         )
                     }
                 }
             } else {
-                Box(modifier = Modifier.fillMaxSize().padding(Spacing.Medium)) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     when (activeTool) {
-                        "Maidenhead Locator" -> MaidenheadTool(viewModel)
-                        "Antenna Calculator" -> AntennaCalculatorScreen()
-                        "Prefix Map" -> PrefixMapTool()
-                        "Callsign Lookup" -> CallsignLookupTool()
-                        "Band Plan" -> BandPlanScreen()
-                        "Club Nets" -> ClubNetsScreen()
-                        "Glossary" -> GlossaryScreen()
+                        "Maidenhead Locator" -> Box(Modifier.padding(Spacing.Medium)) { 
+                            Column(Modifier.fillMaxSize()) {
+                                MaidenheadTool(viewModel)
+                                Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
+                            }
+                        }
+                        "Antenna Calculator" -> Box(Modifier.padding(Spacing.Medium)) { 
+                            Column(Modifier.fillMaxSize()) {
+                                AntennaCalculatorScreen()
+                                Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
+                            }
+                        }
+                        "Prefix Map" -> Box(Modifier.padding(Spacing.Medium)) { 
+                            PrefixMapTool(paddingValues = paddingValues)
+                        }
+                        "Callsign Lookup" -> Box(Modifier.padding(Spacing.Medium)) { 
+                            Column(Modifier.fillMaxSize()) {
+                                CallsignLookupTool()
+                                Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
+                            }
+                        }
+                        "Band Plan" -> BandPlanScreen(
+                            onBack = { activeTool = null },
+                            paddingValues = paddingValues
+                        )
+                        "Club Nets" -> Box(Modifier.padding(Spacing.Medium)) { 
+                            Column(Modifier.fillMaxSize()) {
+                                ClubNetsScreen()
+                                Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
+                            }
+                        }
+                        "Glossary" -> GlossaryScreen(paddingValues = paddingValues)
                     }
                 }
             }
@@ -154,40 +196,36 @@ fun ToolsScreen(
 }
 
 @Composable
-fun ToolGridCard(title: String, icon: ImageVector, onClick: () -> Unit) {
+fun ToolGridCard(title: String, imageRes: Int, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().aspectRatio(0.9f),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier.fillMaxWidth().aspectRatio(0.85f),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        )
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp),
+            modifier = Modifier.fillMaxSize().padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                shape = CircleShape,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon, 
-                        contentDescription = null, 
-                        tint = MaterialTheme.colorScheme.primary, 
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = title,
+                modifier = Modifier.size(44.dp),
+                contentScale = ContentScale.Fit
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = title, 
                 style = MaterialTheme.typography.labelSmall, 
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 lineHeight = 12.sp,
-                maxLines = 2
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -204,56 +242,113 @@ fun MaidenheadTool(viewModel: DashboardViewModel) {
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.Medium)
     ) {
+        // Top Card: Primary Grid Square
         Card(
-            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.Large),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            shape = RoundedCornerShape(24.dp)
         ) {
-            Column(modifier = Modifier.padding(Spacing.ExtraLarge), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("CURRENT GRID SQUARE", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black)
-                Text(text = grid, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Column(
+                modifier = Modifier.padding(vertical = Spacing.Large, horizontal = Spacing.Medium), 
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "CURRENT GRID SQUARE", 
+                    style = MaterialTheme.typography.labelSmall, 
+                    fontWeight = FontWeight.Black, 
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.sp,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = grid, 
+                    style = MaterialTheme.typography.displayLarge.copy(fontSize = 64.sp), 
+                    fontWeight = FontWeight.Black, 
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    textAlign = TextAlign.Center
+                )
                 
                 Button(
                     onClick = { clipboardManager.setText(AnnotatedString(grid)) },
-                    modifier = Modifier.padding(top = Spacing.Medium),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), contentColor = MaterialTheme.colorScheme.primary)
+                    modifier = Modifier.padding(top = Spacing.Small),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
                 ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("COPY GRID")
+                    Text("COPY GRID", fontWeight = FontWeight.Bold)
                 }
             }
         }
         
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(Spacing.Medium)) {
-                Text("LOCATION DATA", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        // Location Intel Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(Spacing.Medium), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "LOCATION INTEL", 
+                    style = MaterialTheme.typography.labelSmall, 
+                    fontWeight = FontWeight.Black, 
+                    color = MaterialTheme.colorScheme.primary
+                )
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Latitude", style = MaterialTheme.typography.bodyMedium)
-                    Text(lat.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text(String.format(java.util.Locale.US, "%.4f°", lat), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Longitude", style = MaterialTheme.typography.bodyMedium)
-                    Text(lon.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text(String.format(java.util.Locale.US, "%.4f°", lon), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 }
                 
-                HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.Small))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 
-                Text(
-                    text = if (location != null) "✓ GPS active and accurate" else "⚠ Using last known location",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (location != null) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (location != null) Icons.Default.GpsFixed else Icons.Default.GpsOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (location != null) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (location != null) "GPS Active & Synchronized" else "Using Last Known Location",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (location != null) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
 
+        // Live Map Card (Replaced About section)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                val mapUrl = "https://levinecentral.com/ham/grid_square.php?Grid=$grid"
+                RobertMap(
+                    url = mapUrl,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        
         Spacer(modifier = Modifier.height(Spacing.Large))
-        Text(
-            text = "Pull down to refresh GPS coordinates",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline
-        )
     }
 }
 
@@ -316,7 +411,7 @@ fun CallsignLookupTool() {
 }
 
 @Composable
-fun PrefixMapTool() {
+fun PrefixMapTool(paddingValues: PaddingValues = PaddingValues()) {
     var query by remember { mutableStateOf("") }
     var selectedRegion by remember { mutableStateOf<PrefixRegion?>(null) }
     var mapOffset by remember { mutableStateOf(Offset.Zero) }
@@ -376,6 +471,7 @@ fun PrefixMapTool() {
                         if (rowRegions.size == 1) Spacer(modifier = Modifier.weight(1f))
                     }
                 }
+                Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 16.dp))
             }
         } else {
             // Map View
@@ -438,6 +534,7 @@ fun PrefixMapTool() {
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = Spacing.Small)
                 )
+                Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
             }
         }
     }
